@@ -8,54 +8,80 @@ import ecosys.v1.StreamFrame
 import ecosys.v1.StreamServiceGrpcKt
 import io.grpc.Status
 import io.grpc.StatusException
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * The bidirectional media relay RPC.
  *
- * Consumes inbound [StreamFrame]s, routes audio to the STT port and video to the
- * frame sink (both opaque), and emits result frames back on the same stream.
+ * Consumes inbound [StreamFrame]s, routes audio to the relay queue and video to
+ * its own queue (both opaque), and emits result frames back on the same stream.
  * Token enforcement already happened in [AuthInterceptor].
  *
  * The session is bound to the device the TOKEN proved, never to an unvalidated
- * id inside a frame. This is the simple-correct core; T14 adds backpressure,
- * drop-oldest video policy, and disconnect cleanup.
+ * id inside a frame.
+ *
+ * ## Teardown
+ *
+ * The session is closed on EVERY exit — normal completion of the inbound flow, a
+ * peer cancel, or a downstream failure — via a pair of nested `finally` blocks
+ * run under [NonCancellable]. Closing the session closes the results channel,
+ * which completes the results collector, so no coroutine is left behind.
  */
 class StreamGrpcService(GoCtx: Context) : StreamServiceGrpcKt.StreamServiceCoroutineImplBase() {
 
     private val GoStream: StreamService = FromContext<StreamService>(GoCtx)
 
-    override fun openStream(requests: Flow<StreamFrame>): Flow<StreamFrame> = flow {
+    override fun openStream(requests: Flow<StreamFrame>): Flow<StreamFrame> = channelFlow {
+        // Never trust a frame field for identity: use the token-proved device id.
         val GoDeviceId = AuthInterceptor.GoDeviceIdKey.get()
             ?: throw StatusException(Status.UNAUTHENTICATED.withDescription("missing bearer token"))
         val GoSession = GoStream.GoOpenSession(GoDeviceId)
         try {
-            requests.collect { GoFrame ->
-                when (GoFrame.payloadCase) {
-                    StreamFrame.PayloadCase.AUDIO_PCM16_16K -> {
-                        val GoResult = GoStream.GoPushAudio(
-                            sessionId = GoSession.GoSessionId,
-                            audioPcm16 = GoFrame.audioPcm1616K.toByteArray(),
-                            sampleRateHz = StreamService.GoAudioSampleRateHz,
-                        )
-                        if (GoResult != null) emit(GoTranscriptFrame(GoResult.GoText))
+            coroutineScope {
+                // Relayed utterances are forwarded as they are produced.
+                launch {
+                    GoStream.GoResults(GoSession.GoSessionId).collect { GoResult ->
+                        send(GoTranscriptFrame(GoResult.GoText))
                     }
-
-                    StreamFrame.PayloadCase.VIDEO_H264_NAL ->
-                        GoStream.GoPushVideo(GoSession.GoSessionId, GoFrame.videoH264Nal.toByteArray())
-
-                    // Transcript/result frames are hub->peer output; a peer echoing
-                    // them changes nothing, so they are accepted and ignored.
-                    StreamFrame.PayloadCase.TRANSCRIPT,
-                    StreamFrame.PayloadCase.RESULT,
-                    StreamFrame.PayloadCase.PAYLOAD_NOT_SET,
-                    null,
-                    -> Unit
+                }
+                try {
+                    requests.collect { GoFrame -> GoDispatch(GoSession.GoSessionId, GoFrame) }
+                } finally {
+                    // Closes the results channel -> the launched collector completes.
+                    withContext(NonCancellable) { GoStream.GoCloseSession(GoSession.GoSessionId) }
                 }
             }
         } finally {
-            GoStream.GoCloseSession(GoSession.GoSessionId)
+            // Idempotent safety net for the cancel/error paths that skip the inner
+            // finally (e.g. cancellation while collecting the inbound flow).
+            withContext(NonCancellable) { GoStream.GoCloseSession(GoSession.GoSessionId) }
+        }
+    }
+
+    private suspend fun GoDispatch(sessionId: String, frame: StreamFrame) {
+        when (frame.payloadCase) {
+            StreamFrame.PayloadCase.AUDIO_PCM16_16K ->
+                GoStream.GoPushAudio(
+                    sessionId = sessionId,
+                    audioPcm16 = frame.audioPcm1616K.toByteArray(),
+                    sampleRateHz = StreamService.GoAudioSampleRateHz,
+                )
+
+            StreamFrame.PayloadCase.VIDEO_H264_NAL ->
+                GoStream.GoPushVideo(sessionId, frame.videoH264Nal.toByteArray())
+
+            // Transcript/result frames are hub->peer output; a peer echoing them
+            // changes nothing, so they are accepted and ignored.
+            StreamFrame.PayloadCase.TRANSCRIPT,
+            StreamFrame.PayloadCase.RESULT,
+            StreamFrame.PayloadCase.PAYLOAD_NOT_SET,
+            null,
+            -> Unit
         }
     }
 

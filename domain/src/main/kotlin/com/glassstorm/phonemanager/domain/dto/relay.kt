@@ -20,3 +20,24 @@ data class RelayResult(
     val GoSpeakerLabel: String,
     val GoPtsMs: Long,
 )
+
+/**
+ * A point-in-time snapshot of relay accounting. Pure data.
+ *
+ * The counters describe the RELAY's own queue decisions, never the media
+ * contents:
+ *
+ *  * [GoAudioFrames] — audio frames ACCEPTED into the queue (never dropped);
+ *  * [GoVideoFrames] — video NALs ACCEPTED into the queue;
+ *  * [GoVideoDropped] — video NALs evicted by drop-oldest because the video
+ *    queue was full;
+ *  * [GoTranscripts] — recognized utterances emitted;
+ *  * [GoLiveSessions] — currently open sessions.
+ */
+data class RelayStats(
+    val GoAudioFrames: Long,
+    val GoVideoFrames: Long,
+    val GoVideoDropped: Long,
+    val GoTranscripts: Long,
+    val GoLiveSessions: Int,
+)

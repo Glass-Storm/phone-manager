@@ -4,6 +4,8 @@ import com.glassstorm.phonemanager.domain.adapter.relay.FrameSink
 import com.glassstorm.phonemanager.domain.adapter.repository.DeviceRepository
 import com.glassstorm.phonemanager.domain.adapter.speech.SttPort
 import com.glassstorm.phonemanager.domain.dto.Device
+import java.util.Collections
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Test-local fakes for the domain ports. They deliberately implement the domain
@@ -36,22 +38,38 @@ class FakeDeviceRepository : DeviceRepository {
     }
 }
 
-/** [SttPort] fake that always recognizes the same utterance and counts audio frames. */
+/**
+ * [SttPort] fake that always recognizes the same utterance, counts audio frames,
+ * and records every session it was asked to close (so "exactly once" teardown is
+ * assertable).
+ */
 class FakeSttPort(private val GoTranscript: String = "hello from fake stt") : SttPort {
-    var GoAudioFrameCount: Int = 0
-        private set
+    private val GoAudioCount = AtomicInteger()
 
-    override suspend fun GoTranscribe(audioPcm16: ByteArray, sampleRateHz: Int): String? {
-        GoAudioFrameCount += 1
+    val GoAudioFrameCount: Int get() = GoAudioCount.get()
+
+    private val GoClosing = Collections.synchronizedList(mutableListOf<String>())
+
+    /** Session ids passed to [GoClose], in arrival order. */
+    val GoClosedSessions: List<String> get() = synchronized(GoClosing) { GoClosing.toList() }
+
+    override suspend fun GoTranscribe(sessionId: String, audioPcm16: ByteArray, sampleRateHz: Int): String? {
+        GoAudioCount.incrementAndGet()
         return GoTranscript
+    }
+
+    override suspend fun GoClose(sessionId: String) {
+        GoClosing += sessionId
     }
 }
 
 /** [FrameSink] fake that records every opaque video NAL it is handed. */
 class FakeFrameSink : FrameSink {
-    val GoVideoNals: MutableList<ByteArray> = mutableListOf()
+    private val GoNals = Collections.synchronizedList(mutableListOf<ByteArray>())
+
+    val GoVideoNals: List<ByteArray> get() = synchronized(GoNals) { GoNals.toList() }
 
     override fun GoAcceptVideo(sessionId: String, h264Nal: ByteArray) {
-        GoVideoNals += h264Nal
+        GoNals += h264Nal
     }
 }
