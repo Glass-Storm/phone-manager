@@ -36,14 +36,17 @@ const (
 
 // config is the parsed command line. Every field is set once, before any RPC.
 type config struct {
-	addr     string
-	pin      string
-	token    string
-	noToken  bool
-	frames   int
-	timeout  time.Duration
-	mode     string
-	scenario string
+	addr        string
+	pin         string
+	token       string
+	tokenFile   string
+	tokenOut    string
+	noToken     bool
+	expectUnaut bool
+	frames      int
+	timeout     time.Duration
+	mode        string
+	scenario    string
 }
 
 func main() {
@@ -56,14 +59,21 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), cfg.timeout)
 	defer cancel()
 
-	frames, transcripts, err := runScenario(ctx, cfg)
+	result, err := runScenario(ctx, cfg)
 	switch {
 	case err == nil:
-		if cfg.scenario == scenarioPair {
+		switch cfg.scenario {
+		case scenarioPair:
+			// T6's original single-line success contract; unchanged.
 			fmt.Println("pair-ok heartbeat-ok")
-			os.Exit(exitOk)
+		case scenarioFull:
+			// The T18 ordered transcript: pair, then liveness, then the relay.
+			fmt.Println("pair-ok")
+			fmt.Println("heartbeat-ok")
+			fmt.Printf("session-ok frames=%d transcripts=%d\n", result.frames, result.transcripts)
+		default:
+			fmt.Printf("session-ok frames=%d transcripts=%d\n", result.frames, result.transcripts)
 		}
-		fmt.Printf("session-ok frames=%d transcripts=%d\n", frames, transcripts)
 		os.Exit(exitOk)
 
 	case errors.Is(err, errUnauthenticated):
@@ -90,7 +100,10 @@ func parseFlags(args []string) (config, error) {
 	fs.StringVar(&cfg.addr, "addr", defaultAddr, "hub host:port to dial (plaintext)")
 	fs.StringVar(&cfg.pin, "pin", "", "6-digit pairing PIN for the open window")
 	fs.StringVar(&cfg.token, "token", "", "bearer token; skips Pair when set")
+	fs.StringVar(&cfg.tokenFile, "token-file", "", "read the bearer token from this file instead of pairing")
+	fs.StringVar(&cfg.tokenOut, "token-out", "", "write the issued token to this file (0600); keeps it OUT of stdout")
 	fs.BoolVar(&cfg.noToken, "no-token", false, "skip Pair and heartbeat WITHOUT metadata (must be rejected)")
+	fs.BoolVar(&cfg.expectUnaut, "expect-unauthenticated", false, "heartbeat with the token and REQUIRE an UNAUTHENTICATED refusal (revoked-token leg)")
 	fs.IntVar(&cfg.frames, "frames", defaultFrames, "synthetic media frames to send per enabled medium")
 	fs.IntVar(&timeoutSeconds, "timeout", defaultTimeout, "overall deadline in seconds")
 	fs.StringVar(&cfg.mode, "mode", modeBoth, "media to send: audio|video|both")
@@ -101,8 +114,24 @@ func parseFlags(args []string) (config, error) {
 	}
 	cfg.timeout = time.Duration(timeoutSeconds) * time.Second
 
-	if cfg.noToken && cfg.token != "" {
-		return config{}, errors.New("--no-token and --token are mutually exclusive")
+	credentialSources := 0
+	if cfg.token != "" {
+		credentialSources++
+	}
+	if cfg.tokenFile != "" {
+		credentialSources++
+	}
+	if cfg.noToken {
+		credentialSources++
+	}
+	if credentialSources > 1 {
+		return config{}, errors.New("--token, --token-file and --no-token are mutually exclusive")
+	}
+	if cfg.expectUnaut && cfg.token == "" && cfg.tokenFile == "" {
+		return config{}, errors.New("--expect-unauthenticated requires --token or --token-file")
+	}
+	if cfg.expectUnaut && cfg.noToken {
+		return config{}, errors.New("--expect-unauthenticated is redundant with --no-token")
 	}
 	if cfg.frames < 0 {
 		return config{}, errors.New("--frames must not be negative")
@@ -120,8 +149,8 @@ func parseFlags(args []string) (config, error) {
 	default:
 		return config{}, fmt.Errorf("--scenario must be full|pair|stream, got %q", cfg.scenario)
 	}
-	if cfg.scenario == scenarioStream && cfg.token == "" && !cfg.noToken {
-		return config{}, errors.New("--scenario stream requires --token (or --no-token to prove rejection)")
+	if cfg.scenario == scenarioStream && cfg.token == "" && cfg.tokenFile == "" && !cfg.noToken {
+		return config{}, errors.New("--scenario stream requires --token (or --token-file, or --no-token to prove rejection)")
 	}
 	return cfg, nil
 }

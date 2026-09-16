@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"strings"
 
 	ecosysv1 "phone-manager/tools/mockpeer/gen/ecosys/v1"
 
@@ -14,6 +16,10 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
+
+// tokenFileMode is read/write for the owner only: the bearer token is an
+// ephemeral loopback test secret and must not be world-readable.
+const tokenFileMode = 0o600
 
 // The three scenarios the CLI can run.
 const (
@@ -38,15 +44,22 @@ type pairRejectedError struct{ reason string }
 
 func (e *pairRejectedError) Error() string { return "pair rejected: " + e.reason }
 
-// runScenario drives the requested RPC sequence and returns the number of media
-// frames SENT and the number of transcript frames RECEIVED.
+// scenarioResult reports what a run accomplished: media frames SENT and
+// transcript frames RECEIVED.
+type scenarioResult struct {
+	frames      int
+	transcripts int
+}
+
+// runScenario drives the requested RPC sequence and returns the counts a caller
+// renders as the machine-checkable stdout line.
 //
 // Plaintext only: the LAN hub is cleartext by design and TLS on Android is the
 // known-broken path, so no credentials beyond insecure are configured.
-func runScenario(ctx context.Context, cfg config) (int, int, error) {
+func runScenario(ctx context.Context, cfg config) (scenarioResult, error) {
 	conn, err := grpc.NewClient(cfg.addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		return 0, 0, fmt.Errorf("dial %s: %w", cfg.addr, err)
+		return scenarioResult{}, fmt.Errorf("dial %s: %w", cfg.addr, err)
 	}
 	defer conn.Close()
 
@@ -55,27 +68,65 @@ func runScenario(ctx context.Context, cfg config) (int, int, error) {
 	if cfg.noToken {
 		// Deliberately unauthenticated: the hub MUST refuse and say so.
 		if err := heartbeat(ctx, pairing, ""); err != nil {
-			return 0, 0, err
+			return scenarioResult{}, err
 		}
-		return 0, 0, errors.New("hub accepted a heartbeat with no token")
+		return scenarioResult{}, errors.New("hub accepted a heartbeat with no token")
 	}
 
-	token := cfg.token
-	if token == "" {
-		token, err = pair(ctx, pairing, cfg.pin)
-		if err != nil {
-			return 0, 0, err
+	token, err := resolveToken(ctx, pairing, cfg)
+	if err != nil {
+		return scenarioResult{}, err
+	}
+
+	if cfg.expectUnaut {
+		// The revoked-token leg: the token was valid at Pair time and has since
+		// been revoked, so the hub MUST now refuse. A success here is the bug.
+		if err := heartbeat(ctx, pairing, token); err != nil {
+			return scenarioResult{}, err
 		}
+		return scenarioResult{}, errors.New("hub accepted a REVOKED token")
 	}
 
 	if err := heartbeat(ctx, pairing, token); err != nil {
-		return 0, 0, err
+		return scenarioResult{}, err
 	}
 	if cfg.scenario == scenarioPair {
-		return 0, 0, nil
+		return scenarioResult{}, nil
 	}
 
 	return openStream(ctx, conn, cfg, token)
+}
+
+// resolveToken picks the bearer credential from the configured source: a
+// pre-issued token file (the post-revoke leg), a literal token, or a fresh Pair.
+// A freshly issued token is also written to --token-out when requested, which is
+// the only sanctioned way for it to leave the process.
+func resolveToken(ctx context.Context, pairing ecosysv1.PairingServiceClient, cfg config) (string, error) {
+	if cfg.tokenFile != "" {
+		raw, err := os.ReadFile(cfg.tokenFile)
+		if err != nil {
+			return "", fmt.Errorf("read token file %s: %w", cfg.tokenFile, err)
+		}
+		token := strings.TrimSpace(string(raw))
+		if token == "" {
+			return "", fmt.Errorf("token file %s was empty", cfg.tokenFile)
+		}
+		return token, nil
+	}
+	if cfg.token != "" {
+		return cfg.token, nil
+	}
+
+	token, err := pair(ctx, pairing, cfg.pin)
+	if err != nil {
+		return "", err
+	}
+	if cfg.tokenOut != "" {
+		if err := os.WriteFile(cfg.tokenOut, []byte(token+"\n"), tokenFileMode); err != nil {
+			return "", fmt.Errorf("write token file %s: %w", cfg.tokenOut, err)
+		}
+	}
+	return token, nil
 }
 
 // pair redeems the window PIN. A rejection is expected (bad/expired/replayed
@@ -117,11 +168,11 @@ func heartbeat(ctx context.Context, client ecosysv1.PairingServiceClient, token 
 
 // openStream pushes synthetic media and drains result frames until the hub
 // closes the stream, counting the transcripts it produced.
-func openStream(ctx context.Context, conn *grpc.ClientConn, cfg config, token string) (int, int, error) {
+func openStream(ctx context.Context, conn *grpc.ClientConn, cfg config, token string) (scenarioResult, error) {
 	callCtx := metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+token)
 	stream, err := ecosysv1.NewStreamServiceClient(conn).OpenStream(callCtx)
 	if err != nil {
-		return 0, 0, mapStatus(err)
+		return scenarioResult{}, mapStatus(err)
 	}
 
 	sent := 0
@@ -131,7 +182,7 @@ func openStream(ctx context.Context, conn *grpc.ClientConn, cfg config, token st
 				Payload: &ecosysv1.StreamFrame_AudioPcm16_16K{AudioPcm16_16K: SyntheticAudioFrame(i)},
 			}
 			if err := stream.Send(frame); err != nil {
-				return sent, 0, mapStatus(err)
+				return scenarioResult{frames: sent}, mapStatus(err)
 			}
 			sent++
 		}
@@ -140,14 +191,14 @@ func openStream(ctx context.Context, conn *grpc.ClientConn, cfg config, token st
 				Payload: &ecosysv1.StreamFrame_VideoH264Nal{VideoH264Nal: SyntheticVideoNAL(i)},
 			}
 			if err := stream.Send(frame); err != nil {
-				return sent, 0, mapStatus(err)
+				return scenarioResult{frames: sent}, mapStatus(err)
 			}
 			sent++
 		}
 	}
 
 	if err := stream.CloseSend(); err != nil {
-		return sent, 0, mapStatus(err)
+		return scenarioResult{frames: sent}, mapStatus(err)
 	}
 
 	transcripts := 0
@@ -157,13 +208,13 @@ func openStream(ctx context.Context, conn *grpc.ClientConn, cfg config, token st
 			break
 		}
 		if err != nil {
-			return sent, transcripts, mapStatus(err)
+			return scenarioResult{frames: sent, transcripts: transcripts}, mapStatus(err)
 		}
 		if resp.GetTranscript() != "" {
 			transcripts++
 		}
 	}
-	return sent, transcripts, nil
+	return scenarioResult{frames: sent, transcripts: transcripts}, nil
 }
 
 // mapStatus converts a gRPC transport failure into either the

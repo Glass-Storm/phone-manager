@@ -10,6 +10,12 @@ import com.glassstorm.phonemanager.domain.context.Register
 import com.glassstorm.phonemanager.domain.service.PairingService
 import com.glassstorm.phonemanager.domain.service.StreamService
 import com.glassstorm.phonemanager.service.security.AuthInterceptor
+import com.glassstorm.phonemanager.testkit.GoGoBinary
+import com.glassstorm.phonemanager.testkit.GoProcessRun
+import com.glassstorm.phonemanager.testkit.GoRepoRoot
+import com.glassstorm.phonemanager.testkit.GoRun
+import com.glassstorm.phonemanager.testkit.GoSyntheticVideoNal
+import com.glassstorm.phonemanager.testkit.GO_REAP_SECONDS
 import io.grpc.netty.shaded.io.grpc.netty.NettyServerBuilder
 import java.io.File
 import java.net.InetSocketAddress
@@ -164,7 +170,7 @@ class HubServerE2ETest {
         GoSink.GoVideoNals.forEachIndexed { index, nal ->
             assertWithMessage("video NAL #$index was mutated in transit")
                 .that(nal)
-                .isEqualTo(SyntheticVideoNal(index))
+                .isEqualTo(GoSyntheticVideoNal(index))
         }
     }
 
@@ -221,12 +227,5 @@ class HubServerE2ETest {
         val GoMatch = Regex("""$name=(\d+)""").find(stdout)
         assertWithMessage("stdout did not carry `$name=<int>`: $stdout").that(GoMatch).isNotNull()
         return GoMatch!!.groupValues[1].toInt()
-    }
-
-    /** Re-derive the Go generator's deterministic video NAL to prove byte-exactness. */
-    private fun SyntheticVideoNal(index: Int): ByteArray {
-        val GoNal = byteArrayOf(0x00, 0x00, 0x00, 0x01, 0x65)
-        val GoBody = ByteArray(24) { i -> ((index * 17 + i) % 251).toByte() }
-        return GoNal + GoBody
     }
 }

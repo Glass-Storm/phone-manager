@@ -100,6 +100,9 @@ dependencies {
     debugImplementation(libs.compose.ui.test.manifest)
 
     testImplementation(composeBom)
+    // Shared E2E kit (mockpeer runner + deterministic media generators), used by
+    // FullE2eTest to drive the real Go peer against the Robolectric-hosted hub.
+    testImplementation(project(":testkit"))
     testImplementation(libs.junit)
     testImplementation(libs.truth)
     testImplementation(libs.turbine)

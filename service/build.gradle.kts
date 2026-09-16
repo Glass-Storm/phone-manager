@@ -82,6 +82,9 @@ dependencies {
     compileOnly(libs.annotations.api)
 
     testImplementation(kotlin("test"))
+    // Shared E2E kit (mockpeer runner + deterministic media generators). `:app`
+    // cannot see these test sources, so they live in a plain JVM module.
+    testImplementation(project(":testkit"))
     testImplementation(libs.junit)
     testImplementation(libs.truth)
     testImplementation(libs.turbine)

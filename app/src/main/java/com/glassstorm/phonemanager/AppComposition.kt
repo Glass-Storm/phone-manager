@@ -4,15 +4,20 @@ import android.content.Context as GoAndroidContext
 import com.glassstorm.phonemanager.adapter.config.RuntimeConfigStore
 import com.glassstorm.phonemanager.adapter.network.nsd.NsdDiscoveryAdapter
 import com.glassstorm.phonemanager.adapter.network.wifi.LocalOnlyHotspotAdapter
+import com.glassstorm.phonemanager.adapter.relay.DiscardingFrameSink
 import com.glassstorm.phonemanager.adapter.repository.memory.MemoryDeviceRepository
 import com.glassstorm.phonemanager.adapter.repository.sqlite.SqliteDeviceRepository
+import com.glassstorm.phonemanager.adapter.speech.SttFactory
+import com.glassstorm.phonemanager.adapter.speech.mock.MockSttAdapter
 import com.glassstorm.phonemanager.adapter.transport.grpc.HubServerAdapter
 import com.glassstorm.phonemanager.battery.AndroidBatteryExemption
 import com.glassstorm.phonemanager.battery.BatteryExemption
 import com.glassstorm.phonemanager.domain.adapter.config.AppConfig
 import com.glassstorm.phonemanager.domain.adapter.network.Discovery
 import com.glassstorm.phonemanager.domain.adapter.network.HotspotController
+import com.glassstorm.phonemanager.domain.adapter.relay.FrameSink
 import com.glassstorm.phonemanager.domain.adapter.repository.DeviceRepository
+import com.glassstorm.phonemanager.domain.adapter.speech.SttPort
 import com.glassstorm.phonemanager.domain.adapter.transport.HubServer
 import com.glassstorm.phonemanager.domain.context.Context
 import com.glassstorm.phonemanager.domain.context.FromContextOrNull
@@ -96,6 +101,11 @@ object AppComposition {
         // fallback (and what the pure-JVM AppCompositionTest resolves).
         if (goAndroidContext == null) {
             Register<DeviceRepository>(GoCtx, MemoryDeviceRepository())
+            // The engine is selected by the config store, which needs an Android
+            // Context. Without one the safe v1 default applies: the offline,
+            // deterministic MockSttAdapter — the SAME instance SttFactory returns
+            // for the unconfigured default, never a test-only stand-in.
+            Register<SttPort>(GoCtx, MockSttAdapter())
         }
 
         GoRegisterAndroidBacked(GoCtx, goAndroidContext)
@@ -111,6 +121,13 @@ object AppComposition {
         Register<TokenVerifier>(GoCtx, GoPairing)
 
         Register<StreamService>(GoCtx, StreamServiceImpl(GoCtx))
+
+        // The relay's video half. The FrameSink port and the SttPort are resolved
+        // EAGERLY the first time a frame is dispatched, so both must be present
+        // before the hub can accept media — without them the real app hub would
+        // throw MissingFromContextException on the first inbound NAL. v1 does not
+        // store or display media, so the sink accepts and drops it.
+        Register<FrameSink>(GoCtx, DiscardingFrameSink())
 
         // The hub listener itself. Production binds all interfaces because the
         // phone IS the hotspot and its LAN peers must dial in; tests bind loopback.
@@ -133,7 +150,9 @@ object AppComposition {
         if (FromContextOrNull<AppConfig>(GoCtx) != null) return
 
         Register<DeviceRepository>(GoCtx, SqliteDeviceRepository(goAndroidContext))
-        Register<AppConfig>(GoCtx, RuntimeConfigStore(goAndroidContext))
+        val GoConfig = RuntimeConfigStore(goAndroidContext)
+        Register<AppConfig>(GoCtx, GoConfig)
+        Register<SttPort>(GoCtx, SttFactory(GoConfig).GoCreateSttPort())
         Register<BatteryExemption>(GoCtx, AndroidBatteryExemption(goAndroidContext))
         Register<HotspotController>(GoCtx, LocalOnlyHotspotAdapter(goAndroidContext))
         Register<Discovery>(GoCtx, NsdDiscoveryAdapter(goAndroidContext, GoGatewayFallback = null))
