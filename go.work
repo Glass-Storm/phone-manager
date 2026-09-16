@@ -1,0 +1,9 @@
+// The repo root is not a Go module: the only Go code lives in tools/mockpeer.
+// This workspace file exists so the mandated E2E invocation
+// `go run ./tools/mockpeer` works from the repository root.
+//
+// The version matches tools/mockpeer/go.mod (go 1.25.0) so no toolchain
+// download is triggered on a machine with Go >= 1.25.
+go 1.25.0
+
+use ./tools/mockpeer

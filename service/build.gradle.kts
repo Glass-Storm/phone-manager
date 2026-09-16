@@ -88,4 +88,9 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.grpc.inprocess)
     testImplementation(libs.grpc.testing)
+    // T6 transport spike: the REAL netty-shaded NIO transport. This is the
+    // transport candidate for Android (issues.md R1) and the one the GO/NO-GO
+    // verdict is about; it is test-scope only here because :app supplies its own
+    // copy in T7.
+    testImplementation(libs.grpc.netty.shaded)
 }
