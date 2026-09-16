@@ -6,9 +6,16 @@ import com.glassstorm.phonemanager.domain.dto.Device
 import com.glassstorm.phonemanager.domain.dto.HotspotInfo
 import com.glassstorm.phonemanager.domain.dto.PairOutcome
 import com.glassstorm.phonemanager.domain.dto.Pairing
+import com.glassstorm.phonemanager.domain.dto.RelayResult
+import com.glassstorm.phonemanager.domain.dto.RelaySession
+import com.glassstorm.phonemanager.domain.dto.RelayStats
 import com.glassstorm.phonemanager.domain.network.HotspotFailure
 import com.glassstorm.phonemanager.domain.network.HotspotUnavailableException
 import com.glassstorm.phonemanager.domain.service.PairingService
+import com.glassstorm.phonemanager.domain.service.StreamService
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.emptyFlow
 
 /**
  * Test-local fakes for the UI tests.
@@ -138,4 +145,87 @@ class FakePairingService(
     }
 
     override fun GoListPaired(): List<Device> = GoRows.values.toList()
+}
+
+/**
+ * [StreamService] fake.
+ *
+ * It implements the DOMAIN port exactly like `StreamServiceImpl` would, and mints
+ * a DISTINCT session id per [GoOpenSession] so a screen rendering a stale session
+ * cannot pass. Counters come from [GoNextStats], which the test pushes through
+ * [GoReportStats] to simulate new frames arriving on the peer between polls — the
+ * screen has no other way to learn them, so a refresh loop that never runs leaves
+ * the counters at zero and fails the test.
+ *
+ * Results are published on a [MutableSharedFlow] with `replay = 1`: the fake's
+ * `GoResults` is collected by the ViewModel while the session is live, and the
+ * latest utterance is what the screen renders with its speaker label.
+ */
+class FakeStreamService(
+    private val GoSessionIds: List<String> = listOf("s-1", "s-2", "s-3"),
+) : StreamService {
+    private val GoResultsFlow = MutableSharedFlow<RelayResult>(replay = 1)
+
+    private var GoStatsValue = RelayStats(
+        GoAudioFrames = 0L,
+        GoVideoFrames = 0L,
+        GoVideoDropped = 0L,
+        GoTranscripts = 0L,
+        GoLiveSessions = 0,
+    )
+
+    private var GoOpenCalls: Int = 0
+    private var GoClosed: MutableList<String> = mutableListOf()
+
+    /** How many sessions the fake currently believes are live. */
+    var GoLiveSessions: Int = 0
+        private set
+
+    fun GoOpenCount(): Int = GoOpenCalls
+
+    fun GoClosedIds(): List<String> = GoClosed.toList()
+
+    /** Replaces the snapshot [GoStats] returns, as if the peer had pushed more media. */
+    fun GoReportStats(
+        GoAudioFrames: Long,
+        GoVideoFrames: Long,
+        GoVideoDropped: Long,
+        GoTranscripts: Long,
+    ) {
+        GoStatsValue = RelayStats(
+            GoAudioFrames = GoAudioFrames,
+            GoVideoFrames = GoVideoFrames,
+            GoVideoDropped = GoVideoDropped,
+            GoTranscripts = GoTranscripts,
+            GoLiveSessions = GoLiveSessions,
+        )
+    }
+
+    /** Publish a recognized utterance, as the STT engine would mid-stream. */
+    fun GoEmitTranscript(GoText: String, GoSpeakerLabel: String = "Speaker 1") {
+        GoResultsFlow.tryEmit(
+            RelayResult(GoText = GoText, GoSpeakerLabel = GoSpeakerLabel, GoPtsMs = 0L),
+        )
+    }
+
+    override fun GoOpenSession(deviceId: String): RelaySession {
+        val GoIndex = GoOpenCalls.coerceAtMost(GoSessionIds.lastIndex)
+        GoOpenCalls += 1
+        GoLiveSessions += 1
+        return RelaySession(GoSessionId = GoSessionIds[GoIndex], GoDeviceId = deviceId)
+    }
+
+    override suspend fun GoPushAudio(sessionId: String, audioPcm16: ByteArray, sampleRateHz: Int) = Unit
+
+    override fun GoPushVideo(sessionId: String, h264Nal: ByteArray) = Unit
+
+    override fun GoResults(sessionId: String): Flow<RelayResult> =
+        if (GoLiveSessions > 0) GoResultsFlow else emptyFlow()
+
+    override suspend fun GoCloseSession(sessionId: String) {
+        GoClosed.add(sessionId)
+        GoLiveSessions = (GoLiveSessions - 1).coerceAtLeast(0)
+    }
+
+    override fun GoStats(): RelayStats = GoStatsValue.copy(GoLiveSessions = GoLiveSessions)
 }

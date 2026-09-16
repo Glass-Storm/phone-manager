@@ -28,7 +28,6 @@ val GO_ROUTES: List<String> = listOf(
     GoRouteSettings,
 )
 
-const val GoPlaceholderStream = "Stream"
 const val GoPlaceholderDevices = "Devices"
 const val GoPlaceholderSettings = "Settings"
 
@@ -40,7 +39,7 @@ const val GoPlaceholderSettings = "Settings"
  * on purpose: the shell must still render (screens degrade to an "unavailable"
  * line) when a port is missing, which is exactly the state the shell test composes.
  *
- * `stream`/`devices`/`settings` are still placeholders; T16/T17 own them.
+ * `devices`/`settings` are still placeholders; T17 owns them.
  */
 @Composable
 fun AppShell(
@@ -57,7 +56,7 @@ fun AppShell(
         ) {
             composable(GoRouteDashboard) { DashboardScreen(GoContext, Modifier.padding(GoInsets)) }
             composable(GoRoutePairing) { PairingScreen(GoContext, Modifier.padding(GoInsets)) }
-            composable(GoRouteStream) { GoPlaceholder(GoInsets, GoPlaceholderStream) }
+            composable(GoRouteStream) { StreamScreen(GoContext, Modifier.padding(GoInsets)) }
             composable(GoRouteDevices) { GoPlaceholder(GoInsets, GoPlaceholderDevices) }
             composable(GoRouteSettings) { GoPlaceholder(GoInsets, GoPlaceholderSettings) }
         }
