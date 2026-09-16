@@ -59,15 +59,29 @@ class LocalOnlyHotspotAdapter(
                 GoInfo
             }
 
-            is HotspotLaunch.Denied -> GoFail(
-                HotspotFailure.StartFailed("platform refused, reason=${GoLaunch.GoReasonCode}"),
-            )
+            is HotspotLaunch.Denied -> GoFail(GoFailureForReason(GoLaunch.GoReasonCode))
 
             HotspotLaunch.TimedOut -> GoFail(
                 HotspotFailure.StartFailed("start timed out after ${DEFAULT_LAUNCH_TIMEOUT_MS}ms"),
             )
         }
     }
+
+    /**
+     * Maps a platform refusal reason to its typed failure.
+     *
+     * [REASON_PERMISSION_DENIED] is the synthetic code the launcher emits when the
+     * platform throws [SecurityException] — the user revoked the grant between the
+     * pre-flight check and the call — so it must surface as
+     * [HotspotFailure.PermissionDenied] and land the machine in `ERROR`, never
+     * `ACTIVE`. Every other code is a genuine platform refusal.
+     */
+    private fun GoFailureForReason(goReasonCode: Int): HotspotFailure =
+        if (goReasonCode == REASON_PERMISSION_DENIED) {
+            HotspotFailure.PermissionDenied
+        } else {
+            HotspotFailure.StartFailed("platform refused, reason=$goReasonCode")
+        }
 
     override fun GoStopHotspot() {
         GoMachine.GoAccept(HotspotEvent.STOP_REQUESTED)
@@ -147,6 +161,14 @@ class LocalOnlyHotspotAdapter(
 
         /** Local reason code used when the device exposes no WifiManager at all. */
         const val REASON_NO_WIFI_SERVICE: Int = -1
+
+        /**
+         * Local reason code used when the platform throws [SecurityException] at the
+         * call site because the revocable Wi-Fi permission was withdrawn after the
+         * pre-flight check. Distinct from [REASON_NO_WIFI_SERVICE] and from every
+         * `LocalOnlyHotspotCallback.ERROR_*` code.
+         */
+        const val REASON_PERMISSION_DENIED: Int = -2
 
         /** Strips the surrounding quotes Android sometimes puts around a raw SSID. */
         internal fun GoNormalizeSsid(raw: String): String =

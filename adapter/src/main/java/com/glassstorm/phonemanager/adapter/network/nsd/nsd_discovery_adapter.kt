@@ -1,5 +1,6 @@
 package com.glassstorm.phonemanager.adapter.network.nsd
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
@@ -145,7 +146,7 @@ class NsdDiscoveryAdapter(
 
     private fun GoAcquireMulticastLock() {
         val GoNeeded = GoNeedsMulticastLock(Build.VERSION.SDK_INT) {
-            SdkExtensions.getExtensionVersion(Build.VERSION_CODES.TIRAMISU)
+            GoTiramisuExtensionVersion()
         }
         if (!GoNeeded) return
         val GoLock = GoWifi.createMulticastLock(GoMulticastLockTag)
@@ -153,6 +154,23 @@ class NsdDiscoveryAdapter(
         GoLock.acquire()
         GoMulticastLock = GoLock
     }
+
+    /**
+     * Tiramisu SDK-extension version, with the API-30 guard the lint analysis can
+     * follow.
+     *
+     * [SdkExtensions.getExtensionVersion] requires API 30. [GoNeedsMulticastLock]
+     * only invokes the extension probe at `sdkInt == 33`, but that call crosses a
+     * function boundary and lint cannot see it, so the guard is repeated here: on
+     * API 29 (the app's targetSdk) the Tiramisu extension does not exist and `0`
+     * is the safe, below-threshold fallback.
+     */
+    private fun GoTiramisuExtensionVersion(): Int =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            SdkExtensions.getExtensionVersion(Build.VERSION_CODES.TIRAMISU)
+        } else {
+            GoTiramisuExtensionAbsent
+        }
 
     private fun GoReleaseMulticastLock() {
         val GoLock = GoMulticastLock ?: return
@@ -234,6 +252,18 @@ class NsdDiscoveryAdapter(
         GoNsd.resolveService(goInfo, GoListener)
     }
 
+    /**
+     * Resolves a discovered service through the `ServiceInfoCallback` API.
+     *
+     * `@SuppressLint("NewApi")` is the annotation lint follows across the function
+     * boundary: `GoResolve` only reaches this branch when
+     * `GoUsesServiceInfoCallback(Build.VERSION.SDK_INT)` is true, which holds only at
+     * `sdkInt >= 35` — so `ServiceInfoCallback` (API 34) and
+     * `registerServiceInfoCallback` (T-ext 7) are unreachable on API 29-34 at
+     * runtime. The API-29-34 `resolveService` path in [GoResolveViaDeprecatedPath]
+     * is untouched and remains the live path on this app's targetSdk 29.
+     */
+    @SuppressLint("NewApi") // Guarded by GoUsesServiceInfoCallback(): only reachable at sdkInt >= 35.
     private fun GoResolveViaServiceInfoCallback(
         goInfo: NsdServiceInfo,
         goLatch: CountDownLatch,
@@ -275,5 +305,12 @@ class NsdDiscoveryAdapter(
         const val GoDefaultServiceType: String = "_ecosys._tcp"
 
         const val GoMulticastLockTag: String = "phone-manager:mdns"
+
+        /**
+         * Extension version reported below API 30, where `SdkExtensions` does not
+         * exist. `0` is below every meaningful Tiramisu extension, so the
+         * multicast-lock predicate can never be weakened by the fallback.
+         */
+        const val GoTiramisuExtensionAbsent: Int = 0
     }
 }

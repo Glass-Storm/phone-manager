@@ -1,5 +1,6 @@
 package com.glassstorm.phonemanager.adapter.network.wifi
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.net.wifi.WifiManager
 import java.net.Inet4Address
@@ -73,6 +74,19 @@ class PlatformHotspotLauncher(
     private val GoTimeoutMs: Long = LocalOnlyHotspotAdapter.DEFAULT_LAUNCH_TIMEOUT_MS,
 ) : HotspotLauncher {
 
+    /**
+     * Starts the platform hotspot.
+     *
+     * `@SuppressLint("MissingPermission")` is load-bearing but honest: lint cannot
+     * see across functions, so it cannot observe that the caller
+     * [LocalOnlyHotspotAdapter.GoStartHotspot] gates this with
+     * `GoHasRequiredPermission()` (API-branched `ACCESS_FINE_LOCATION` below API 33,
+     * `NEARBY_WIFI_DEVICES` from API 33) plus the location-services check before it
+     * ever invokes this launcher. The grant is revocable, so it may be withdrawn
+     * between that check and this call; the call is therefore ALSO defended at
+     * runtime (below) rather than relying on the annotation alone.
+     */
+    @SuppressLint("MissingPermission") // Guarded by LocalOnlyHotspotAdapter.GoHasRequiredPermission(); SecurityException is handled below.
     override fun GoLaunch(): HotspotLaunch {
         val GoWifi = GoContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
             ?: return HotspotLaunch.Denied(LocalOnlyHotspotAdapter.REASON_NO_WIFI_SERVICE)
@@ -93,7 +107,12 @@ class PlatformHotspotLauncher(
                 GoLatch.countDown()
             }
         }
-        GoWifi.startLocalOnlyHotspot(GoCallback, null)
+        try {
+            GoWifi.startLocalOnlyHotspot(GoCallback, null)
+        } catch (GoDenied: SecurityException) {
+            GoOutcome.set(HotspotLaunch.Denied(LocalOnlyHotspotAdapter.REASON_PERMISSION_DENIED))
+            GoLatch.countDown()
+        }
         if (!GoLatch.await(GoTimeoutMs, TimeUnit.MILLISECONDS)) {
             return HotspotLaunch.TimedOut
         }
