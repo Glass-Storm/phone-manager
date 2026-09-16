@@ -10,6 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.glassstorm.phonemanager.domain.context.Context
 import com.glassstorm.phonemanager.ui.components.Scaffold
 import com.glassstorm.phonemanager.ui.components.Text
 
@@ -27,8 +28,6 @@ val GO_ROUTES: List<String> = listOf(
     GoRouteSettings,
 )
 
-const val GoPlaceholderDashboard = "Dashboard"
-const val GoPlaceholderPairing = "Pairing"
 const val GoPlaceholderStream = "Stream"
 const val GoPlaceholderDevices = "Devices"
 const val GoPlaceholderSettings = "Settings"
@@ -36,11 +35,18 @@ const val GoPlaceholderSettings = "Settings"
 /**
  * The app shell: one [NavHost] over the five routes the hub exposes.
  *
- * Screens are placeholders in this todo; T13/T16/T17 replace each destination body
- * with a ViewModel-backed screen while keeping these route names stable.
+ * [GoContext] is the composition root's registry, handed down so each screen can
+ * build its ViewModel against the domain ports. The default is an EMPTY registry
+ * on purpose: the shell must still render (screens degrade to an "unavailable"
+ * line) when a port is missing, which is exactly the state the shell test composes.
+ *
+ * `stream`/`devices`/`settings` are still placeholders; T16/T17 own them.
  */
 @Composable
-fun AppShell(GoStartRoute: String = GoRouteDashboard) {
+fun AppShell(
+    GoStartRoute: String = GoRouteDashboard,
+    GoContext: Context = Context(),
+) {
     val GoNavController = rememberNavController()
 
     Scaffold(modifier = Modifier.fillMaxSize()) { GoInsets ->
@@ -49,8 +55,8 @@ fun AppShell(GoStartRoute: String = GoRouteDashboard) {
             startDestination = GoStartRoute,
             modifier = Modifier.fillMaxSize(),
         ) {
-            composable(GoRouteDashboard) { GoPlaceholder(GoInsets, GoPlaceholderDashboard) }
-            composable(GoRoutePairing) { GoPlaceholder(GoInsets, GoPlaceholderPairing) }
+            composable(GoRouteDashboard) { DashboardScreen(GoContext, Modifier.padding(GoInsets)) }
+            composable(GoRoutePairing) { PairingScreen(GoContext, Modifier.padding(GoInsets)) }
             composable(GoRouteStream) { GoPlaceholder(GoInsets, GoPlaceholderStream) }
             composable(GoRouteDevices) { GoPlaceholder(GoInsets, GoPlaceholderDevices) }
             composable(GoRouteSettings) { GoPlaceholder(GoInsets, GoPlaceholderSettings) }
