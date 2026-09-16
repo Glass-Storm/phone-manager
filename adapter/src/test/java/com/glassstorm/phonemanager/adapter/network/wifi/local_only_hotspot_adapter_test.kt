@@ -192,6 +192,48 @@ class LocalOnlyHotspotAdapterTest {
     }
 
     @Test
+    fun `a repeated start while active reuses the live reservation and never leaks`() {
+        // Given a permitted device and a launcher that records every platform launch,
+        // so a leaked re-launch on a double start becomes observable
+        GoGrantFineLocation()
+        GoSetLocationEnabled(true)
+        val GoLaunches = mutableListOf<WifiManager.LocalOnlyHotspotReservation>()
+        val GoHotspot = LocalOnlyHotspotAdapter(
+            GoContext = GoApp,
+            GoLauncher = HotspotLauncher {
+                val GoNext = GoBuildWifiReservation("ssid-${GoLaunches.size + 1}", "pass")
+                GoLaunches += GoNext
+                HotspotLaunch.Granted(GoNext)
+            },
+            GoTetherProbe = TetherProbe { emptyList() },
+        )
+        val GoFirstInfo = GoHotspot.GoStartHotspot()
+        assertThat(GoFirstInfo.GoSsid).isEqualTo("ssid-1")
+
+        // When the hotspot is started AGAIN while already ACTIVE
+        val GoSecondInfo = GoHotspot.GoStartHotspot()
+
+        // Then the platform was launched exactly once, so no second reservation exists
+        // to leak, and the live credentials from the first start are returned verbatim
+        assertThat(GoLaunches).hasSize(1)
+        assertThat(GoSecondInfo.GoSsid).isEqualTo(GoFirstInfo.GoSsid)
+        assertThat(GoSecondInfo.GoPassphrase).isEqualTo(GoFirstInfo.GoPassphrase)
+        assertThat(GoSecondInfo.GoGatewayIp).isEqualTo(GoFirstInfo.GoGatewayIp)
+
+        // And the machine never left ACTIVE and still holds exactly its one reservation
+        assertThat(GoHotspot.GoState).isEqualTo(HotspotState.ACTIVE)
+        assertThat(GoHotspot.GoIsActive()).isTrue()
+        assertThat(GoHotspot.GoHasLiveReservation()).isTrue()
+
+        // And teardown afterwards still closes cleanly and stays idempotent
+        GoHotspot.GoStopHotspot()
+        GoHotspot.GoStopHotspot()
+        assertThat(GoHotspot.GoHasLiveReservation()).isFalse()
+        assertThat(GoHotspot.GoState).isEqualTo(HotspotState.IDLE)
+        assertThat(GoHotspot.GoIsActive()).isFalse()
+    }
+
+    @Test
     fun `stop when never started is a no-op`() {
         // Given a never-started adapter
         val GoHotspot = GoAdapter(HotspotLaunch.TimedOut)

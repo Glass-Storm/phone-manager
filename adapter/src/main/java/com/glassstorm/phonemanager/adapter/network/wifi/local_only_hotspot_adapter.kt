@@ -12,6 +12,7 @@ import com.glassstorm.phonemanager.domain.network.HotspotEvent
 import com.glassstorm.phonemanager.domain.network.HotspotFailure
 import com.glassstorm.phonemanager.domain.network.HotspotState
 import com.glassstorm.phonemanager.domain.network.HotspotStateMachine
+import com.glassstorm.phonemanager.domain.network.HotspotTransition
 import com.glassstorm.phonemanager.domain.network.HotspotUnavailableException
 
 /**
@@ -40,7 +41,13 @@ class LocalOnlyHotspotAdapter(
     fun GoHasLiveReservation(): Boolean = GoReservation != null
 
     override fun GoStartHotspot(): HotspotInfo {
-        GoMachine.GoAccept(HotspotEvent.START_REQUESTED)
+        val GoTransition = GoMachine.GoAccept(HotspotEvent.START_REQUESTED)
+        if (GoTransition is HotspotTransition.Rejected) {
+            // Already ACTIVE (or STOPPING): a repeated start is a no-op that must NOT
+            // transition state and must NOT launch again. Return the credentials of the
+            // one live reservation so the caller is served without a second platform start.
+            return GoInfoFor(GoLiveReservationOrFail(GoTransition))
+        }
         if (!GoHasRequiredPermission()) {
             GoFail(HotspotFailure.PermissionDenied)
         }
@@ -49,12 +56,10 @@ class LocalOnlyHotspotAdapter(
         }
         return when (val GoLaunch = GoLauncher.GoLaunch()) {
             is HotspotLaunch.Granted -> {
+                // Defensive: never orphan a live reservation by overwriting the field.
+                GoReservation?.let { GoCloseQuietly(it) }
                 GoReservation = GoLaunch.GoReservation
-                val GoInfo = HotspotInfo(
-                    GoSsid = GoReadSsid(GoLaunch.GoReservation),
-                    GoPassphrase = GoReadPassphrase(GoLaunch.GoReservation),
-                    GoGatewayIp = GoDiscoverGateway(),
-                )
+                val GoInfo = GoInfoFor(GoLaunch.GoReservation)
                 GoMachine.GoAccept(HotspotEvent.STARTED)
                 GoInfo
             }
@@ -66,6 +71,25 @@ class LocalOnlyHotspotAdapter(
             )
         }
     }
+
+    /** Credentials of [reservation]; the single place SSID/passphrase/gateway are read. */
+    private fun GoInfoFor(reservation: WifiManager.LocalOnlyHotspotReservation): HotspotInfo =
+        HotspotInfo(
+            GoSsid = GoReadSsid(reservation),
+            GoPassphrase = GoReadPassphrase(reservation),
+            GoGatewayIp = GoDiscoverGateway(),
+        )
+
+    /**
+     * The live reservation if one is held, otherwise a typed failure.
+     *
+     * A rejected start while `ACTIVE` implies a live reservation, so the null branch is
+     * only the (unreachable) invariant breach; it fails typed rather than returning stale data.
+     */
+    private fun GoLiveReservationOrFail(
+        rejection: HotspotTransition.Rejected,
+    ): WifiManager.LocalOnlyHotspotReservation =
+        GoReservation ?: GoFail(rejection.GoFailure)
 
     /**
      * Maps a platform refusal reason to its typed failure.
