@@ -1,18 +1,14 @@
 package com.glassstorm.phonemanager.ui
 
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.glassstorm.phonemanager.domain.context.Context
 import com.glassstorm.phonemanager.ui.components.Scaffold
-import com.glassstorm.phonemanager.ui.components.Text
 
 const val GoRouteDashboard = "dashboard"
 const val GoRoutePairing = "pairing"
@@ -28,9 +24,6 @@ val GO_ROUTES: List<String> = listOf(
     GoRouteSettings,
 )
 
-const val GoPlaceholderDevices = "Devices"
-const val GoPlaceholderSettings = "Settings"
-
 /**
  * The app shell: one [NavHost] over the five routes the hub exposes.
  *
@@ -38,8 +31,6 @@ const val GoPlaceholderSettings = "Settings"
  * build its ViewModel against the domain ports. The default is an EMPTY registry
  * on purpose: the shell must still render (screens degrade to an "unavailable"
  * line) when a port is missing, which is exactly the state the shell test composes.
- *
- * `devices`/`settings` are still placeholders; T17 owns them.
  */
 @Composable
 fun AppShell(
@@ -57,18 +48,8 @@ fun AppShell(
             composable(GoRouteDashboard) { DashboardScreen(GoContext, Modifier.padding(GoInsets)) }
             composable(GoRoutePairing) { PairingScreen(GoContext, Modifier.padding(GoInsets)) }
             composable(GoRouteStream) { StreamScreen(GoContext, Modifier.padding(GoInsets)) }
-            composable(GoRouteDevices) { GoPlaceholder(GoInsets, GoPlaceholderDevices) }
-            composable(GoRouteSettings) { GoPlaceholder(GoInsets, GoPlaceholderSettings) }
+            composable(GoRouteDevices) { DevicesScreen(GoContext, Modifier.padding(GoInsets)) }
+            composable(GoRouteSettings) { SettingsScreen(GoContext, Modifier.padding(GoInsets)) }
         }
-    }
-}
-
-@Composable
-private fun GoPlaceholder(GoInsets: PaddingValues, GoLabel: String) {
-    Box(
-        modifier = Modifier.fillMaxSize().padding(GoInsets),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(GoLabel)
     }
 }

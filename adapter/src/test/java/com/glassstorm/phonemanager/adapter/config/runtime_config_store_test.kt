@@ -120,4 +120,63 @@ class RuntimeConfigStoreTest {
         assertThat(GoReopened.GoApiKey()).isEqualTo("abc-123")
         assertThat(GoReopened.GoRegion()).isEqualTo("au")
     }
+
+    @Test
+    fun `the domain port maps the stored adapter kind to the domain engine`() {
+        // Given the adapter-local spelling is what is persisted
+        GoStore.GoSetSttAdapterKind(SttAdapterKind.SPEECHMATICS)
+
+        // When the domain port is read
+        val GoPort: com.glassstorm.phonemanager.domain.adapter.config.AppConfig = GoStore
+
+        // Then the domain vocabulary is returned, not the adapter enum
+        assertThat(GoPort.GoSttEngine())
+            .isEqualTo(com.glassstorm.phonemanager.domain.dto.SttEngine.SPEECHMATICS)
+    }
+
+    @Test
+    fun `a fresh install defaults the domain port to mock and manual hotspot`() {
+        val GoPort: com.glassstorm.phonemanager.domain.adapter.config.AppConfig = GoStore
+
+        assertThat(GoPort.GoSttEngine())
+            .isEqualTo(com.glassstorm.phonemanager.domain.dto.SttEngine.MOCK)
+        assertThat(GoPort.GoHotspotMode())
+            .isEqualTo(com.glassstorm.phonemanager.domain.dto.HotspotMode.MANUAL)
+    }
+
+    @Test
+    fun `the hotspot mode round-trips through the domain port`() {
+        val GoPort: com.glassstorm.phonemanager.domain.adapter.config.AppConfig = GoStore
+
+        GoPort.GoSetHotspotMode(com.glassstorm.phonemanager.domain.dto.HotspotMode.AUTO)
+        assertThat(GoPort.GoHotspotMode())
+            .isEqualTo(com.glassstorm.phonemanager.domain.dto.HotspotMode.AUTO)
+
+        GoPort.GoSetHotspotMode(com.glassstorm.phonemanager.domain.dto.HotspotMode.MANUAL)
+        assertThat(GoPort.GoHotspotMode())
+            .isEqualTo(com.glassstorm.phonemanager.domain.dto.HotspotMode.MANUAL)
+    }
+
+    @Test
+    fun `an unknown persisted hotspot mode falls back to manual`() {
+        GoContext.getSharedPreferences(RuntimeConfigStore.GO_PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putString(RuntimeConfigStore.GO_KEY_HOTSPOT_MODE, "not-a-mode")
+            .commit()
+
+        assertThat(RuntimeConfigStore(GoContext).GoHotspotMode())
+            .isEqualTo(com.glassstorm.phonemanager.domain.dto.HotspotMode.MANUAL)
+    }
+
+    @Test
+    fun `the api key is never returned as part of the domain port's string form`() {
+        // Given a stored key
+        GoStore.GoSetApiKey("secret-key-value")
+
+        // When the store is stringified (the shape a log line would take)
+        val GoText = GoStore.toString()
+
+        // Then the key does not appear: persistence is secret-safe by construction
+        assertThat(GoText).doesNotContain("secret-key-value")
+    }
 }

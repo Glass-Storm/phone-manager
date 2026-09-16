@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Cloud-backup exclusions (Android 11 and below; from API 31 the platform also
+  reads data_extraction_rules.xml).
+
+  WHAT IS EXCLUDED AND WHY
+  ========================
+  * `runtime_config.xml` holds the Speechmatics API key (see the adapter's
+    RuntimeConfigStore, prefs file "runtime_config"). A cloud copy of a paid API
+    credential is a leak, so the whole prefs file is excluded rather than the key
+    alone.
+  * `phone_manager.db` is the SQLite paired-device store; it holds each paired
+    device's token HASH. It is device-bound security state: restoring it onto
+    another device would resurrect pairings that were never made there, so it is
+    excluded from backup AND from device transfer.
+
+  This mirrors the reference repo's posture
+  (SpeakerDiarazation-Gesture res/xml/backup_rules.xml), which excludes its own
+  runtime_config.xml for the same reason.
+
+  EXCLUSIONS, NOT INCLUSIONS
+  ==========================
+  Everything else remains eligible for backup. The exclusions below are the
+  security-relevant subset only.
+
+  XML NOTE: an XML comment may not contain a double hyphen run, so the separators
+  above use `=`.
+-->
+<full-backup-content>
+    <exclude domain="sharedpref" path="runtime_config.xml" />
+    <exclude domain="database" path="phone_manager.db" />
+</full-backup-content>

@@ -1,14 +1,19 @@
 package com.glassstorm.phonemanager.ui
 
+import com.glassstorm.phonemanager.battery.BatteryExemption
+import com.glassstorm.phonemanager.domain.adapter.config.AppConfig
 import com.glassstorm.phonemanager.domain.adapter.network.HotspotController
+import com.glassstorm.phonemanager.domain.adapter.repository.DeviceRepository
 import com.glassstorm.phonemanager.domain.adapter.transport.HubServer
 import com.glassstorm.phonemanager.domain.dto.Device
 import com.glassstorm.phonemanager.domain.dto.HotspotInfo
+import com.glassstorm.phonemanager.domain.dto.HotspotMode
 import com.glassstorm.phonemanager.domain.dto.PairOutcome
 import com.glassstorm.phonemanager.domain.dto.Pairing
 import com.glassstorm.phonemanager.domain.dto.RelayResult
 import com.glassstorm.phonemanager.domain.dto.RelaySession
 import com.glassstorm.phonemanager.domain.dto.RelayStats
+import com.glassstorm.phonemanager.domain.dto.SttEngine
 import com.glassstorm.phonemanager.domain.network.HotspotFailure
 import com.glassstorm.phonemanager.domain.network.HotspotUnavailableException
 import com.glassstorm.phonemanager.domain.service.PairingService
@@ -228,4 +233,137 @@ class FakeStreamService(
     }
 
     override fun GoStats(): RelayStats = GoStatsValue.copy(GoLiveSessions = GoLiveSessions)
+}
+
+/**
+ * [DeviceRepository] fake for the Devices screen, implementing the DOMAIN port.
+ *
+ * [GoFailOnList] lets a test drive the "repository unavailable" path: the screen
+ * must degrade to an unavailable state rather than crash when the store throws.
+ * Deletes are tracked in [GoDeletedIds] so a revoke can be proven independently of
+ * the list mutation it causes.
+ */
+class FakeDeviceRepository(
+    GoSeed: List<Device> = emptyList(),
+    private val GoFailOnList: Boolean = false,
+) : DeviceRepository {
+    private val GoRows: MutableMap<String, Device> = linkedMapOf()
+
+    val GoDeletedIds: MutableList<String> = mutableListOf()
+
+    init {
+        GoSeed.forEach { GoRows[it.GoDeviceId] = it }
+    }
+
+    fun GoSeedDevice(
+        deviceId: String,
+        deviceName: String,
+        role: String = "GLASS",
+        lastSeenMs: Long? = null,
+    ) {
+        GoRows[deviceId] = Device(
+            GoDeviceId = deviceId,
+            GoDeviceName = deviceName,
+            GoRole = role,
+            GoTokenHash = "hash-$deviceId",
+            GoPairedAtMs = 1_000L,
+            GoLastSeenMs = lastSeenMs,
+        )
+    }
+
+    override fun GoUpsert(device: Device) {
+        GoRows[device.GoDeviceId] = device
+    }
+
+    override fun GoGet(deviceId: String): Device? = GoRows[deviceId]
+
+    override fun GoGetByTokenHash(tokenHash: String): Device? =
+        GoRows.values.firstOrNull { it.GoTokenHash == tokenHash }
+
+    override fun GoList(): List<Device> {
+        if (GoFailOnList) throw IllegalStateException("device store unavailable")
+        return GoRows.values.toList()
+    }
+
+    override fun GoTouch(deviceId: String, seenAtMs: Long) {
+        GoRows[deviceId]?.let { GoRows[deviceId] = it.copy(GoLastSeenMs = seenAtMs) }
+    }
+
+    override fun GoDelete(deviceId: String) {
+        GoDeletedIds.add(deviceId)
+        GoRows.remove(deviceId)
+    }
+}
+
+/**
+ * [AppConfig] fake implementing the DOMAIN port only.
+ *
+ * [GoStoredKey] is what a real store would hold; the screen must never render it in
+ * cleartext by default, so the value is a recognizable sentinel the test can search
+ * for in the semantics tree.
+ */
+class FakeAppConfig(
+    GoStoredKey: String = "",
+    GoEngine: SttEngine = SttEngine.MOCK,
+    GoRegionValue: String = AppConfig.GoDefaultRegion,
+    GoMode: HotspotMode = HotspotMode.MANUAL,
+) : AppConfig {
+    private var GoKeyValue: String = GoStoredKey
+    private var GoEngineValue: SttEngine = GoEngine
+    private var GoRegionValue: String = GoRegionValue
+    private var GoModeValue: HotspotMode = GoMode
+
+    var GoSetSttAdapterCalls: Int = 0
+        private set
+
+    var GoSetRegionCalls: Int = 0
+        private set
+
+    var GoSetHotspotModeCalls: Int = 0
+        private set
+
+    override fun GoSttEngine(): SttEngine = GoEngineValue
+
+    override fun GoSetSttEngine(kind: SttEngine) {
+        GoSetSttAdapterCalls += 1
+        GoEngineValue = kind
+    }
+
+    override fun GoApiKey(): String = GoKeyValue
+
+    override fun GoSetApiKey(apiKey: String?) {
+        GoKeyValue = apiKey?.trim().orEmpty()
+    }
+
+    override fun GoRegion(): String = GoRegionValue
+
+    override fun GoSetRegion(region: String?) {
+        GoSetRegionCalls += 1
+        region?.trim()?.lowercase()?.takeIf { it.isNotEmpty() }?.let {
+            if (it in setOf("global", "eu", "us", "au")) GoRegionValue = it
+        }
+    }
+
+    override fun GoHotspotMode(): HotspotMode = GoModeValue
+
+    override fun GoSetHotspotMode(mode: HotspotMode) {
+        GoSetHotspotModeCalls += 1
+        GoModeValue = mode
+    }
+}
+
+/** [BatteryExemption] fake: the state is settable and every request is counted. */
+class FakeBatteryExemption(private var GoExempt: Boolean = false) : BatteryExemption {
+    var GoRequestCalls: Int = 0
+        private set
+
+    fun GoSetExempt(exempt: Boolean) {
+        GoExempt = exempt
+    }
+
+    override fun GoIsExempt(): Boolean = GoExempt
+
+    override fun GoRequestExemption() {
+        GoRequestCalls += 1
+    }
 }

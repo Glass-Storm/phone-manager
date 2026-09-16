@@ -1,15 +1,21 @@
 package com.glassstorm.phonemanager
 
 import android.content.Context as GoAndroidContext
+import com.glassstorm.phonemanager.adapter.config.RuntimeConfigStore
 import com.glassstorm.phonemanager.adapter.network.nsd.NsdDiscoveryAdapter
 import com.glassstorm.phonemanager.adapter.network.wifi.LocalOnlyHotspotAdapter
 import com.glassstorm.phonemanager.adapter.repository.memory.MemoryDeviceRepository
+import com.glassstorm.phonemanager.adapter.repository.sqlite.SqliteDeviceRepository
 import com.glassstorm.phonemanager.adapter.transport.grpc.HubServerAdapter
+import com.glassstorm.phonemanager.battery.AndroidBatteryExemption
+import com.glassstorm.phonemanager.battery.BatteryExemption
+import com.glassstorm.phonemanager.domain.adapter.config.AppConfig
 import com.glassstorm.phonemanager.domain.adapter.network.Discovery
 import com.glassstorm.phonemanager.domain.adapter.network.HotspotController
 import com.glassstorm.phonemanager.domain.adapter.repository.DeviceRepository
 import com.glassstorm.phonemanager.domain.adapter.transport.HubServer
 import com.glassstorm.phonemanager.domain.context.Context
+import com.glassstorm.phonemanager.domain.context.FromContextOrNull
 import com.glassstorm.phonemanager.domain.context.Register
 import com.glassstorm.phonemanager.domain.service.DeviceService
 import com.glassstorm.phonemanager.domain.service.PairingService
@@ -48,16 +54,18 @@ object AppComposition {
     /**
      * Record the Android application context BEFORE the registry is first built.
      *
-     * The network adapters need a real `WifiManager`/`NsdManager`, which only an
-     * Android Context can supply, so the hub's own [HubForegroundService] calls
-     * this in `onCreate` — before anything resolves the registry.
+     * The persistent repository and the config store need an Android Context, and
+     * the network adapters need a real `WifiManager`/`NsdManager`; only an Android
+     * Context can supply them. The hub's own [HubForegroundService] calls this in
+     * `onCreate` — before anything resolves the registry.
      */
     fun GoInitAndroid(goAndroidContext: GoAndroidContext) {
         GoAndroidAppContext = goAndroidContext.applicationContext
         // A registry built before the Android Context arrived (e.g. the UI resolved
-        // first) would lack the platform-backed network ports. Register them into
-        // the live singleton so the hub never comes up half-wired.
-        GoSingleton?.let { GoRegisterNetwork(it, GoAndroidAppContext) }
+        // first) would hold the in-memory repository and lack the platform-backed
+        // ports. Re-register them into the live singleton so the hub never comes up
+        // half-wired (and so settings persist instead of silently resetting).
+        GoSingleton?.let { GoRegisterAndroidBacked(it, GoAndroidAppContext) }
     }
 
     /**
@@ -76,16 +84,21 @@ object AppComposition {
      * Build a registry.
      *
      * [goAndroidContext] is optional: the pure-JVM/UI slice and the unit tests
-     * build a registry without it, and the platform-backed network adapters are
-     * registered only when one is present (they cannot be constructed without it).
+     * build a registry without it. With no Android Context the repository falls
+     * back to the in-memory implementation and the config port is simply absent;
+     * with one, the SQLite repository and the app-private config store are bound.
      */
     fun GoBuildContext(goAndroidContext: GoAndroidContext? = null): Context {
         val GoCtx = Context()
 
-        // Adapter layer: bind the concrete repository under the DOMAIN port type.
-        Register<DeviceRepository>(GoCtx, MemoryDeviceRepository())
+        // Adapter layer: bind a concrete repository under the DOMAIN port type.
+        // No Android Context means no persistent store, so the in-memory fake is the
+        // fallback (and what the pure-JVM AppCompositionTest resolves).
+        if (goAndroidContext == null) {
+            Register<DeviceRepository>(GoCtx, MemoryDeviceRepository())
+        }
 
-        GoRegisterNetwork(GoCtx, goAndroidContext)
+        GoRegisterAndroidBacked(GoCtx, goAndroidContext)
 
         // Service layer: the service resolves its collaborator from the Context.
         Register<DeviceService>(GoCtx, DeviceServiceImpl(GoCtx))
@@ -107,14 +120,21 @@ object AppComposition {
     }
 
     /**
-     * Register the platform-backed network ports when an Android Context exists.
+     * Register the Android-backed adapters when an Android Context exists.
      *
-     * The discovery adapter's gateway fallback is left unconfigured: it is a
-     * settings-owned value (T17), and the hub's own use of the port is advertising,
-     * which needs no fallback.
+     * Registered together and guarded by the [AppConfig] binding so a repeated
+     * [GoInitAndroid] (the service can be re-created) is a no-op rather than a
+     * second repository over the same database file. The discovery gateway
+     * fallback is left unconfigured: it is a settings-owned value, and the hub's
+     * own use of the port is advertising, which needs no fallback.
      */
-    private fun GoRegisterNetwork(GoCtx: Context, goAndroidContext: GoAndroidContext?) {
+    private fun GoRegisterAndroidBacked(GoCtx: Context, goAndroidContext: GoAndroidContext?) {
         if (goAndroidContext == null) return
+        if (FromContextOrNull<AppConfig>(GoCtx) != null) return
+
+        Register<DeviceRepository>(GoCtx, SqliteDeviceRepository(goAndroidContext))
+        Register<AppConfig>(GoCtx, RuntimeConfigStore(goAndroidContext))
+        Register<BatteryExemption>(GoCtx, AndroidBatteryExemption(goAndroidContext))
         Register<HotspotController>(GoCtx, LocalOnlyHotspotAdapter(goAndroidContext))
         Register<Discovery>(GoCtx, NsdDiscoveryAdapter(goAndroidContext, GoGatewayFallback = null))
     }
