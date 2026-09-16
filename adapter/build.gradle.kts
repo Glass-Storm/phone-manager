@@ -57,6 +57,10 @@ dependencies {
     // Annotations referenced by the generated gRPC Java stubs.
     compileOnly(libs.annotations.api)
 
+    // The Speechmatics realtime adapter speaks WebSocket (JWT exchange over HTTPS,
+    // then binary/text frames). OkHttp is the transport the reference client proved.
+    implementation(libs.okhttp)
+
     testImplementation(libs.junit)
     testImplementation(libs.truth)
     testImplementation(libs.turbine)
