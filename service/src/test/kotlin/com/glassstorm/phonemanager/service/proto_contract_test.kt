@@ -17,15 +17,16 @@ import org.junit.Test
  * required. Everything asserted here is generated, never hand-written.
  */
 class ProtoContractTest {
-
     @Test
     fun `StreamFrame result payload round trips through serialization`() {
         // Given a frame carrying a diarized result
-        val GoResult = StreamResult.newBuilder()
-            .setText("hello world")
-            .setSpeakerLabel("spk-1")
-            .setPtsMs(42L)
-            .build()
+        val GoResult =
+            StreamResult
+                .newBuilder()
+                .setText("hello world")
+                .setSpeakerLabel("spk-1")
+                .setPtsMs(42L)
+                .build()
         val GoFrame = StreamFrame.newBuilder().setResult(GoResult).build()
 
         // When it is serialized and parsed back
@@ -66,11 +67,13 @@ class ProtoContractTest {
     @Test
     fun `PairRequest round trips with its role enum`() {
         // Given a pairing request from a glasses peer
-        val GoRequest = PairRequest.newBuilder()
-            .setPin("123456")
-            .setDeviceName("glass-1")
-            .setRole(DeviceRole.DEVICE_ROLE_GLASS)
-            .build()
+        val GoRequest =
+            PairRequest
+                .newBuilder()
+                .setPin("123456")
+                .setDeviceName("glass-1")
+                .setRole(DeviceRole.DEVICE_ROLE_GLASS)
+                .build()
 
         // When serialized and parsed back
         val GoParsed = PairRequest.parseFrom(GoRequest.toByteArray())

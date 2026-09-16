@@ -8,9 +8,6 @@ import com.glassstorm.phonemanager.domain.dto.RelayResult
 import com.glassstorm.phonemanager.domain.dto.RelaySession
 import com.glassstorm.phonemanager.domain.dto.RelayStats
 import com.glassstorm.phonemanager.domain.service.StreamService
-import java.security.SecureRandom
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -21,6 +18,9 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
+import java.security.SecureRandom
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Audio/video relay use-cases with bounded queues and deterministic teardown.
@@ -52,7 +52,6 @@ class StreamServiceImpl(
     private val GoVideoCapacity: Int = GO_DEFAULT_VIDEO_CAPACITY,
     private val GoScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
 ) : StreamService {
-
     private val GoRandom = SecureRandom()
     private val GoSessions: ConcurrentHashMap<String, GoSessionState> = ConcurrentHashMap()
 
@@ -67,15 +66,20 @@ class StreamServiceImpl(
         val GoResults = Channel<RelayResult>(Channel.UNLIMITED)
         val GoSessionId = GoRelay.GoSessionId
         // One parent job per session: joining it drains BOTH pumps.
-        val GoPump = GoScope.launch {
-            launch { GoAudioPump(GoSessionId, GoQueue, GoResults) }
-            launch { GoVideoPump(GoSessionId, GoQueue) }
-        }
+        val GoPump =
+            GoScope.launch {
+                launch { GoAudioPump(GoSessionId, GoQueue, GoResults) }
+                launch { GoVideoPump(GoSessionId, GoQueue) }
+            }
         GoSessions[GoSessionId] = GoSessionState(GoRelay, GoQueue, GoResults, GoPump)
         return GoRelay
     }
 
-    override suspend fun GoPushAudio(sessionId: String, audioPcm16: ByteArray, sampleRateHz: Int) {
+    override suspend fun GoPushAudio(
+        sessionId: String,
+        audioPcm16: ByteArray,
+        sampleRateHz: Int,
+    ) {
         val GoState = GoSessions[sessionId] ?: return
         try {
             // Parks while the audio queue is full — audio is never dropped.
@@ -88,14 +92,16 @@ class StreamServiceImpl(
         GoAudioFrames.incrementAndGet()
     }
 
-    override fun GoPushVideo(sessionId: String, h264Nal: ByteArray) {
+    override fun GoPushVideo(
+        sessionId: String,
+        h264Nal: ByteArray,
+    ) {
         val GoState = GoSessions[sessionId] ?: return
         GoVideoFrames.incrementAndGet()
         if (GoState.GoQueue.GoAdmitVideo(h264Nal)) GoVideoDropped.incrementAndGet()
     }
 
-    override fun GoResults(sessionId: String): Flow<RelayResult> =
-        GoSessions[sessionId]?.GoResults?.receiveAsFlow() ?: emptyFlow()
+    override fun GoResults(sessionId: String): Flow<RelayResult> = GoSessions[sessionId]?.GoResults?.receiveAsFlow() ?: emptyFlow()
 
     override suspend fun GoCloseSession(sessionId: String) {
         // remove FIRST: a concurrent push then sees "closed" and is a no-op, so no
@@ -107,13 +113,14 @@ class StreamServiceImpl(
         FromContext<SttPort>(GoCtx).GoClose(sessionId)
     }
 
-    override fun GoStats(): RelayStats = RelayStats(
-        GoAudioFrames = GoAudioFrames.get(),
-        GoVideoFrames = GoVideoFrames.get(),
-        GoVideoDropped = GoVideoDropped.get(),
-        GoTranscripts = GoTranscripts.get(),
-        GoLiveSessions = GoSessions.size,
-    )
+    override fun GoStats(): RelayStats =
+        RelayStats(
+            GoAudioFrames = GoAudioFrames.get(),
+            GoVideoFrames = GoVideoFrames.get(),
+            GoVideoDropped = GoVideoDropped.get(),
+            GoTranscripts = GoTranscripts.get(),
+            GoLiveSessions = GoSessions.size,
+        )
 
     private suspend fun GoAudioPump(
         sessionId: String,
@@ -121,8 +128,9 @@ class StreamServiceImpl(
         results: Channel<RelayResult>,
     ) {
         for (GoPcm in queue.GoAudio) {
-            val GoText = FromContext<SttPort>(GoCtx)
-                .GoTranscribe(sessionId, GoPcm, StreamService.GoAudioSampleRateHz)
+            val GoText =
+                FromContext<SttPort>(GoCtx)
+                    .GoTranscribe(sessionId, GoPcm, StreamService.GoAudioSampleRateHz)
             if (GoText != null) {
                 GoTranscripts.incrementAndGet()
                 results.send(RelayResult(GoText = GoText, GoSpeakerLabel = "", GoPtsMs = 0L))
@@ -130,7 +138,10 @@ class StreamServiceImpl(
         }
     }
 
-    private suspend fun GoVideoPump(sessionId: String, queue: RelayQueue) {
+    private suspend fun GoVideoPump(
+        sessionId: String,
+        queue: RelayQueue,
+    ) {
         for (GoNal in queue.GoVideo) {
             // Opaque by contract: the exact bytes are handed on, never decoded.
             FromContext<FrameSink>(GoCtx).GoAcceptVideo(sessionId, GoNal)

@@ -21,28 +21,34 @@ import io.grpc.StatusException
  * [AuthInterceptor] before any of these bodies ran; `Pair` is the single method
  * the interceptor deliberately leaves open.
  */
-class PairingGrpcService(GoCtx: Context) : PairingServiceGrpcKt.PairingServiceCoroutineImplBase() {
-
+class PairingGrpcService(
+    GoCtx: Context,
+) : PairingServiceGrpcKt.PairingServiceCoroutineImplBase() {
     private val GoPairing: PairingService = FromContext<PairingService>(GoCtx)
 
     /** The one unauthenticated RPC: redeem the open-window PIN for a token. */
     override suspend fun pair(request: PairRequest): PairResponse {
-        val GoOutcome = GoPairing.GoPair(
-            pin = request.pin,
-            deviceName = request.deviceName,
-            role = request.role.name,
-        )
+        val GoOutcome =
+            GoPairing.GoPair(
+                pin = request.pin,
+                deviceName = request.deviceName,
+                role = request.role.name,
+            )
         return when (GoOutcome) {
-            is PairOutcome.GoOk -> PairResponse.newBuilder()
-                .setOk(true)
-                .setToken(GoOutcome.GoToken)
-                .setDeviceId(GoOutcome.GoDeviceId)
-                .build()
+            is PairOutcome.GoOk ->
+                PairResponse
+                    .newBuilder()
+                    .setOk(true)
+                    .setToken(GoOutcome.GoToken)
+                    .setDeviceId(GoOutcome.GoDeviceId)
+                    .build()
 
-            is PairOutcome.GoRejected -> PairResponse.newBuilder()
-                .setOk(false)
-                .setRejectReason(GoOutcome.GoReason)
-                .build()
+            is PairOutcome.GoRejected ->
+                PairResponse
+                    .newBuilder()
+                    .setOk(false)
+                    .setRejectReason(GoOutcome.GoReason)
+                    .build()
         }
     }
 
@@ -53,10 +59,12 @@ class PairingGrpcService(GoCtx: Context) : PairingServiceGrpcKt.PairingServiceCo
      * filling in a different `device_id`.
      */
     override suspend fun heartbeat(request: HeartbeatRequest): HeartbeatResponse {
-        val GoDeviceId = AuthInterceptor.GoDeviceIdKey.get()
-            ?: throw StatusException(Status.UNAUTHENTICATED.withDescription("missing bearer token"))
+        val GoDeviceId =
+            AuthInterceptor.GoDeviceIdKey.get()
+                ?: throw StatusException(Status.UNAUTHENTICATED.withDescription("missing bearer token"))
         GoPairing.GoTouchLastSeen(GoDeviceId, System.currentTimeMillis())
-        return HeartbeatResponse.newBuilder()
+        return HeartbeatResponse
+            .newBuilder()
             .setOk(true)
             .setServerTimeMs(System.currentTimeMillis())
             .build()

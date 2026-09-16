@@ -59,7 +59,10 @@ fun PairingScreen(
 }
 
 @Composable
-private fun GoWindowCard(GoState: PairingUiState, GoViewModel: PairingViewModel) {
+private fun GoWindowCard(
+    GoState: PairingUiState,
+    GoViewModel: PairingViewModel,
+) {
     Card {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -92,7 +95,10 @@ private fun GoWindowCard(GoState: PairingUiState, GoViewModel: PairingViewModel)
 }
 
 @Composable
-private fun GoDeviceListCard(GoState: PairingUiState, GoViewModel: PairingViewModel) {
+private fun GoDeviceListCard(
+    GoState: PairingUiState,
+    GoViewModel: PairingViewModel,
+) {
     Card {
         Column(
             modifier = Modifier.padding(16.dp),

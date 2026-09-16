@@ -2,9 +2,9 @@ package com.glassstorm.phonemanager.adapter.repository.sqlite
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
-import com.google.common.truth.Truth.assertThat
 import com.glassstorm.phonemanager.domain.adapter.repository.DeviceRepository
 import com.glassstorm.phonemanager.domain.dto.Device
+import com.google.common.truth.Truth.assertThat
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -19,7 +19,6 @@ import org.robolectric.RobolectricTestRunner
  */
 @RunWith(RobolectricTestRunner::class)
 class SqliteDeviceRepositoryTest {
-
     private lateinit var GoContext: Context
     private lateinit var GoDatabaseName: String
     private lateinit var GoRepo: SqliteDeviceRepository
@@ -44,14 +43,15 @@ class SqliteDeviceRepositoryTest {
         tokenHash: String = "hash-$id",
         pairedAtMs: Long = 1_000L,
         lastSeenMs: Long? = null,
-    ): Device = Device(
-        GoDeviceId = id,
-        GoDeviceName = name,
-        GoRole = role,
-        GoTokenHash = tokenHash,
-        GoPairedAtMs = pairedAtMs,
-        GoLastSeenMs = lastSeenMs,
-    )
+    ): Device =
+        Device(
+            GoDeviceId = id,
+            GoDeviceName = name,
+            GoRole = role,
+            GoTokenHash = tokenHash,
+            GoPairedAtMs = pairedAtMs,
+            GoLastSeenMs = lastSeenMs,
+        )
 
     private fun GoRowCount(): Int =
         GoRepo.readableDatabase.rawQuery("SELECT COUNT(*) FROM paired_device", null).use {
@@ -98,7 +98,7 @@ class SqliteDeviceRepositoryTest {
         // When looked up by the second hash
         // Then only that row returns, with its null last-seen preserved
         assertThat(GoRepo.GoGetByTokenHash("hash-two")).isEqualTo(
-            GoPairedDevice(id = "d-2", name = "daemon", role = "DAEMON", tokenHash = "hash-two")
+            GoPairedDevice(id = "d-2", name = "daemon", role = "DAEMON", tokenHash = "hash-two"),
         )
         assertThat(GoRepo.GoGetByTokenHash("hash-two")?.GoLastSeenMs).isNull()
         assertThat(GoRepo.GoGetByTokenHash("hash-absent")).isNull()

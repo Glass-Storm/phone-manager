@@ -1,26 +1,26 @@
 package com.glassstorm.phonemanager.adapter.repository.memory
 
-import com.google.common.truth.Truth.assertThat
 import com.glassstorm.phonemanager.domain.adapter.repository.DeviceRepository
 import com.glassstorm.phonemanager.domain.dto.Device
+import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 
 /** Behaviour of the in-memory fake adapter — mirrors the real repository port contract. */
 class MemoryDeviceRepositoryTest {
-
     private fun GoPairedDevice(
         id: String,
         name: String = "glass",
         role: String = "GLASS",
         lastSeenMs: Long? = null,
-    ): Device = Device(
-        GoDeviceId = id,
-        GoDeviceName = name,
-        GoRole = role,
-        GoTokenHash = "hash-$id",
-        GoPairedAtMs = 1_000L,
-        GoLastSeenMs = lastSeenMs,
-    )
+    ): Device =
+        Device(
+            GoDeviceId = id,
+            GoDeviceName = name,
+            GoRole = role,
+            GoTokenHash = "hash-$id",
+            GoPairedAtMs = 1_000L,
+            GoLastSeenMs = lastSeenMs,
+        )
 
     @Test
     fun `upsert then get returns the stored device`() {

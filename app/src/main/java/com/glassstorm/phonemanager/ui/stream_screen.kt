@@ -62,7 +62,10 @@ fun StreamScreen(
 }
 
 @Composable
-private fun GoSessionCard(GoState: StreamUiState, GoViewModel: StreamViewModel) {
+private fun GoSessionCard(
+    GoState: StreamUiState,
+    GoViewModel: StreamViewModel,
+) {
     val GoLive = GoState.GoSessionId != null
 
     Card {

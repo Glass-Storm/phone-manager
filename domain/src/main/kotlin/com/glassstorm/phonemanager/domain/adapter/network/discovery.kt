@@ -15,7 +15,10 @@ import com.glassstorm.phonemanager.domain.dto.PeerAddress
  */
 interface Discovery {
     /** Advertise this hub under [name] on [port]. Idempotent for a repeating name/port. */
-    fun GoAdvertise(name: String, port: Int)
+    fun GoAdvertise(
+        name: String,
+        port: Int,
+    )
 
     /** Stop advertising. Idempotent: safe to call when never started. */
     fun GoStopAdvertise()

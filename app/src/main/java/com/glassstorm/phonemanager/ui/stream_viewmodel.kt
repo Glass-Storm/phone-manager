@@ -40,7 +40,6 @@ class StreamViewModel(
     private val GoContext: Context,
     private val GoPollIntervalMs: Long = GoDefaultPollIntervalMs,
 ) : ViewModel() {
-
     private val GoStream: StreamService? = FromContextOrNull<StreamService>(GoContext)
     private val GoPairing: PairingService? = FromContextOrNull<PairingService>(GoContext)
 
@@ -62,10 +61,11 @@ class StreamViewModel(
             GoPairing?.GoListPaired()?.firstOrNull()?.GoDeviceId ?: GoDefaultPeerId
         val GoSession = GoService.GoOpenSession(GoPeerId)
 
-        GoState.value = GoState.value.copy(
-            GoSessionId = GoSession.GoSessionId,
-            GoPeerId = GoSession.GoDeviceId,
-        )
+        GoState.value =
+            GoState.value.copy(
+                GoSessionId = GoSession.GoSessionId,
+                GoPeerId = GoSession.GoDeviceId,
+            )
         GoRefresh()
 
         GoPollJob =
@@ -127,10 +127,11 @@ class StreamViewModel(
     }
 }
 
-private val GoZeroStats = RelayStats(
-    GoAudioFrames = 0L,
-    GoVideoFrames = 0L,
-    GoVideoDropped = 0L,
-    GoTranscripts = 0L,
-    GoLiveSessions = 0,
-)
+private val GoZeroStats =
+    RelayStats(
+        GoAudioFrames = 0L,
+        GoVideoFrames = 0L,
+        GoVideoDropped = 0L,
+        GoTranscripts = 0L,
+        GoLiveSessions = 0,
+    )

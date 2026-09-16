@@ -28,7 +28,6 @@ import org.robolectric.RobolectricTestRunner
  */
 @RunWith(RobolectricTestRunner::class)
 class DevicesScreenTest {
-
     @get:Rule
     val composeRule = createComposeRule()
 
@@ -51,10 +50,11 @@ class DevicesScreenTest {
 
     @Test
     fun `a seeded device list renders names roles and last-seen`() {
-        val GoRepo = FakeDeviceRepository().also {
-            it.GoSeedDevice("d-1", "Glass One", role = "GLASS", lastSeenMs = 1_700_000_000_000L)
-            it.GoSeedDevice("d-2", "Ubuntu Daemon", role = "DAEMON")
-        }
+        val GoRepo =
+            FakeDeviceRepository().also {
+                it.GoSeedDevice("d-1", "Glass One", role = "GLASS", lastSeenMs = 1_700_000_000_000L)
+                it.GoSeedDevice("d-2", "Ubuntu Daemon", role = "DAEMON")
+            }
         val GoCtx = Context().also { Register<DeviceRepository>(it, GoRepo) }
 
         composeRule.GoSetDevicesContent(GoCtx)
@@ -68,9 +68,10 @@ class DevicesScreenTest {
 
     @Test
     fun `a device never seen since pairing shows the never-seen line`() {
-        val GoRepo = FakeDeviceRepository().also {
-            it.GoSeedDevice("d-1", "Glass One", lastSeenMs = null)
-        }
+        val GoRepo =
+            FakeDeviceRepository().also {
+                it.GoSeedDevice("d-1", "Glass One", lastSeenMs = null)
+            }
         val GoCtx = Context().also { Register<DeviceRepository>(it, GoRepo) }
 
         composeRule.GoSetDevicesContent(GoCtx)
@@ -80,10 +81,11 @@ class DevicesScreenTest {
 
     @Test
     fun `revoking a device removes its row from the list`() {
-        val GoRepo = FakeDeviceRepository().also {
-            it.GoSeedDevice("d-1", "Glass One", role = "GLASS")
-            it.GoSeedDevice("d-2", "Ubuntu Daemon", role = "DAEMON")
-        }
+        val GoRepo =
+            FakeDeviceRepository().also {
+                it.GoSeedDevice("d-1", "Glass One", role = "GLASS")
+                it.GoSeedDevice("d-2", "Ubuntu Daemon", role = "DAEMON")
+            }
         val GoCtx = Context().also { Register<DeviceRepository>(it, GoRepo) }
 
         composeRule.GoSetDevicesContent(GoCtx)
@@ -112,9 +114,10 @@ class DevicesScreenTest {
     fun `a failing repository renders unavailable instead of crashing`() {
         // The port exists but its list read throws, which is exactly what a broken
         // database would do: the screen must degrade, not take the shell down.
-        val GoCtx = Context().also {
-            Register<DeviceRepository>(it, FakeDeviceRepository(GoFailOnList = true))
-        }
+        val GoCtx =
+            Context().also {
+                Register<DeviceRepository>(it, FakeDeviceRepository(GoFailOnList = true))
+            }
 
         composeRule.GoSetDevicesContent(GoCtx)
 

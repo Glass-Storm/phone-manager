@@ -7,10 +7,10 @@ import android.location.LocationManager
 import android.net.wifi.WifiConfiguration
 import android.net.wifi.WifiManager
 import androidx.test.core.app.ApplicationProvider
-import com.google.common.truth.Truth.assertThat
 import com.glassstorm.phonemanager.domain.dto.HotspotInfo
 import com.glassstorm.phonemanager.domain.network.HotspotState
 import com.glassstorm.phonemanager.domain.network.HotspotUnavailableException
+import com.google.common.truth.Truth.assertThat
 import org.junit.Assert.assertThrows
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -31,7 +31,6 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [29])
 class LocalOnlyHotspotAdapterTest {
-
     private val GoApp: Application = ApplicationProvider.getApplicationContext()
     private val GoWifi: WifiManager = GoApp.getSystemService(Context.WIFI_SERVICE) as WifiManager
 
@@ -39,12 +38,14 @@ class LocalOnlyHotspotAdapterTest {
         ssid: String,
         passphrase: String,
     ): WifiManager.LocalOnlyHotspotReservation {
-        val GoConfig = WifiConfiguration().apply {
-            SSID = ssid
-            preSharedKey = passphrase
-        }
-        val GoCtor = WifiManager.LocalOnlyHotspotReservation::class.java
-            .getDeclaredConstructor(WifiManager::class.java, WifiConfiguration::class.java)
+        val GoConfig =
+            WifiConfiguration().apply {
+                SSID = ssid
+                preSharedKey = passphrase
+            }
+        val GoCtor =
+            WifiManager.LocalOnlyHotspotReservation::class.java
+                .getDeclaredConstructor(WifiManager::class.java, WifiConfiguration::class.java)
         GoCtor.isAccessible = true
         return GoCtor.newInstance(GoWifi, GoConfig)
     }
@@ -52,11 +53,12 @@ class LocalOnlyHotspotAdapterTest {
     private fun GoAdapter(
         launch: HotspotLaunch,
         candidates: List<TetherCandidate> = emptyList(),
-    ): LocalOnlyHotspotAdapter = LocalOnlyHotspotAdapter(
-        GoContext = GoApp,
-        GoLauncher = HotspotLauncher { launch },
-        GoTetherProbe = TetherProbe { candidates },
-    )
+    ): LocalOnlyHotspotAdapter =
+        LocalOnlyHotspotAdapter(
+            GoContext = GoApp,
+            GoLauncher = HotspotLauncher { launch },
+            GoTetherProbe = TetherProbe { candidates },
+        )
 
     private fun GoGrantFineLocation() {
         Shadows.shadowOf(GoApp).grantPermissions(Manifest.permission.ACCESS_FINE_LOCATION)
@@ -74,9 +76,10 @@ class LocalOnlyHotspotAdapterTest {
         val GoHotspot = GoAdapter(HotspotLaunch.Granted(GoBuildWifiReservation("ssid", "pass")))
 
         // When the hotspot is started
-        val GoThrown = assertThrows(HotspotUnavailableException::class.java) {
-            GoHotspot.GoStartHotspot()
-        }
+        val GoThrown =
+            assertThrows(HotspotUnavailableException::class.java) {
+                GoHotspot.GoStartHotspot()
+            }
 
         // Then the typed cause is PermissionDenied, the state is exactly ERROR, and it is not active
         assertThat(GoThrown.GoFailure)
@@ -94,9 +97,10 @@ class LocalOnlyHotspotAdapterTest {
         val GoHotspot = GoAdapter(HotspotLaunch.Granted(GoBuildWifiReservation("ssid", "pass")))
 
         // When the hotspot is started
-        val GoThrown = assertThrows(HotspotUnavailableException::class.java) {
-            GoHotspot.GoStartHotspot()
-        }
+        val GoThrown =
+            assertThrows(HotspotUnavailableException::class.java) {
+                GoHotspot.GoStartHotspot()
+            }
 
         // Then it fails with LocationServicesDisabled and lands in ERROR
         assertThat(GoThrown.GoFailure).isEqualTo(
@@ -147,15 +151,18 @@ class LocalOnlyHotspotAdapterTest {
         val GoHotspot = GoAdapter(HotspotLaunch.Denied(GoReasonCode = 42))
 
         // When the hotspot is started
-        val GoThrown = assertThrows(HotspotUnavailableException::class.java) {
-            GoHotspot.GoStartHotspot()
-        }
+        val GoThrown =
+            assertThrows(HotspotUnavailableException::class.java) {
+                GoHotspot.GoStartHotspot()
+            }
 
         // Then the state is ERROR (never ACTIVE) and the reason mentions the platform code
         assertThat(GoHotspot.GoState).isEqualTo(HotspotState.ERROR)
         assertThat(GoHotspot.GoIsActive()).isFalse()
-        assertThat((GoThrown.GoFailure as com.glassstorm.phonemanager.domain.network.HotspotFailure.StartFailed)
-            .GoReason).contains("42")
+        assertThat(
+            (GoThrown.GoFailure as com.glassstorm.phonemanager.domain.network.HotspotFailure.StartFailed)
+                .GoReason,
+        ).contains("42")
     }
 
     @Test
@@ -198,15 +205,17 @@ class LocalOnlyHotspotAdapterTest {
         GoGrantFineLocation()
         GoSetLocationEnabled(true)
         val GoLaunches = mutableListOf<WifiManager.LocalOnlyHotspotReservation>()
-        val GoHotspot = LocalOnlyHotspotAdapter(
-            GoContext = GoApp,
-            GoLauncher = HotspotLauncher {
-                val GoNext = GoBuildWifiReservation("ssid-${GoLaunches.size + 1}", "pass")
-                GoLaunches += GoNext
-                HotspotLaunch.Granted(GoNext)
-            },
-            GoTetherProbe = TetherProbe { emptyList() },
-        )
+        val GoHotspot =
+            LocalOnlyHotspotAdapter(
+                GoContext = GoApp,
+                GoLauncher =
+                    HotspotLauncher {
+                        val GoNext = GoBuildWifiReservation("ssid-${GoLaunches.size + 1}", "pass")
+                        GoLaunches += GoNext
+                        HotspotLaunch.Granted(GoNext)
+                    },
+                GoTetherProbe = TetherProbe { emptyList() },
+            )
         val GoFirstInfo = GoHotspot.GoStartHotspot()
         assertThat(GoFirstInfo.GoSsid).isEqualTo("ssid-1")
 
@@ -260,11 +269,12 @@ class LocalOnlyHotspotAdapterTest {
     @Test
     fun `manual tether detection reports the tether interface gateway`() {
         // Given a probe exposing a loopback, a station wlan0 and an AP interface
-        val GoCandidates = listOf(
-            TetherCandidate(GoName = "lo", GoIpv4 = "127.0.0.1"),
-            TetherCandidate(GoName = "wlan0", GoIpv4 = "192.168.1.5"),
-            TetherCandidate(GoName = "ap0", GoIpv4 = "192.168.43.1"),
-        )
+        val GoCandidates =
+            listOf(
+                TetherCandidate(GoName = "lo", GoIpv4 = "127.0.0.1"),
+                TetherCandidate(GoName = "wlan0", GoIpv4 = "192.168.1.5"),
+                TetherCandidate(GoName = "ap0", GoIpv4 = "192.168.43.1"),
+            )
         val GoHotspot = GoAdapter(HotspotLaunch.TimedOut, GoCandidates)
 
         // When a manual tether is detected
@@ -278,13 +288,14 @@ class LocalOnlyHotspotAdapterTest {
     @Test
     fun `manual tether detection returns null when no tether interface exists`() {
         // Given only a loopback and a station interface
-        val GoHotspot = GoAdapter(
-            HotspotLaunch.TimedOut,
-            listOf(
-                TetherCandidate(GoName = "lo", GoIpv4 = "127.0.0.1"),
-                TetherCandidate(GoName = "wlan0", GoIpv4 = "192.168.1.5"),
-            ),
-        )
+        val GoHotspot =
+            GoAdapter(
+                HotspotLaunch.TimedOut,
+                listOf(
+                    TetherCandidate(GoName = "lo", GoIpv4 = "127.0.0.1"),
+                    TetherCandidate(GoName = "wlan0", GoIpv4 = "192.168.1.5"),
+                ),
+            )
 
         // When a manual tether is detected
         val GoInfo = GoHotspot.GoDetectManualTether()
@@ -296,13 +307,14 @@ class LocalOnlyHotspotAdapterTest {
     @Test
     fun `the tether selector prefers AP-style interface names over station ones`() {
         // Given several interfaces in an arbitrary order
-        val GoChosen = GoPickTetherGateway(
-            listOf(
-                TetherCandidate(GoName = "wlan0", GoIpv4 = "192.168.1.5"),
-                TetherCandidate(GoName = "lo", GoIpv4 = "127.0.0.1"),
-                TetherCandidate(GoName = "swlan0", GoIpv4 = "192.168.12.1"),
-            ),
-        )
+        val GoChosen =
+            GoPickTetherGateway(
+                listOf(
+                    TetherCandidate(GoName = "wlan0", GoIpv4 = "192.168.1.5"),
+                    TetherCandidate(GoName = "lo", GoIpv4 = "127.0.0.1"),
+                    TetherCandidate(GoName = "swlan0", GoIpv4 = "192.168.12.1"),
+                ),
+            )
 
         // Then the soft-AP interface wins
         assertThat(GoChosen?.GoIpv4).isEqualTo("192.168.12.1")

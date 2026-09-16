@@ -30,7 +30,6 @@ import android.os.Build
  * request flow; this file provides only the matrix and the checker.
  */
 object HubPermissions {
-
     /**
      * The Wi-Fi permission that gates LocalOnlyHotspot/NSD at [goSdkInt].
      *

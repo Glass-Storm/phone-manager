@@ -1,8 +1,6 @@
 package com.glassstorm.phonemanager
 
-import android.content.Context as GoAndroidContext
 import androidx.test.core.app.ApplicationProvider
-import com.google.common.truth.Truth.assertThat
 import com.glassstorm.phonemanager.adapter.config.RuntimeConfigStore
 import com.glassstorm.phonemanager.adapter.repository.memory.MemoryDeviceRepository
 import com.glassstorm.phonemanager.adapter.repository.sqlite.SqliteDeviceRepository
@@ -12,10 +10,12 @@ import com.glassstorm.phonemanager.domain.context.Context
 import com.glassstorm.phonemanager.domain.context.FromContext
 import com.glassstorm.phonemanager.domain.dto.HotspotMode
 import com.glassstorm.phonemanager.domain.dto.SttEngine
+import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import android.content.Context as GoAndroidContext
 
 /**
  * The T17 wiring change, proven at the composition root.
@@ -30,7 +30,6 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [29])
 class AppCompositionWiringTest {
-
     private val GoAndroid: GoAndroidContext = ApplicationProvider.getApplicationContext()
 
     @Test
@@ -80,7 +79,8 @@ class AppCompositionWiringTest {
 
         // Then the config port degrades to absent rather than crashing construction
         assertThat(
-            com.glassstorm.phonemanager.domain.context.FromContextOrNull<AppConfig>(GoCtx),
+            com.glassstorm.phonemanager.domain.context
+                .FromContextOrNull<AppConfig>(GoCtx),
         ).isNull()
     }
 }

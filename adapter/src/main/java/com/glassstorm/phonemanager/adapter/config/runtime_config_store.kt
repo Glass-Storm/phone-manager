@@ -37,21 +37,22 @@ enum class SttAdapterKind {
  * The DEFAULTS are the safe ones: [SttAdapterKind.MOCK] (no key, no network),
  * region `us`, and [HotspotMode.MANUAL] (the user owns the access point).
  */
-class RuntimeConfigStore(private val GoContext: Context) : AppConfig {
-
+class RuntimeConfigStore(
+    private val GoContext: Context,
+) : AppConfig {
     /** Persist [kind]; a fresh install with no write at all stays on [SttAdapterKind.MOCK]. */
     fun GoSetSttAdapterKind(kind: SttAdapterKind) {
         GoPrefs().edit().putString(GO_KEY_STT_ADAPTER, GoKindToKey(kind)).apply()
     }
 
     /** The configured engine, or [SttAdapterKind.MOCK] when unset or unrecognised. */
-    fun GoSttAdapterKind(): SttAdapterKind =
-        GoKindFromKey(GoPrefs().getString(GO_KEY_STT_ADAPTER, null))
+    fun GoSttAdapterKind(): SttAdapterKind = GoKindFromKey(GoPrefs().getString(GO_KEY_STT_ADAPTER, null))
 
-    override fun GoSttEngine(): SttEngine = when (GoSttAdapterKind()) {
-        SttAdapterKind.MOCK -> SttEngine.MOCK
-        SttAdapterKind.SPEECHMATICS -> SttEngine.SPEECHMATICS
-    }
+    override fun GoSttEngine(): SttEngine =
+        when (GoSttAdapterKind()) {
+            SttAdapterKind.MOCK -> SttEngine.MOCK
+            SttAdapterKind.SPEECHMATICS -> SttEngine.SPEECHMATICS
+        }
 
     override fun GoSetSttEngine(kind: SttEngine) {
         GoSetSttAdapterKind(
@@ -107,23 +108,25 @@ class RuntimeConfigStore(private val GoContext: Context) : AppConfig {
             else -> HotspotMode.MANUAL
         }
 
-    private fun GoPrefs(): SharedPreferences =
-        GoContext.getSharedPreferences(GO_PREFS_NAME, Context.MODE_PRIVATE)
+    private fun GoPrefs(): SharedPreferences = GoContext.getSharedPreferences(GO_PREFS_NAME, Context.MODE_PRIVATE)
 
-    private fun GoKindToKey(kind: SttAdapterKind): String = when (kind) {
-        SttAdapterKind.MOCK -> GO_ADAPTER_MOCK
-        SttAdapterKind.SPEECHMATICS -> GO_ADAPTER_SPEECHMATICS
-    }
+    private fun GoKindToKey(kind: SttAdapterKind): String =
+        when (kind) {
+            SttAdapterKind.MOCK -> GO_ADAPTER_MOCK
+            SttAdapterKind.SPEECHMATICS -> GO_ADAPTER_SPEECHMATICS
+        }
 
-    private fun GoKindFromKey(key: String?): SttAdapterKind = when (key?.trim()?.lowercase(Locale.ROOT)) {
-        GO_ADAPTER_SPEECHMATICS -> SttAdapterKind.SPEECHMATICS
-        else -> SttAdapterKind.MOCK
-    }
+    private fun GoKindFromKey(key: String?): SttAdapterKind =
+        when (key?.trim()?.lowercase(Locale.ROOT)) {
+            GO_ADAPTER_SPEECHMATICS -> SttAdapterKind.SPEECHMATICS
+            else -> SttAdapterKind.MOCK
+        }
 
-    private fun GoHotspotModeToKey(mode: HotspotMode): String = when (mode) {
-        HotspotMode.MANUAL -> GO_HOTSPOT_MANUAL
-        HotspotMode.AUTO -> GO_HOTSPOT_AUTO
-    }
+    private fun GoHotspotModeToKey(mode: HotspotMode): String =
+        when (mode) {
+            HotspotMode.MANUAL -> GO_HOTSPOT_MANUAL
+            HotspotMode.AUTO -> GO_HOTSPOT_AUTO
+        }
 
     companion object {
         /** The app-private prefs file; matches the reference repo's backup exclusions. */

@@ -1,6 +1,5 @@
 package com.glassstorm.phonemanager.adapter.speech.speechmatics
 
-import java.util.concurrent.TimeUnit
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -8,8 +7,9 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
+import java.util.concurrent.TimeUnit
 
-/**
+/*
  * The two OkHttp seams of the Speechmatics adapter.
  *
  * They exist so the adapter's session bookkeeping (lazy connect, idempotent
@@ -25,7 +25,10 @@ fun interface GoTokenFetcher {
 
 /** Opens the realtime WebSocket for an already-authenticated URL. */
 fun interface GoSocketOpener {
-    fun GoOpen(url: String, listener: WebSocketListener): WebSocket
+    fun GoOpen(
+        url: String,
+        listener: WebSocketListener,
+    ): WebSocket
 }
 
 /** Bounded timeouts for the cloud path (the reference client used 30s). */
@@ -38,12 +41,14 @@ private const val GO_WS_CONNECT_TIMEOUT_SECONDS: Long = 15L
 private const val GO_WS_READ_TIMEOUT_SECONDS: Long = 60L
 
 /** The shared OkHttp client; connection pooling is desirable across sessions. */
-fun GoSpeechmaticsHttpClient(): OkHttpClient = OkHttpClient.Builder()
-    .connectTimeout(GO_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-    .readTimeout(GO_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-    .writeTimeout(GO_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-    .callTimeout(GO_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-    .build()
+fun GoSpeechmaticsHttpClient(): OkHttpClient =
+    OkHttpClient
+        .Builder()
+        .connectTimeout(GO_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        .readTimeout(GO_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        .writeTimeout(GO_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        .callTimeout(GO_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        .build()
 
 /**
  * Production [GoTokenFetcher]: `POST https://mp.speechmatics.com/v1/api_keys?type=rt`
@@ -54,15 +59,16 @@ fun GoSpeechmaticsHttpClient(): OkHttpClient = OkHttpClient.Builder()
 class HttpTokenFetcher(
     private val GoHttp: OkHttpClient = GoSpeechmaticsHttpClient(),
 ) : GoTokenFetcher {
-
     override fun GoFetch(apiKey: String): String? {
         val GoBody = """{"ttl":$GO_TOKEN_TTL_SECONDS}"""
-        val GoRequest = Request.Builder()
-            .url(GO_TOKEN_URL)
-            .addHeader("Content-Type", "application/json")
-            .addHeader("Authorization", "Bearer $apiKey")
-            .post(GoBody.toRequestBody("application/json".toMediaType()))
-            .build()
+        val GoRequest =
+            Request
+                .Builder()
+                .url(GO_TOKEN_URL)
+                .addHeader("Content-Type", "application/json")
+                .addHeader("Authorization", "Bearer $apiKey")
+                .post(GoBody.toRequestBody("application/json".toMediaType()))
+                .build()
         return try {
             GoHttp.newCall(GoRequest).execute().use { GoResponse: Response ->
                 val GoText = GoResponse.body?.string() ?: return null
@@ -81,9 +87,12 @@ class HttpTokenFetcher(
 class OkHttpSocketOpener(
     private val GoHttp: OkHttpClient = GoSpeechmaticsHttpClient(),
 ) : GoSocketOpener {
-
-    override fun GoOpen(url: String, listener: WebSocketListener): WebSocket =
-        GoHttp.newBuilder()
+    override fun GoOpen(
+        url: String,
+        listener: WebSocketListener,
+    ): WebSocket =
+        GoHttp
+            .newBuilder()
             .connectTimeout(GO_WS_CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
             .readTimeout(GO_WS_READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
             .build()

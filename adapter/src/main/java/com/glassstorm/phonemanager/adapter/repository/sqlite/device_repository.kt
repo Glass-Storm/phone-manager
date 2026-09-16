@@ -17,8 +17,8 @@ import com.glassstorm.phonemanager.domain.dto.Device
 class SqliteDeviceRepository(
     private val GoContext: Context,
     private val GoDatabaseName: String = DEFAULT_DATABASE_NAME,
-) : SQLiteOpenHelper(GoContext, GoDatabaseName, null, SCHEMA_VERSION), DeviceRepository {
-
+) : SQLiteOpenHelper(GoContext, GoDatabaseName, null, SCHEMA_VERSION),
+    DeviceRepository {
     override fun getWritableDatabase(): SQLiteDatabase {
         GoEnsureDatabaseDirectory()
         return super.getWritableDatabase()
@@ -41,7 +41,11 @@ class SqliteDeviceRepository(
 
     // No versioned migration exists: the v1 schema is authoritative, so a version bump
     // rebuilds the table instead of altering it.
-    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+    override fun onUpgrade(
+        db: SQLiteDatabase,
+        oldVersion: Int,
+        newVersion: Int,
+    ) {
         db.execSQL("DROP TABLE IF EXISTS $TABLE_PAIRED_DEVICE")
         onCreate(db)
     }
@@ -55,28 +59,30 @@ class SqliteDeviceRepository(
         )
     }
 
-    override fun GoGet(deviceId: String): Device? =
-        GoQueryDevice("$COLUMN_DEVICE_ID = ?", arrayOf(deviceId))
+    override fun GoGet(deviceId: String): Device? = GoQueryDevice("$COLUMN_DEVICE_ID = ?", arrayOf(deviceId))
 
-    override fun GoGetByTokenHash(tokenHash: String): Device? =
-        GoQueryDevice("$COLUMN_TOKEN_HASH = ?", arrayOf(tokenHash))
+    override fun GoGetByTokenHash(tokenHash: String): Device? = GoQueryDevice("$COLUMN_TOKEN_HASH = ?", arrayOf(tokenHash))
 
     override fun GoList(): List<Device> =
-        readableDatabase.query(
-            TABLE_PAIRED_DEVICE,
-            null,
-            null,
-            null,
-            null,
-            null,
-            "$COLUMN_PAIRED_AT_MS ASC, $COLUMN_DEVICE_ID ASC",
-        ).use { cursor ->
-            buildList {
-                while (cursor.moveToNext()) add(GoReadDevice(cursor))
+        readableDatabase
+            .query(
+                TABLE_PAIRED_DEVICE,
+                null,
+                null,
+                null,
+                null,
+                null,
+                "$COLUMN_PAIRED_AT_MS ASC, $COLUMN_DEVICE_ID ASC",
+            ).use { cursor ->
+                buildList {
+                    while (cursor.moveToNext()) add(GoReadDevice(cursor))
+                }
             }
-        }
 
-    override fun GoTouch(deviceId: String, seenAtMs: Long) {
+    override fun GoTouch(
+        deviceId: String,
+        seenAtMs: Long,
+    ) {
         writableDatabase.update(
             TABLE_PAIRED_DEVICE,
             ContentValues().apply { put(COLUMN_LAST_SEEN_MS, seenAtMs) },
@@ -89,19 +95,23 @@ class SqliteDeviceRepository(
         writableDatabase.delete(TABLE_PAIRED_DEVICE, "$COLUMN_DEVICE_ID = ?", arrayOf(deviceId))
     }
 
-    private fun GoQueryDevice(selection: String, selectionArgs: Array<String>): Device? =
-        readableDatabase.query(
-            TABLE_PAIRED_DEVICE,
-            null,
-            selection,
-            selectionArgs,
-            null,
-            null,
-            null,
-        ).use { cursor ->
-            if (!cursor.moveToFirst()) return@use null
-            GoReadDevice(cursor)
-        }
+    private fun GoQueryDevice(
+        selection: String,
+        selectionArgs: Array<String>,
+    ): Device? =
+        readableDatabase
+            .query(
+                TABLE_PAIRED_DEVICE,
+                null,
+                selection,
+                selectionArgs,
+                null,
+                null,
+                null,
+            ).use { cursor ->
+                if (!cursor.moveToFirst()) return@use null
+                GoReadDevice(cursor)
+            }
 
     private fun GoReadDevice(cursor: Cursor): Device {
         val GoLastSeenIndex = cursor.getColumnIndexOrThrow(COLUMN_LAST_SEEN_MS)
@@ -115,14 +125,15 @@ class SqliteDeviceRepository(
         )
     }
 
-    private fun GoDeviceValues(device: Device): ContentValues = ContentValues().apply {
-        put(COLUMN_DEVICE_ID, device.GoDeviceId)
-        put(COLUMN_DEVICE_NAME, device.GoDeviceName)
-        put(COLUMN_ROLE, device.GoRole)
-        put(COLUMN_TOKEN_HASH, device.GoTokenHash)
-        put(COLUMN_PAIRED_AT_MS, device.GoPairedAtMs)
-        device.GoLastSeenMs?.let { put(COLUMN_LAST_SEEN_MS, it) } ?: putNull(COLUMN_LAST_SEEN_MS)
-    }
+    private fun GoDeviceValues(device: Device): ContentValues =
+        ContentValues().apply {
+            put(COLUMN_DEVICE_ID, device.GoDeviceId)
+            put(COLUMN_DEVICE_NAME, device.GoDeviceName)
+            put(COLUMN_ROLE, device.GoRole)
+            put(COLUMN_TOKEN_HASH, device.GoTokenHash)
+            put(COLUMN_PAIRED_AT_MS, device.GoPairedAtMs)
+            device.GoLastSeenMs?.let { put(COLUMN_LAST_SEEN_MS, it) } ?: putNull(COLUMN_LAST_SEEN_MS)
+        }
 
     private companion object {
         const val SCHEMA_VERSION = 1

@@ -1,7 +1,5 @@
 package com.glassstorm.phonemanager.service
 
-import com.google.common.truth.Truth.assertThat
-import com.google.common.truth.Truth.assertWithMessage
 import com.glassstorm.phonemanager.domain.adapter.relay.FrameSink
 import com.glassstorm.phonemanager.domain.adapter.repository.DeviceRepository
 import com.glassstorm.phonemanager.domain.adapter.speech.SttPort
@@ -16,14 +14,16 @@ import com.glassstorm.phonemanager.testkit.GoRun
 import com.glassstorm.phonemanager.testkit.GoSyntheticVideoNal
 import com.glassstorm.phonemanager.testkit.MockPeerDriver
 import com.glassstorm.phonemanager.testkit.MockPeerTranscript
+import com.google.common.truth.Truth.assertThat
+import com.google.common.truth.Truth.assertWithMessage
 import io.grpc.netty.shaded.io.grpc.netty.NettyServerBuilder
-import java.io.File
-import java.net.InetSocketAddress
 import org.junit.After
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.Timeout
+import java.io.File
+import java.net.InetSocketAddress
 
 /**
  * T18 harness (a): the FULL scenario against the plain-JVM hub.
@@ -43,7 +43,6 @@ import org.junit.rules.Timeout
  * contract, so the two are directly comparable.
  */
 class FullE2eTest {
-
     @get:Rule
     val GoDeadline: Timeout = Timeout.seconds(300)
 
@@ -74,12 +73,14 @@ class FullE2eTest {
         Register<SttPort>(GoCtx, GoStt)
         Register<FrameSink>(GoCtx, GoSink)
 
-        GoHub = GrpcHubServer { port ->
-            NettyServerBuilder.forAddress(InetSocketAddress("127.0.0.1", port))
-                .addService(PairingGrpcService(GoCtx))
-                .addService(StreamGrpcService(GoCtx))
-                .intercept(AuthInterceptor(GoPairing))
-        }
+        GoHub =
+            GrpcHubServer { port ->
+                NettyServerBuilder
+                    .forAddress(InetSocketAddress("127.0.0.1", port))
+                    .addService(PairingGrpcService(GoCtx))
+                    .addService(StreamGrpcService(GoCtx))
+                    .intercept(AuthInterceptor(GoPairing))
+            }
         GoHub.GoStart(0)
         GoPort = GoHub.GoBoundPort()
         assertThat(GoPort).isGreaterThan(0)
@@ -95,11 +96,12 @@ class FullE2eTest {
     @Test
     fun `the full scenario produces the ordered transcript and byte exact video`() {
         // Given an open pairing window and a driver bound to the live hub
-        GoDriver = MockPeerDriver(
-            GoPort = GoPort,
-            GoOpenWindow = { GoPairing.GoOpenWindow(ttlMs = 120_000).GoPin },
-            GoRevokeAll = { GoPairing.GoListPaired().forEach { GoPairing.GoRevoke(it.GoDeviceId) } },
-        )
+        GoDriver =
+            MockPeerDriver(
+                GoPort = GoPort,
+                GoOpenWindow = { GoPairing.GoOpenWindow(ttlMs = 120_000).GoPin },
+                GoRevokeAll = { GoPairing.GoListPaired().forEach { GoPairing.GoRevoke(it.GoDeviceId) } },
+            )
 
         // When the peer pairs, heartbeats and streams 10 audio + 10 video frames
         val GoRun = GoDriver!!.GoPairHeartbeatStream(frames = 10)
@@ -109,21 +111,27 @@ class FullE2eTest {
             .isEqualTo(0)
 
         // Then its RAW stdout carries the ordered pair/heartbeat/session lines
-        val GoLines = GoRun.stdout.lines().map { it.trim() }.filter { it.isNotEmpty() }
+        val GoLines =
+            GoRun.stdout
+                .lines()
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
         assertThat(GoLines).containsAtLeast("pair-ok", "heartbeat-ok").inOrder()
         assertThat(GoRun.stdout).contains("session-ok frames=")
-        assertThat(GoDriver!!.GoFullLines(GoRun)).containsExactly(
-            "pair-ok",
-            "heartbeat-ok",
-            "session-ok frames=20",
-        ).inOrder()
+        assertThat(GoDriver!!.GoFullLines(GoRun))
+            .containsExactly(
+                "pair-ok",
+                "heartbeat-ok",
+                "session-ok frames=20",
+            ).inOrder()
 
         // And the video sink recorded the EXACT bytes the Go peer generated —
         // a real equality check per index, not a length check.
         assertThat(GoSink.GoVideoNals).hasSize(10)
-        val GoBytesMatch = GoSink.GoVideoNals.withIndex().all { (index, nal) ->
-            nal.contentEquals(GoSyntheticVideoNal(index))
-        }
+        val GoBytesMatch =
+            GoSink.GoVideoNals.withIndex().all { (index, nal) ->
+                nal.contentEquals(GoSyntheticVideoNal(index))
+            }
         GoSink.GoVideoNals.forEachIndexed { index, nal ->
             assertWithMessage("video NAL #$index was mutated in transit")
                 .that(nal)
@@ -145,22 +153,24 @@ class FullE2eTest {
         val GoRevokedOk = GoRevoked.exitCode != 0 && GoRevoked.stdout.contains("UNAUTHENTICATED")
 
         // And the ordered evidence transcript is emitted exactly once
-        val GoTranscript = MockPeerTranscript.GoLines(
-            pairOk = true,
-            heartbeatOk = true,
-            frames = 20,
-            videoBytesMatch = GoBytesMatch,
-            revokedUnauthenticated = GoRevokedOk,
-        )
+        val GoTranscript =
+            MockPeerTranscript.GoLines(
+                pairOk = true,
+                heartbeatOk = true,
+                frames = 20,
+                videoBytesMatch = GoBytesMatch,
+                revokedUnauthenticated = GoRevokedOk,
+            )
         println("[QA] service evidence transcript: $GoTranscript")
         MockPeerTranscript.GoWrite(GoEvidencePath(), "service-full-e2e (jvm harness)", GoTranscript)
-        assertThat(GoTranscript).containsExactly(
-            "pair-ok",
-            "heartbeat-ok",
-            "session-ok frames=20",
-            "video-bytes-match",
-            "revoked->UNAUTHENTICATED",
-        ).inOrder()
+        assertThat(GoTranscript)
+            .containsExactly(
+                "pair-ok",
+                "heartbeat-ok",
+                "session-ok frames=20",
+                "video-bytes-match",
+                "revoked->UNAUTHENTICATED",
+            ).inOrder()
     }
 
     @Test
@@ -168,23 +178,30 @@ class FullE2eTest {
         // Given an open window whose PIN is NOT 000000
         val GoWindow = GoPairing.GoOpenWindow(ttlMs = 120_000)
         assertThat(GoWindow.GoPin).isNotEqualTo("000000")
-        val GoDriver = MockPeerDriver(
-            GoPort = GoPort,
-            GoOpenWindow = { GoWindow.GoPin },
-            GoRevokeAll = {},
-        )
+        val GoDriver =
+            MockPeerDriver(
+                GoPort = GoPort,
+                GoOpenWindow = { GoWindow.GoPin },
+                GoRevokeAll = {},
+            )
         this.GoDriver = GoDriver
 
         // When the peer pairs with the wrong PIN
-        val GoRun = GoRun(
-            listOf(GoGoBinary(), "run", "./tools/mockpeer") + listOf(
-                "--addr", "127.0.0.1:$GoPort",
-                "--pin", "000000",
-                "--scenario", "pair",
-                "--timeout", "30",
-            ),
-            GoRepoRoot(),
-        )
+        val GoRun =
+            GoRun(
+                listOf(GoGoBinary(), "run", "./tools/mockpeer") +
+                    listOf(
+                        "--addr",
+                        "127.0.0.1:$GoPort",
+                        "--pin",
+                        "000000",
+                        "--scenario",
+                        "pair",
+                        "--timeout",
+                        "30",
+                    ),
+                GoRepoRoot(),
+            )
         GoRun.process?.let { GoDriver.GoRegisterForReaping(it) }
 
         // Then the hub rejects with a machine-checkable reason, never a success

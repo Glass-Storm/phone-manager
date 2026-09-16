@@ -27,18 +27,20 @@ import kotlinx.coroutines.flow.asStateFlow
  * state updates on the same frame the user acted, which is also what makes the
  * Robolectric tests deterministic.
  */
-class DashboardViewModel(private val GoContext: Context) : ViewModel() {
-
+class DashboardViewModel(
+    private val GoContext: Context,
+) : ViewModel() {
     private val GoHub: HubServer? = FromContextOrNull<HubServer>(GoContext)
     private val GoHotspot: HotspotController? = FromContextOrNull<HotspotController>(GoContext)
     private val GoPairing: PairingService? = FromContextOrNull<PairingService>(GoContext)
 
-    private val GoState = MutableStateFlow(
-        DashboardUiState(
-            GoHubAvailable = GoHub != null,
-            GoHotspotAvailable = GoHotspot != null,
+    private val GoState =
+        MutableStateFlow(
+            DashboardUiState(
+                GoHubAvailable = GoHub != null,
+                GoHotspotAvailable = GoHotspot != null,
+            ),
         )
-    )
 
     val GoUiState: StateFlow<DashboardUiState> = GoState.asStateFlow()
 
@@ -74,15 +76,16 @@ class DashboardViewModel(private val GoContext: Context) : ViewModel() {
     }
 
     private fun GoRefresh() {
-        GoState.value = DashboardUiState(
-            GoHubAvailable = GoHub != null,
-            GoHotspotAvailable = GoHotspot != null,
-            GoRunning = GoHub?.GoIsRunning() ?: false,
-            GoBoundPort = GoHub?.GoBoundPort() ?: 0,
-            GoPairedCount = GoPairing?.GoListPaired()?.size ?: 0,
-            GoHotspot = GoHotspot?.GoDetectManualTether(),
-            GoHotspotError = GoState.value.GoHotspotError,
-        )
+        GoState.value =
+            DashboardUiState(
+                GoHubAvailable = GoHub != null,
+                GoHotspotAvailable = GoHotspot != null,
+                GoRunning = GoHub?.GoIsRunning() ?: false,
+                GoBoundPort = GoHub?.GoBoundPort() ?: 0,
+                GoPairedCount = GoPairing?.GoListPaired()?.size ?: 0,
+                GoHotspot = GoHotspot?.GoDetectManualTether(),
+                GoHotspotError = GoState.value.GoHotspotError,
+            )
     }
 }
 

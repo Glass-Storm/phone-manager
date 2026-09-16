@@ -7,10 +7,10 @@ import android.location.LocationManager
 import android.net.wifi.WifiManager
 import android.os.Handler
 import androidx.test.core.app.ApplicationProvider
-import com.google.common.truth.Truth.assertThat
 import com.glassstorm.phonemanager.domain.network.HotspotFailure
 import com.glassstorm.phonemanager.domain.network.HotspotState
 import com.glassstorm.phonemanager.domain.network.HotspotUnavailableException
+import com.google.common.truth.Truth.assertThat
 import org.junit.Assert.assertThrows
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -28,14 +28,11 @@ import org.robolectric.shadows.ShadowWifiManager
  */
 @Implements(WifiManager::class)
 class SecurityExceptionShadowWifiManager : ShadowWifiManager() {
-
     @Implementation
     protected fun startLocalOnlyHotspot(
         callback: WifiManager.LocalOnlyHotspotCallback,
         handler: Handler?,
-    ) {
-        throw SecurityException("permission revoked between check and call")
-    }
+    ): Unit = throw SecurityException("permission revoked between check and call")
 }
 
 /**
@@ -49,7 +46,6 @@ class SecurityExceptionShadowWifiManager : ShadowWifiManager() {
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [29], shadows = [SecurityExceptionShadowWifiManager::class])
 class LocalOnlyHotspotPermissionRevokedTest {
-
     private val GoApp: Application = ApplicationProvider.getApplicationContext()
 
     private fun GoGrantFineLocation() {
@@ -80,15 +76,17 @@ class LocalOnlyHotspotPermissionRevokedTest {
         // Given the pre-flight checks pass but the grant is gone by the platform call
         GoGrantFineLocation()
         GoSetLocationEnabled(true)
-        val GoHotspot = LocalOnlyHotspotAdapter(
-            GoContext = GoApp,
-            GoTetherProbe = TetherProbe { emptyList() },
-        )
+        val GoHotspot =
+            LocalOnlyHotspotAdapter(
+                GoContext = GoApp,
+                GoTetherProbe = TetherProbe { emptyList() },
+            )
 
         // When the hotspot start races the revocation
-        val GoThrown = assertThrows(HotspotUnavailableException::class.java) {
-            GoHotspot.GoStartHotspot()
-        }
+        val GoThrown =
+            assertThrows(HotspotUnavailableException::class.java) {
+                GoHotspot.GoStartHotspot()
+            }
 
         // Then the cause is the typed PermissionDenied and the state is exactly ERROR
         assertThat(GoThrown.GoFailure).isEqualTo(HotspotFailure.PermissionDenied)
@@ -103,10 +101,11 @@ class LocalOnlyHotspotPermissionRevokedTest {
         // Given a revoked-grant start failure
         GoGrantFineLocation()
         GoSetLocationEnabled(true)
-        val GoHotspot = LocalOnlyHotspotAdapter(
-            GoContext = GoApp,
-            GoTetherProbe = TetherProbe { emptyList() },
-        )
+        val GoHotspot =
+            LocalOnlyHotspotAdapter(
+                GoContext = GoApp,
+                GoTetherProbe = TetherProbe { emptyList() },
+            )
         assertThrows(HotspotUnavailableException::class.java) { GoHotspot.GoStartHotspot() }
 
         // When the controller is stopped afterwards

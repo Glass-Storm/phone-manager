@@ -1,7 +1,7 @@
 package com.glassstorm.phonemanager.service
 
-import com.google.common.truth.Truth.assertThat
 import com.glassstorm.phonemanager.service.security.TokenCodec
+import com.google.common.truth.Truth.assertThat
 import org.junit.Assert.assertThrows
 import org.junit.Test
 
@@ -11,7 +11,6 @@ import org.junit.Test
  * comparison, and a uniform 6-digit PIN drawn from a CSPRNG.
  */
 class TokenCodecTest {
-
     @Test
     fun `same pin with different random salts derives different tokens`() {
         // Given two independent per-pairing salts

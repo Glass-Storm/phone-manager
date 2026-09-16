@@ -8,7 +8,7 @@ import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
-/**
+/*
  * Test-local fakes for the domain ports. They deliberately implement the domain
  * INTERFACES only, exactly like a real adapter would — `:service` has no build
  * edge to `:adapter`, so a concrete adapter class is unreachable here by design.
@@ -29,12 +29,14 @@ class FakeDeviceRepository : DeviceRepository {
 
     override fun GoGet(deviceId: String): Device? = GoRows[deviceId]
 
-    override fun GoGetByTokenHash(tokenHash: String): Device? =
-        GoRows.values.firstOrNull { it.GoTokenHash == tokenHash }
+    override fun GoGetByTokenHash(tokenHash: String): Device? = GoRows.values.firstOrNull { it.GoTokenHash == tokenHash }
 
     override fun GoList(): List<Device> = GoRows.values.sortedBy { it.GoDeviceId }
 
-    override fun GoTouch(deviceId: String, seenAtMs: Long) {
+    override fun GoTouch(
+        deviceId: String,
+        seenAtMs: Long,
+    ) {
         val GoExisting = GoRows[deviceId] ?: return
         GoRows[deviceId] = GoExisting.copy(GoLastSeenMs = seenAtMs)
     }
@@ -49,7 +51,9 @@ class FakeDeviceRepository : DeviceRepository {
  * and records every session it was asked to close (so "exactly once" teardown is
  * assertable).
  */
-class FakeSttPort(private val GoTranscript: String = "hello from fake stt") : SttPort {
+class FakeSttPort(
+    private val GoTranscript: String = "hello from fake stt",
+) : SttPort {
     private val GoAudioCount = AtomicInteger()
 
     val GoAudioFrameCount: Int get() = GoAudioCount.get()
@@ -59,7 +63,11 @@ class FakeSttPort(private val GoTranscript: String = "hello from fake stt") : St
     /** Session ids passed to [GoClose], in arrival order. */
     val GoClosedSessions: List<String> get() = synchronized(GoClosing) { GoClosing.toList() }
 
-    override suspend fun GoTranscribe(sessionId: String, audioPcm16: ByteArray, sampleRateHz: Int): String? {
+    override suspend fun GoTranscribe(
+        sessionId: String,
+        audioPcm16: ByteArray,
+        sampleRateHz: Int,
+    ): String? {
         GoAudioCount.incrementAndGet()
         return GoTranscript
     }
@@ -75,7 +83,10 @@ class FakeFrameSink : FrameSink {
 
     val GoVideoNals: List<ByteArray> get() = synchronized(GoNals) { GoNals.toList() }
 
-    override fun GoAcceptVideo(sessionId: String, h264Nal: ByteArray) {
+    override fun GoAcceptVideo(
+        sessionId: String,
+        h264Nal: ByteArray,
+    ) {
         GoNals += h264Nal
     }
 }

@@ -2,11 +2,11 @@ package com.glassstorm.phonemanager.adapter.speech
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
-import com.google.common.truth.Truth.assertThat
 import com.glassstorm.phonemanager.adapter.config.RuntimeConfigStore
 import com.glassstorm.phonemanager.adapter.config.SttAdapterKind
 import com.glassstorm.phonemanager.adapter.speech.mock.MockSttAdapter
 import com.glassstorm.phonemanager.adapter.speech.speechmatics.SpeechmaticsSttAdapter
+import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.runBlocking
 import org.junit.Before
 import org.junit.Test
@@ -21,14 +21,14 @@ import org.robolectric.RobolectricTestRunner
  */
 @RunWith(RobolectricTestRunner::class)
 class SttFactoryTest {
-
     private lateinit var GoContext: Context
     private lateinit var GoStore: RuntimeConfigStore
 
     @Before
     fun setUp() {
         GoContext = ApplicationProvider.getApplicationContext()
-        GoContext.getSharedPreferences(RuntimeConfigStore.GO_PREFS_NAME, Context.MODE_PRIVATE)
+        GoContext
+            .getSharedPreferences(RuntimeConfigStore.GO_PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
             .clear()
             .commit()
@@ -53,36 +53,39 @@ class SttFactoryTest {
     }
 
     @Test
-    fun `the selected mock engine actually transcribes without a network`() = runBlocking {
-        val GoPort = SttFactory(GoStore).GoCreateSttPort()
-        val GoAudio = ByteArray(320) { (it % 97).toByte() }
+    fun `the selected mock engine actually transcribes without a network`() =
+        runBlocking {
+            val GoPort = SttFactory(GoStore).GoCreateSttPort()
+            val GoAudio = ByteArray(320) { (it % 97).toByte() }
 
-        val GoText = GoPort.GoTranscribe("session-1", GoAudio, 16_000)
+            val GoText = GoPort.GoTranscribe("session-1", GoAudio, 16_000)
 
-        assertThat(GoText).isNotNull()
-    }
-
-    @Test
-    fun `a speechmatics engine with no api key transcribes nothing and never connects`() = runBlocking {
-        GoStore.GoSetSttAdapterKind(SttAdapterKind.SPEECHMATICS)
-        val GoPort = SttFactory(GoStore).GoCreateSttPort()
-
-        // No key => an ordinary "no utterance" outcome, NOT a hang and NOT a throw.
-        // A socket attempt here would block or fail loudly, so this asserts the
-        // engine stays offline until it is genuinely configured.
-        val GoText = GoPort.GoTranscribe("session-1", ByteArray(320) { 1 }, 16_000)
-
-        assertThat(GoText).isNull()
-    }
+            assertThat(GoText).isNotNull()
+        }
 
     @Test
-    fun `closing a speechmatics engine session with no api key is a no-op`() = runBlocking {
-        GoStore.GoSetSttAdapterKind(SttAdapterKind.SPEECHMATICS)
-        val GoPort = SttFactory(GoStore).GoCreateSttPort()
+    fun `a speechmatics engine with no api key transcribes nothing and never connects`() =
+        runBlocking {
+            GoStore.GoSetSttAdapterKind(SttAdapterKind.SPEECHMATICS)
+            val GoPort = SttFactory(GoStore).GoCreateSttPort()
 
-        GoPort.GoClose("session-1")
-        GoPort.GoClose("session-1")
+            // No key => an ordinary "no utterance" outcome, NOT a hang and NOT a throw.
+            // A socket attempt here would block or fail loudly, so this asserts the
+            // engine stays offline until it is genuinely configured.
+            val GoText = GoPort.GoTranscribe("session-1", ByteArray(320) { 1 }, 16_000)
 
-        assertThat(GoPort).isInstanceOf(SpeechmaticsSttAdapter::class.java)
-    }
+            assertThat(GoText).isNull()
+        }
+
+    @Test
+    fun `closing a speechmatics engine session with no api key is a no-op`() =
+        runBlocking {
+            GoStore.GoSetSttAdapterKind(SttAdapterKind.SPEECHMATICS)
+            val GoPort = SttFactory(GoStore).GoCreateSttPort()
+
+            GoPort.GoClose("session-1")
+            GoPort.GoClose("session-1")
+
+            assertThat(GoPort).isInstanceOf(SpeechmaticsSttAdapter::class.java)
+        }
 }

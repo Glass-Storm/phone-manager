@@ -13,7 +13,6 @@ import org.junit.Test
  * value is a deliberate, reviewable change rather than an accident.
  */
 class AppConfigTest {
-
     @Test
     fun `the speech engines are exactly the offline mock and the cloud engine`() {
         assertEquals(listOf(SttEngine.MOCK, SttEngine.SPEECHMATICS), SttEngine.entries.toList())
@@ -91,7 +90,11 @@ class AppConfigTest {
         override fun GoRegion(): String = GoRegionValue
 
         override fun GoSetRegion(region: String?) {
-            region?.trim()?.lowercase()?.takeIf { it.isNotEmpty() }?.let { GoRegionValue = it }
+            region
+                ?.trim()
+                ?.lowercase()
+                ?.takeIf { it.isNotEmpty() }
+                ?.let { GoRegionValue = it }
         }
 
         override fun GoHotspotMode(): HotspotMode = GoMode

@@ -58,7 +58,10 @@ fun DevicesScreen(
 }
 
 @Composable
-private fun GoDeviceListCard(GoState: DevicesUiState, GoViewModel: DevicesViewModel) {
+private fun GoDeviceListCard(
+    GoState: DevicesUiState,
+    GoViewModel: DevicesViewModel,
+) {
     Card {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -93,5 +96,4 @@ private fun GoDeviceListCard(GoState: DevicesUiState, GoViewModel: DevicesViewMo
 }
 
 /** A device seen after pairing: the instant. A device never seen: `never`. */
-private fun Device.GoLastSeenLabel(): String =
-    GoLastSeenMs?.let { Instant.ofEpochMilli(it).toString() } ?: "never"
+private fun Device.GoLastSeenLabel(): String = GoLastSeenMs?.let { Instant.ofEpochMilli(it).toString() } ?: "never"

@@ -1,12 +1,12 @@
 package com.glassstorm.phonemanager.service
 
-import com.google.common.truth.Truth.assertThat
 import com.glassstorm.phonemanager.domain.adapter.repository.DeviceRepository
 import com.glassstorm.phonemanager.domain.context.Context
 import com.glassstorm.phonemanager.domain.context.Register
 import com.glassstorm.phonemanager.domain.dto.PairOutcome
 import com.glassstorm.phonemanager.domain.dto.Pairing
 import com.glassstorm.phonemanager.domain.service.PairingService
+import com.google.common.truth.Truth.assertThat
 import org.junit.Before
 import org.junit.Test
 
@@ -23,7 +23,6 @@ import org.junit.Test
  * no `sleep`, no wall clock, no flake.
  */
 class PairingLifecycleTest {
-
     private lateinit var GoCtx: Context
     private lateinit var GoRepo: FakeDeviceRepository
     private lateinit var GoPairing: PairingServiceImpl
@@ -83,7 +82,10 @@ class PairingLifecycleTest {
         assertThat(GoReason(GoSecond)).isEqualTo(PairOutcome.GoReasonPinConsumed)
         assertThat(GoRepo.GoList()).hasSize(1)
         assertThat(GoRepo.GoGet(GoDeviceId)!!.GoTokenHash)
-            .isEqualTo(com.glassstorm.phonemanager.service.security.TokenCodec.GoHashToken(GoToken))
+            .isEqualTo(
+                com.glassstorm.phonemanager.service.security.TokenCodec
+                    .GoHashToken(GoToken),
+            )
     }
 
     // ------------------------------------------------------ case 3: window expiry
@@ -223,7 +225,10 @@ class PairingLifecycleTest {
         val GoStored = GoRepo.GoGet(GoDeviceId)!!
         assertThat(GoStored.GoTokenHash).isNotEqualTo(GoToken)
         assertThat(GoStored.GoTokenHash)
-            .isEqualTo(com.glassstorm.phonemanager.service.security.TokenCodec.GoHashToken(GoToken))
+            .isEqualTo(
+                com.glassstorm.phonemanager.service.security.TokenCodec
+                    .GoHashToken(GoToken),
+            )
         assertThat(GoPairing.GoVerifyToken(GoToken)?.GoDeviceId).isEqualTo(GoDeviceId)
     }
 

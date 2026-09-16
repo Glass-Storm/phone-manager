@@ -30,7 +30,6 @@ class LocalOnlyHotspotAdapter(
     private val GoLauncher: HotspotLauncher = PlatformHotspotLauncher(GoContext),
     private val GoTetherProbe: TetherProbe = TetherProbe { GoEnumerateInterfaces() },
 ) : HotspotController {
-
     private val GoMachine = HotspotStateMachine()
     private var GoReservation: WifiManager.LocalOnlyHotspotReservation? = null
 
@@ -66,9 +65,10 @@ class LocalOnlyHotspotAdapter(
 
             is HotspotLaunch.Denied -> GoFail(GoFailureForReason(GoLaunch.GoReasonCode))
 
-            HotspotLaunch.TimedOut -> GoFail(
-                HotspotFailure.StartFailed("start timed out after ${DEFAULT_LAUNCH_TIMEOUT_MS}ms"),
-            )
+            HotspotLaunch.TimedOut ->
+                GoFail(
+                    HotspotFailure.StartFailed("start timed out after ${DEFAULT_LAUNCH_TIMEOUT_MS}ms"),
+                )
         }
     }
 
@@ -86,9 +86,7 @@ class LocalOnlyHotspotAdapter(
      * A rejected start while `ACTIVE` implies a live reservation, so the null branch is
      * only the (unreachable) invariant breach; it fails typed rather than returning stale data.
      */
-    private fun GoLiveReservationOrFail(
-        rejection: HotspotTransition.Rejected,
-    ): WifiManager.LocalOnlyHotspotReservation =
+    private fun GoLiveReservationOrFail(rejection: HotspotTransition.Rejected): WifiManager.LocalOnlyHotspotReservation =
         GoReservation ?: GoFail(rejection.GoFailure)
 
     /**
@@ -142,8 +140,9 @@ class LocalOnlyHotspotAdapter(
         }
 
     private fun GoIsLocationServicesEnabled(): Boolean {
-        val GoLocations = GoContext.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
-            ?: return false
+        val GoLocations =
+            GoContext.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
+                ?: return false
         return GoLocations.isLocationEnabled
     }
 
@@ -166,8 +165,7 @@ class LocalOnlyHotspotAdapter(
             runCatching { reservation.wifiConfiguration?.preSharedKey }.getOrNull().orEmpty()
         }
 
-    private fun GoDiscoverGateway(): String =
-        GoPickTetherGateway(GoTetherProbe.GoCandidates())?.GoIpv4 ?: DEFAULT_GATEWAY_IP
+    private fun GoDiscoverGateway(): String = GoPickTetherGateway(GoTetherProbe.GoCandidates())?.GoIpv4 ?: DEFAULT_GATEWAY_IP
 
     private fun GoCloseQuietly(reservation: WifiManager.LocalOnlyHotspotReservation) {
         runCatching { reservation.close() }
@@ -195,7 +193,6 @@ class LocalOnlyHotspotAdapter(
         const val REASON_PERMISSION_DENIED: Int = -2
 
         /** Strips the surrounding quotes Android sometimes puts around a raw SSID. */
-        internal fun GoNormalizeSsid(raw: String): String =
-            raw.removePrefix("\"").removeSuffix("\"")
+        internal fun GoNormalizeSsid(raw: String): String = raw.removePrefix("\"").removeSuffix("\"")
     }
 }

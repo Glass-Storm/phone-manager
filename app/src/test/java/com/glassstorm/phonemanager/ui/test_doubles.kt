@@ -22,7 +22,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.emptyFlow
 
-/**
+/*
  * Test-local fakes for the UI tests.
  *
  * They implement the DOMAIN interfaces only, exactly like a real adapter would.
@@ -32,7 +32,9 @@ import kotlinx.coroutines.flow.emptyFlow
  */
 
 /** [HubServer] fake: `GoStart` always binds [GoBoundPortValue] and flips running. */
-class FakeHubServer(private val GoBoundPortValue: Int = 40404) : HubServer {
+class FakeHubServer(
+    private val GoBoundPortValue: Int = 40404,
+) : HubServer {
     var GoStartCalls: Int = 0
         private set
 
@@ -59,11 +61,12 @@ class FakeHubServer(private val GoBoundPortValue: Int = 40404) : HubServer {
  * "could not start" path is exercised exactly as production would raise it.
  */
 class FakeHotspotController(
-    private val GoInfo: HotspotInfo = HotspotInfo(
-        GoSsid = "EcoSys-Phone",
-        GoPassphrase = "hunter2-phone",
-        GoGatewayIp = "192.168.43.1",
-    ),
+    private val GoInfo: HotspotInfo =
+        HotspotInfo(
+            GoSsid = "EcoSys-Phone",
+            GoPassphrase = "hunter2-phone",
+            GoGatewayIp = "192.168.43.1",
+        ),
     private val GoFailWith: HotspotFailure? = null,
 ) : HotspotController {
     private var GoActive: Boolean = false
@@ -113,23 +116,25 @@ class FakePairingService(
         deviceName: String,
         role: String = "GLASS",
     ) {
-        GoRows[deviceId] = Device(
-            GoDeviceId = deviceId,
-            GoDeviceName = deviceName,
-            GoRole = role,
-            GoTokenHash = "hash-$deviceId",
-            GoPairedAtMs = GoClock(),
-            GoLastSeenMs = null,
-        )
+        GoRows[deviceId] =
+            Device(
+                GoDeviceId = deviceId,
+                GoDeviceName = deviceName,
+                GoRole = role,
+                GoTokenHash = "hash-$deviceId",
+                GoPairedAtMs = GoClock(),
+                GoLastSeenMs = null,
+            )
     }
 
     override fun GoOpenWindow(ttlMs: Long): Pairing {
         val GoIndex = GoOpenCalls.coerceAtMost(GoPinSequence.lastIndex)
         GoOpenCalls += 1
-        val GoFresh = Pairing(
-            GoPin = GoPinSequence[GoIndex],
-            GoExpiresAtMs = GoClock() + ttlMs,
-        )
+        val GoFresh =
+            Pairing(
+                GoPin = GoPinSequence[GoIndex],
+                GoExpiresAtMs = GoClock() + ttlMs,
+            )
         GoWindow = GoFresh
         return GoFresh
     }
@@ -138,12 +143,18 @@ class FakePairingService(
         GoWindow = null
     }
 
-    override fun GoPair(pin: String, deviceName: String, role: String): PairOutcome =
-        PairOutcome.GoRejected(GoReason = PairOutcome.GoReasonPinInvalid)
+    override fun GoPair(
+        pin: String,
+        deviceName: String,
+        role: String,
+    ): PairOutcome = PairOutcome.GoRejected(GoReason = PairOutcome.GoReasonPinInvalid)
 
     override fun GoVerifyToken(token: String): Device? = null
 
-    override fun GoTouchLastSeen(deviceId: String, seenAtMs: Long) = Unit
+    override fun GoTouchLastSeen(
+        deviceId: String,
+        seenAtMs: Long,
+    ) = Unit
 
     override fun GoRevoke(deviceId: String) {
         GoRows.remove(deviceId)
@@ -171,13 +182,14 @@ class FakeStreamService(
 ) : StreamService {
     private val GoResultsFlow = MutableSharedFlow<RelayResult>(replay = 1)
 
-    private var GoStatsValue = RelayStats(
-        GoAudioFrames = 0L,
-        GoVideoFrames = 0L,
-        GoVideoDropped = 0L,
-        GoTranscripts = 0L,
-        GoLiveSessions = 0,
-    )
+    private var GoStatsValue =
+        RelayStats(
+            GoAudioFrames = 0L,
+            GoVideoFrames = 0L,
+            GoVideoDropped = 0L,
+            GoTranscripts = 0L,
+            GoLiveSessions = 0,
+        )
 
     private var GoOpenCalls: Int = 0
     private var GoClosed: MutableList<String> = mutableListOf()
@@ -197,17 +209,21 @@ class FakeStreamService(
         GoVideoDropped: Long,
         GoTranscripts: Long,
     ) {
-        GoStatsValue = RelayStats(
-            GoAudioFrames = GoAudioFrames,
-            GoVideoFrames = GoVideoFrames,
-            GoVideoDropped = GoVideoDropped,
-            GoTranscripts = GoTranscripts,
-            GoLiveSessions = GoLiveSessions,
-        )
+        GoStatsValue =
+            RelayStats(
+                GoAudioFrames = GoAudioFrames,
+                GoVideoFrames = GoVideoFrames,
+                GoVideoDropped = GoVideoDropped,
+                GoTranscripts = GoTranscripts,
+                GoLiveSessions = GoLiveSessions,
+            )
     }
 
     /** Publish a recognized utterance, as the STT engine would mid-stream. */
-    fun GoEmitTranscript(GoText: String, GoSpeakerLabel: String = "Speaker 1") {
+    fun GoEmitTranscript(
+        GoText: String,
+        GoSpeakerLabel: String = "Speaker 1",
+    ) {
         GoResultsFlow.tryEmit(
             RelayResult(GoText = GoText, GoSpeakerLabel = GoSpeakerLabel, GoPtsMs = 0L),
         )
@@ -220,12 +236,18 @@ class FakeStreamService(
         return RelaySession(GoSessionId = GoSessionIds[GoIndex], GoDeviceId = deviceId)
     }
 
-    override suspend fun GoPushAudio(sessionId: String, audioPcm16: ByteArray, sampleRateHz: Int) = Unit
+    override suspend fun GoPushAudio(
+        sessionId: String,
+        audioPcm16: ByteArray,
+        sampleRateHz: Int,
+    ) = Unit
 
-    override fun GoPushVideo(sessionId: String, h264Nal: ByteArray) = Unit
+    override fun GoPushVideo(
+        sessionId: String,
+        h264Nal: ByteArray,
+    ) = Unit
 
-    override fun GoResults(sessionId: String): Flow<RelayResult> =
-        if (GoLiveSessions > 0) GoResultsFlow else emptyFlow()
+    override fun GoResults(sessionId: String): Flow<RelayResult> = if (GoLiveSessions > 0) GoResultsFlow else emptyFlow()
 
     override suspend fun GoCloseSession(sessionId: String) {
         GoClosed.add(sessionId)
@@ -261,14 +283,15 @@ class FakeDeviceRepository(
         role: String = "GLASS",
         lastSeenMs: Long? = null,
     ) {
-        GoRows[deviceId] = Device(
-            GoDeviceId = deviceId,
-            GoDeviceName = deviceName,
-            GoRole = role,
-            GoTokenHash = "hash-$deviceId",
-            GoPairedAtMs = 1_000L,
-            GoLastSeenMs = lastSeenMs,
-        )
+        GoRows[deviceId] =
+            Device(
+                GoDeviceId = deviceId,
+                GoDeviceName = deviceName,
+                GoRole = role,
+                GoTokenHash = "hash-$deviceId",
+                GoPairedAtMs = 1_000L,
+                GoLastSeenMs = lastSeenMs,
+            )
     }
 
     override fun GoUpsert(device: Device) {
@@ -277,15 +300,17 @@ class FakeDeviceRepository(
 
     override fun GoGet(deviceId: String): Device? = GoRows[deviceId]
 
-    override fun GoGetByTokenHash(tokenHash: String): Device? =
-        GoRows.values.firstOrNull { it.GoTokenHash == tokenHash }
+    override fun GoGetByTokenHash(tokenHash: String): Device? = GoRows.values.firstOrNull { it.GoTokenHash == tokenHash }
 
     override fun GoList(): List<Device> {
         if (GoFailOnList) throw IllegalStateException("device store unavailable")
         return GoRows.values.toList()
     }
 
-    override fun GoTouch(deviceId: String, seenAtMs: Long) {
+    override fun GoTouch(
+        deviceId: String,
+        seenAtMs: Long,
+    ) {
         GoRows[deviceId]?.let { GoRows[deviceId] = it.copy(GoLastSeenMs = seenAtMs) }
     }
 
@@ -353,7 +378,9 @@ class FakeAppConfig(
 }
 
 /** [BatteryExemption] fake: the state is settable and every request is counted. */
-class FakeBatteryExemption(private var GoExempt: Boolean = false) : BatteryExemption {
+class FakeBatteryExemption(
+    private var GoExempt: Boolean = false,
+) : BatteryExemption {
     var GoRequestCalls: Int = 0
         private set
 

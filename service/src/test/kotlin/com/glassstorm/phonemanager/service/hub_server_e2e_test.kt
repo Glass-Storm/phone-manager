@@ -1,7 +1,5 @@
 package com.glassstorm.phonemanager.service
 
-import com.google.common.truth.Truth.assertThat
-import com.google.common.truth.Truth.assertWithMessage
 import com.glassstorm.phonemanager.domain.adapter.relay.FrameSink
 import com.glassstorm.phonemanager.domain.adapter.repository.DeviceRepository
 import com.glassstorm.phonemanager.domain.adapter.speech.SttPort
@@ -10,21 +8,23 @@ import com.glassstorm.phonemanager.domain.context.Register
 import com.glassstorm.phonemanager.domain.service.PairingService
 import com.glassstorm.phonemanager.domain.service.StreamService
 import com.glassstorm.phonemanager.service.security.AuthInterceptor
+import com.glassstorm.phonemanager.testkit.GO_REAP_SECONDS
 import com.glassstorm.phonemanager.testkit.GoGoBinary
 import com.glassstorm.phonemanager.testkit.GoProcessRun
 import com.glassstorm.phonemanager.testkit.GoRepoRoot
 import com.glassstorm.phonemanager.testkit.GoRun
 import com.glassstorm.phonemanager.testkit.GoSyntheticVideoNal
-import com.glassstorm.phonemanager.testkit.GO_REAP_SECONDS
+import com.google.common.truth.Truth.assertThat
+import com.google.common.truth.Truth.assertWithMessage
 import io.grpc.netty.shaded.io.grpc.netty.NettyServerBuilder
-import java.io.File
-import java.net.InetSocketAddress
-import java.util.concurrent.TimeUnit
 import org.junit.After
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.Timeout
+import java.io.File
+import java.net.InetSocketAddress
+import java.util.concurrent.TimeUnit
 
 /**
  * The T6 transport spike: the REAL gRPC server on a REAL JVM socket, driven by
@@ -46,7 +46,6 @@ import org.junit.rules.Timeout
  *    so nothing leaks across tests or into the daemon.
  */
 class HubServerE2ETest {
-
     @get:Rule
     val GoDeadline: Timeout = Timeout.seconds(180)
 
@@ -84,12 +83,14 @@ class HubServerE2ETest {
         Register<FrameSink>(GoCtx, GoSink)
 
         // The transport under test: netty-shaded NIO, IPv4 explicit, ephemeral port.
-        GoHub = GrpcHubServer { port ->
-            NettyServerBuilder.forAddress(InetSocketAddress("127.0.0.1", port))
-                .addService(PairingGrpcService(GoCtx))
-                .addService(StreamGrpcService(GoCtx))
-                .intercept(AuthInterceptor(GoPairing))
-        }
+        GoHub =
+            GrpcHubServer { port ->
+                NettyServerBuilder
+                    .forAddress(InetSocketAddress("127.0.0.1", port))
+                    .addService(PairingGrpcService(GoCtx))
+                    .addService(StreamGrpcService(GoCtx))
+                    .intercept(AuthInterceptor(GoPairing))
+            }
         GoHub.GoStart(0)
         GoPort = GoHub.GoBoundPort()
         assertThat(GoPort).isGreaterThan(0)
@@ -115,14 +116,21 @@ class HubServerE2ETest {
         val GoWindow = GoPairing.GoOpenWindow(ttlMs = 120_000)
 
         // When the Go peer walks the full protocol over TCP
-        val GoRun = GoMockPeer(
-            "--addr", "127.0.0.1:$GoPort",
-            "--pin", GoWindow.GoPin,
-            "--scenario", "full",
-            "--mode", "audio",
-            "--frames", "10",
-            "--timeout", "60",
-        )
+        val GoRun =
+            GoMockPeer(
+                "--addr",
+                "127.0.0.1:$GoPort",
+                "--pin",
+                GoWindow.GoPin,
+                "--scenario",
+                "full",
+                "--mode",
+                "audio",
+                "--frames",
+                "10",
+                "--timeout",
+                "60",
+            )
 
         // Then its RAW stdout carries the machine-checkable success line
         println("[QA] mockpeer full stdout: ${GoRun.stdout.trim()}")
@@ -149,14 +157,21 @@ class HubServerE2ETest {
         val GoWindow = GoPairing.GoOpenWindow(ttlMs = 120_000)
 
         // When the peer sends BOTH media kinds
-        val GoRun = GoMockPeer(
-            "--addr", "127.0.0.1:$GoPort",
-            "--pin", GoWindow.GoPin,
-            "--scenario", "full",
-            "--mode", "both",
-            "--frames", "10",
-            "--timeout", "60",
-        )
+        val GoRun =
+            GoMockPeer(
+                "--addr",
+                "127.0.0.1:$GoPort",
+                "--pin",
+                GoWindow.GoPin,
+                "--scenario",
+                "full",
+                "--mode",
+                "both",
+                "--frames",
+                "10",
+                "--timeout",
+                "60",
+            )
 
         // Then all 20 frames (10 audio + 10 video) were accepted and transcripts came back
         println("[QA] mockpeer both stdout: ${GoRun.stdout.trim()}")
@@ -180,11 +195,14 @@ class HubServerE2ETest {
         GoPairing.GoOpenWindow(ttlMs = 120_000)
 
         // When the peer deliberately sends NO bearer metadata
-        val GoRun = GoMockPeer(
-            "--addr", "127.0.0.1:$GoPort",
-            "--no-token",
-            "--timeout", "30",
-        )
+        val GoRun =
+            GoMockPeer(
+                "--addr",
+                "127.0.0.1:$GoPort",
+                "--no-token",
+                "--timeout",
+                "30",
+            )
 
         // Then the hub refuses and the CLI says exactly so
         println("[QA] mockpeer no-token stdout: ${GoRun.stdout.trim()} (exit=${GoRun.exitCode})")
@@ -199,12 +217,17 @@ class HubServerE2ETest {
         assertThat(GoWindow.GoPin).isNotEqualTo("000000")
 
         // When the peer pairs with the wrong PIN
-        val GoRun = GoMockPeer(
-            "--addr", "127.0.0.1:$GoPort",
-            "--pin", "000000",
-            "--scenario", "pair",
-            "--timeout", "30",
-        )
+        val GoRun =
+            GoMockPeer(
+                "--addr",
+                "127.0.0.1:$GoPort",
+                "--pin",
+                "000000",
+                "--scenario",
+                "pair",
+                "--timeout",
+                "30",
+            )
 
         // Then the hub rejects with a machine-checkable reason
         println("[QA] mockpeer wrong-pin stdout: ${GoRun.stdout.trim()} (exit=${GoRun.exitCode})")
@@ -223,7 +246,10 @@ class HubServerE2ETest {
     }
 
     /** Parse `name=<int>` out of the CLI's stdout, failing loudly when absent. */
-    private fun GoCount(stdout: String, name: String): Int {
+    private fun GoCount(
+        stdout: String,
+        name: String,
+    ): Int {
         val GoMatch = Regex("""$name=(\d+)""").find(stdout)
         assertWithMessage("stdout did not carry `$name=<int>`: $stdout").that(GoMatch).isNotNull()
         return GoMatch!!.groupValues[1].toInt()

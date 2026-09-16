@@ -1,7 +1,7 @@
 package com.glassstorm.phonemanager.domain.network
 
-import com.google.common.truth.Truth.assertThat
 import com.glassstorm.phonemanager.domain.dto.PeerAddress
+import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 
 /**
@@ -13,7 +13,6 @@ import org.junit.Test
  * locked here alongside the timeout branch.
  */
 class DiscoveryStateMachineTest {
-
     private val GoGateway = PeerAddress("192.168.43.1", 9000, PeerAddress.GoSourceGateway)
     private val GoMdns = PeerAddress("192.168.43.7", 9000, PeerAddress.GoSourceMdns)
 
@@ -51,10 +50,11 @@ class DiscoveryStateMachineTest {
         GoMachine.GoAccept(DiscoveryEvent.START_ADVERTISE)
 
         // When registration fails
-        val GoResult = GoMachine.GoAccept(
-            DiscoveryEvent.ADVERTISE_FAILED,
-            DiscoveryFailure.AdvertiseFailed("registerService failed code=3"),
-        )
+        val GoResult =
+            GoMachine.GoAccept(
+                DiscoveryEvent.ADVERTISE_FAILED,
+                DiscoveryFailure.AdvertiseFailed("registerService failed code=3"),
+            )
 
         // Then it falls back to IDLE carrying the cause
         assertThat(GoResult).isEqualTo(
@@ -105,10 +105,11 @@ class DiscoveryStateMachineTest {
         GoMachine.GoAccept(DiscoveryEvent.START_RESOLVE)
 
         // When mDNS resolution fails
-        val GoResult = GoMachine.GoAccept(
-            DiscoveryEvent.MDNS_FAILED,
-            DiscoveryFailure.ResolveFailed("onResolveFailed code=0"),
-        )
+        val GoResult =
+            GoMachine.GoAccept(
+                DiscoveryEvent.MDNS_FAILED,
+                DiscoveryFailure.ResolveFailed("onResolveFailed code=0"),
+            )
 
         // Then the fallback is a normal terminal state (not an error)
         assertThat(GoResult).isEqualTo(DiscoveryTransition.Moved(DiscoveryState.FALLBACK))

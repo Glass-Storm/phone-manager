@@ -32,7 +32,6 @@ import java.util.concurrent.ConcurrentHashMap
  * no-op, not a reachable state.
  */
 class MockSttAdapter : SttPort {
-
     /** `sessionId -> true` means open. A CLOSED session is tracked to reject late chunks. */
     private val GoOpenSessions: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
@@ -71,8 +70,7 @@ class MockSttAdapter : SttPort {
      * from the bytes alone. FNV-1a 64-bit is used explicitly because
      * `ByteArray.hashCode()` is identity-based and would break determinism.
      */
-    private fun GoPseudoTranscript(audioPcm16: ByteArray): String =
-        "mock:${audioPcm16.size}:${GoFnv1a64Hex(audioPcm16)}"
+    private fun GoPseudoTranscript(audioPcm16: ByteArray): String = "mock:${audioPcm16.size}:${GoFnv1a64Hex(audioPcm16)}"
 
     private fun GoFnv1a64Hex(bytes: ByteArray): String {
         var GoHash = GO_FNV_OFFSET_BASIS

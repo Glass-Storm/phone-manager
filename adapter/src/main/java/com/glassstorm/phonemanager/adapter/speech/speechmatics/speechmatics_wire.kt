@@ -1,11 +1,11 @@
 package com.glassstorm.phonemanager.adapter.speech.speechmatics
 
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
 import org.json.JSONException
 import org.json.JSONObject
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 
-/**
+/*
  * The Speechmatics realtime WIRE FORMAT, as pure functions.
  *
  * Everything here is deliberately side-effect free (no socket, no key, no clock)
@@ -40,12 +40,13 @@ private const val PCM16_SCALE = 32_768f
  * Unknown, blank and `null` regions fall back to `us`, matching the reference
  * store's `regionToWsUrl`. Matching is trimmed and case-insensitive.
  */
-fun GoRegionToWsUrl(region: String?): String = when (region?.trim()?.lowercase()) {
-    "global" -> "wss://global.rt.speechmatics.com/v2"
-    "eu" -> "wss://eu.rt.speechmatics.com/v2"
-    "au" -> "wss://au.rt.speechmatics.com/v2"
-    else -> "wss://us.rt.speechmatics.com/v2"
-}
+fun GoRegionToWsUrl(region: String?): String =
+    when (region?.trim()?.lowercase()) {
+        "global" -> "wss://global.rt.speechmatics.com/v2"
+        "eu" -> "wss://eu.rt.speechmatics.com/v2"
+        "au" -> "wss://au.rt.speechmatics.com/v2"
+        else -> "wss://us.rt.speechmatics.com/v2"
+    }
 
 /**
  * Convert little-endian PCM16 mono to little-endian IEEE-754 float32, the only
@@ -55,9 +56,10 @@ fun GoRegionToWsUrl(region: String?): String = when (region?.trim()?.lowercase()
  * audio, so a malformed final byte MUST NOT take the session down.
  */
 fun GoPcm16ToFloat32Le(pcm16: ByteArray): ByteArray {
-    val GoOut = ByteBuffer
-        .allocate((pcm16.size / BYTES_PER_PCM16_SAMPLE) * FLOAT32_BYTES)
-        .order(ByteOrder.LITTLE_ENDIAN)
+    val GoOut =
+        ByteBuffer
+            .allocate((pcm16.size / BYTES_PER_PCM16_SAMPLE) * FLOAT32_BYTES)
+            .order(ByteOrder.LITTLE_ENDIAN)
     var GoIndex = 0
     while (GoIndex + 1 < pcm16.size) {
         val GoLow = pcm16[GoIndex].toInt() and 0xFF
@@ -77,9 +79,8 @@ fun GoStartRecognitionJson(language: String = GO_DEFAULT_LANGUAGE): String =
             JSONObject()
                 .put("type", "raw")
                 .put("encoding", "pcm_f32le")
-                .put("sample_rate", GO_SAMPLE_RATE_HZ)
-        )
-        .put("transcription_config", JSONObject().put("language", language))
+                .put("sample_rate", GO_SAMPLE_RATE_HZ),
+        ).put("transcription_config", JSONObject().put("language", language))
         .toString()
 
 /** The `StopRecognition` teardown frame, carrying the PROVIDER's session id. */
@@ -122,11 +123,12 @@ fun GoProviderSessionId(message: String): String? =
  * ignored: the port emits only complete utterances).
  */
 fun GoTranscriptFromMessage(message: String): String? {
-    val GoFrame = try {
-        JSONObject(message)
-    } catch (GoMalformed: JSONException) {
-        return null
-    }
+    val GoFrame =
+        try {
+            JSONObject(message)
+        } catch (GoMalformed: JSONException) {
+            return null
+        }
     if (GoFrame.optString("message") != GO_ADD_TRANSCRIPT) return null
     val GoResults = GoFrame.optJSONArray("results") ?: return null
     val GoBuilder = StringBuilder()

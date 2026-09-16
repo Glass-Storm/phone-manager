@@ -24,7 +24,6 @@ import com.glassstorm.phonemanager.permission.HubPermissions
  * port. This class names no concrete adapter.
  */
 class HubForegroundService : Service() {
-
     private var GoBringUp: HubBringUp? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -39,15 +38,20 @@ class HubForegroundService : Service() {
         GoEnsureChannel()
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+    override fun onStartCommand(
+        intent: Intent?,
+        flags: Int,
+        startId: Int,
+    ): Int {
         startForeground(GO_NOTIFICATION_ID, GoNotification())
         if (GoBringUp == null) {
-            GoBringUp = HubBringUp(
-                GoCtx = AppComposition.GoAppContext(),
-                GoPermissionBlocker = {
-                    HubPermissions.GoBlockingHotspotPermission(applicationContext)
-                },
-            ).also { it.GoBringUp(GoRequestedPort(intent)) }
+            GoBringUp =
+                HubBringUp(
+                    GoCtx = AppComposition.GoAppContext(),
+                    GoPermissionBlocker = {
+                        HubPermissions.GoBlockingHotspotPermission(applicationContext)
+                    },
+                ).also { it.GoBringUp(GoRequestedPort(intent)) }
         }
         // Restart the hub after the OS reclaims the process: the hub is the whole
         // point of this service, so a stolen process must come back.
@@ -73,12 +77,13 @@ class HubForegroundService : Service() {
                 GO_CHANNEL_ID,
                 GO_CHANNEL_NAME,
                 NotificationManager.IMPORTANCE_LOW,
-            )
+            ),
         )
     }
 
     private fun GoNotification(): Notification =
-        Notification.Builder(this, GO_CHANNEL_ID)
+        Notification
+            .Builder(this, GO_CHANNEL_ID)
             .setContentTitle(GO_NOTIFICATION_TITLE)
             .setContentText(GO_NOTIFICATION_TEXT)
             .setSmallIcon(android.R.drawable.stat_sys_upload)

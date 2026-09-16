@@ -51,8 +51,8 @@ import java.security.SecureRandom
 class PairingServiceImpl(
     private val GoCtx: Context,
     private val GoClock: () -> Long = { System.currentTimeMillis() },
-) : PairingService, TokenVerifier {
-
+) : PairingService,
+    TokenVerifier {
     private val GoRandom = SecureRandom()
 
     private var GoWindow: Pairing? = null
@@ -78,7 +78,11 @@ class PairingServiceImpl(
     }
 
     @Synchronized
-    override fun GoPair(pin: String, deviceName: String, role: String): PairOutcome {
+    override fun GoPair(
+        pin: String,
+        deviceName: String,
+        role: String,
+    ): PairOutcome {
         if (pin.isBlank()) return GoReject(PairOutcome.GoReasonPinMissing)
         if (deviceName.isBlank()) return GoReject(PairOutcome.GoReasonNameMissing)
 
@@ -110,7 +114,7 @@ class PairingServiceImpl(
                 GoTokenHash = TokenCodec.GoHashToken(GoToken),
                 GoPairedAtMs = GoClock(),
                 GoLastSeenMs = null,
-            )
+            ),
         )
         return PairOutcome.GoOk(GoDeviceId = GoDeviceId, GoToken = GoToken)
     }
@@ -123,7 +127,10 @@ class PairingServiceImpl(
         return GoDevice
     }
 
-    override fun GoTouchLastSeen(deviceId: String, seenAtMs: Long) {
+    override fun GoTouchLastSeen(
+        deviceId: String,
+        seenAtMs: Long,
+    ) {
         GoRepo().GoTouch(deviceId, seenAtMs)
     }
 

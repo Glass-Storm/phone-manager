@@ -1,16 +1,16 @@
 package com.glassstorm.phonemanager.adapter.speech.speechmatics
 
 import com.glassstorm.phonemanager.domain.adapter.speech.SttPort
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.LinkedBlockingQueue
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import okio.ByteString.Companion.toByteString
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 
 /** The reference client's wait before treating a chunk as "no utterance". */
 private const val GO_DEFAULT_RESULT_WAIT_MS: Long = 250L
@@ -65,7 +65,6 @@ class SpeechmaticsSttAdapter(
     private val GoConfig: SpeechmaticsConfig,
     private val GoTransport: SpeechmaticsTransport = SpeechmaticsTransport(),
 ) : SttPort {
-
     private val GoSessions: ConcurrentHashMap<String, GoSession> = ConcurrentHashMap()
 
     override suspend fun GoTranscribe(
@@ -121,7 +120,6 @@ class SpeechmaticsSttAdapter(
         private val GoTranscripts: LinkedBlockingQueue<String>,
         private val GoProviderId: AtomicReference<String?>,
     ) : WebSocketListener() {
-
         @Volatile private var GoDetached = false
 
         /** Stop accepting results (the session is being torn down). */
@@ -129,18 +127,28 @@ class SpeechmaticsSttAdapter(
             GoDetached = true
         }
 
-        override fun onOpen(webSocket: WebSocket, response: Response) {
+        override fun onOpen(
+            webSocket: WebSocket,
+            response: Response,
+        ) {
             if (GoDetached) return
             webSocket.send(GoStartRecognitionJson())
         }
 
-        override fun onMessage(webSocket: WebSocket, text: String) {
+        override fun onMessage(
+            webSocket: WebSocket,
+            text: String,
+        ) {
             if (GoDetached) return
             GoProviderSessionId(text)?.let { GoProviderId.set(it) }
             GoTranscriptFromMessage(text)?.let { GoTranscripts.offer(it) }
         }
 
-        override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+        override fun onFailure(
+            webSocket: WebSocket,
+            t: Throwable,
+            response: Response?,
+        ) {
             // A dropped uplink is an ordinary outcome for this port: no throw, the
             // caller simply gets no transcript. The failure is deliberately not
             // logged: the socket URL carries the short-lived jwt query parameter.

@@ -2,12 +2,12 @@ package com.glassstorm.phonemanager.adapter.transport.grpc
 
 import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
-import java.net.InetSocketAddress
-import java.net.ServerSocket
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.net.InetSocketAddress
+import java.net.ServerSocket
 
 /**
  * Robolectric tests for the real Android hub transport adapter.
@@ -23,7 +23,6 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [29])
 class HubServerAdapterTest {
-
     private fun GoAdapter(): HubServerAdapter = HubServerAdapter(GoHubContext())
 
     @Test
@@ -122,8 +121,10 @@ class HubServerAdapterTest {
             }
 
             // Then it fails cleanly rather than reporting a phantom listener
-            println("[QA] malformed_input: binding taken port $GoTaken failed with " +
-                "${GoThrown?.javaClass?.name}: ${GoThrown?.message}")
+            println(
+                "[QA] malformed_input: binding taken port $GoTaken failed with " +
+                    "${GoThrown?.javaClass?.name}: ${GoThrown?.message}",
+            )
             assertWithMessage("binding an in-use port must not silently succeed")
                 .that(GoThrown)
                 .isNotNull()

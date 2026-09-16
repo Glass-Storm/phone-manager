@@ -18,7 +18,6 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [29])
 class BatteryOptimizationTest {
-
     private val GoContext: Context = ApplicationProvider.getApplicationContext()
 
     private fun GoShadowPower(): Pair<PowerManager, org.robolectric.shadows.ShadowPowerManager> {

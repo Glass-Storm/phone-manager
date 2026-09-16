@@ -28,7 +28,6 @@ class MockPeerDriver(
     private val GoOpenWindow: () -> String,
     private val GoRevokeAll: () -> Unit,
 ) {
-
     /** Every child process launched, so the caller can reap them in teardown. */
     private val GoChildren: MutableList<Process> = mutableListOf()
 
@@ -53,15 +52,23 @@ class MockPeerDriver(
      * The freshly issued token is written to a 0600 temp file, never to stdout.
      */
     fun GoPairHeartbeatStream(frames: Int = 10): GoProcessRun {
-        GoFirstRun = GoMockPeer(
-            "--addr", "127.0.0.1:$GoPort",
-            "--pin", GoOpenWindow(),
-            "--scenario", "full",
-            "--mode", "both",
-            "--frames", "$frames",
-            "--token-out", GoTokenFile.absolutePath,
-            "--timeout", "60",
-        )
+        GoFirstRun =
+            GoMockPeer(
+                "--addr",
+                "127.0.0.1:$GoPort",
+                "--pin",
+                GoOpenWindow(),
+                "--scenario",
+                "full",
+                "--mode",
+                "both",
+                "--frames",
+                "$frames",
+                "--token-out",
+                GoTokenFile.absolutePath,
+                "--timeout",
+                "60",
+            )
         return GoFirstRun
     }
 
@@ -71,22 +78,28 @@ class MockPeerDriver(
      */
     fun GoRevokedLeg(): GoProcessRun {
         GoRevokeAll()
-        GoRevokedRun = GoMockPeer(
-            "--addr", "127.0.0.1:$GoPort",
-            "--scenario", "full",
-            "--token-file", GoTokenFile.absolutePath,
-            "--expect-unauthenticated",
-            "--timeout", "30",
-        )
+        GoRevokedRun =
+            GoMockPeer(
+                "--addr",
+                "127.0.0.1:$GoPort",
+                "--scenario",
+                "full",
+                "--token-file",
+                GoTokenFile.absolutePath,
+                "--expect-unauthenticated",
+                "--timeout",
+                "30",
+            )
         return GoRevokedRun
     }
 
     /** The three media lines the full scenario prints, in order. */
-    fun GoFullLines(run: GoProcessRun = GoFirstRun): List<String> = listOf(
-        "pair-ok",
-        "heartbeat-ok",
-        "session-ok frames=${GoCount(run.stdout, "frames")}",
-    )
+    fun GoFullLines(run: GoProcessRun = GoFirstRun): List<String> =
+        listOf(
+            "pair-ok",
+            "heartbeat-ok",
+            "session-ok frames=${GoCount(run.stdout, "frames")}",
+        )
 
     /** Register an externally launched child so [GoReap] still guarantees reaping. */
     fun GoRegisterForReaping(process: Process) {
@@ -112,9 +125,13 @@ class MockPeerDriver(
         return GoResult
     }
 
-    private fun GoCount(stdout: String, name: String): Int {
-        val GoMatch = Regex("""$name=(\d+)""").find(stdout)
-            ?: error("mockpeer stdout did not carry `$name=<int>`: $stdout")
+    private fun GoCount(
+        stdout: String,
+        name: String,
+    ): Int {
+        val GoMatch =
+            Regex("""$name=(\d+)""").find(stdout)
+                ?: error("mockpeer stdout did not carry `$name=<int>`: $stdout")
         return GoMatch.groupValues[1].toInt()
     }
 }
@@ -127,7 +144,6 @@ class MockPeerDriver(
  * and written here verbatim.
  */
 object MockPeerTranscript {
-
     /** The frozen ordered sequence. */
     fun GoLines(
         pairOk: Boolean,
@@ -135,22 +151,28 @@ object MockPeerTranscript {
         frames: Int,
         videoBytesMatch: Boolean,
         revokedUnauthenticated: Boolean,
-    ): List<String> = listOf(
-        if (pairOk) "pair-ok" else "pair-missing",
-        if (heartbeatOk) "heartbeat-ok" else "heartbeat-missing",
-        "session-ok frames=$frames",
-        if (videoBytesMatch) "video-bytes-match" else "video-bytes-mismatch",
-        if (revokedUnauthenticated) "revoked->UNAUTHENTICATED" else "revoked->ACCEPTED",
-    )
+    ): List<String> =
+        listOf(
+            if (pairOk) "pair-ok" else "pair-missing",
+            if (heartbeatOk) "heartbeat-ok" else "heartbeat-missing",
+            "session-ok frames=$frames",
+            if (videoBytesMatch) "video-bytes-match" else "video-bytes-mismatch",
+            if (revokedUnauthenticated) "revoked->UNAUTHENTICATED" else "revoked->ACCEPTED",
+        )
 
     /** Append the harness's transcript to the evidence file as ONE atomic append. */
-    fun GoWrite(evidencePath: String, harness: String, lines: List<String>) {
+    fun GoWrite(
+        evidencePath: String,
+        harness: String,
+        lines: List<String>,
+    ) {
         val GoFile = File(evidencePath).absoluteFile
         GoFile.parentFile?.mkdirs()
-        val GoBlock = buildString {
-            appendLine("=== $harness ===")
-            lines.forEach { appendLine(it) }
-        }
+        val GoBlock =
+            buildString {
+                appendLine("=== $harness ===")
+                lines.forEach { appendLine(it) }
+            }
         GoFile.appendBytes(GoBlock.toByteArray())
     }
 }

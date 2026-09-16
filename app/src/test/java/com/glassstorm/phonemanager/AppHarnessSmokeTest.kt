@@ -10,7 +10,6 @@ import org.robolectric.RobolectricTestRunner
 /** Proves the Robolectric harness runs on the `:app` module. */
 @RunWith(RobolectricTestRunner::class)
 class AppHarnessSmokeTest {
-
     @Test
     fun `robolectric provides an application context`() {
         val GoContext = ApplicationProvider.getApplicationContext<Context>()

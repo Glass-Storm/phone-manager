@@ -11,7 +11,6 @@ import org.junit.Test
  * Every transition (including the illegal and idempotent ones) is locked here.
  */
 class HotspotStateMachineTest {
-
     @Test
     fun `start request from IDLE moves to STARTING`() {
         // Given a fresh machine

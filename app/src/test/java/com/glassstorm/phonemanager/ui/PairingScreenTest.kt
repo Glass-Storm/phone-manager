@@ -1,13 +1,13 @@
 package com.glassstorm.phonemanager.ui
 
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.semantics.SemanticsProperties
-import androidx.compose.ui.test.SemanticsMatcher
-import androidx.compose.ui.semantics.getOrNull
 import com.glassstorm.phonemanager.domain.context.Context
 import com.glassstorm.phonemanager.domain.context.Register
 import com.glassstorm.phonemanager.domain.service.PairingService
@@ -25,7 +25,6 @@ import org.robolectric.RobolectricTestRunner
  */
 @RunWith(RobolectricTestRunner::class)
 class PairingScreenTest {
-
     @get:Rule
     val composeRule = createComposeRule()
 
@@ -83,10 +82,11 @@ class PairingScreenTest {
 
     @Test
     fun `a revoked device disappears from the paired list`() {
-        val GoPairing = FakePairingService().also {
-            it.GoSeedDevice(deviceId = "d-1", deviceName = "Glass One")
-            it.GoSeedDevice(deviceId = "d-2", deviceName = "Ubuntu Daemon", role = "DAEMON")
-        }
+        val GoPairing =
+            FakePairingService().also {
+                it.GoSeedDevice(deviceId = "d-1", deviceName = "Glass One")
+                it.GoSeedDevice(deviceId = "d-2", deviceName = "Ubuntu Daemon", role = "DAEMON")
+            }
         val GoCtx = Context().also { Register<PairingService>(it, GoPairing) }
 
         composeRule.GoSetPairingContent(GoCtx)
@@ -117,9 +117,7 @@ class PairingScreenTest {
         composeRule.onNodeWithText("No pairing window open").assertIsDisplayed()
     }
 
-    private fun androidx.compose.ui.test.junit4.ComposeContentTestRule.GoSetPairingContent(
-        GoCtx: Context,
-    ) {
+    private fun androidx.compose.ui.test.junit4.ComposeContentTestRule.GoSetPairingContent(GoCtx: Context) {
         setContent {
             AppTheme {
                 PairingScreen(GoContext = GoCtx)
@@ -128,8 +126,11 @@ class PairingScreenTest {
     }
 
     private fun androidx.compose.ui.test.junit4.ComposeContentTestRule.GoCountSixDigitPinNodes(): Int =
-        onAllNodes(SemanticsMatcher("is a 6-digit PIN") { GoNode ->
-            GoNode.config.getOrNull(SemanticsProperties.Text)
-                ?.any { it.text.matches(Regex("\\d{6}")) } == true
-        }).fetchSemanticsNodes().size
+        onAllNodes(
+            SemanticsMatcher("is a 6-digit PIN") { GoNode ->
+                GoNode.config
+                    .getOrNull(SemanticsProperties.Text)
+                    ?.any { it.text.matches(Regex("\\d{6}")) } == true
+            },
+        ).fetchSemanticsNodes().size
 }

@@ -20,7 +20,6 @@ import com.glassstorm.phonemanager.domain.adapter.relay.FrameSink
  * `:service` — the relay only ever sees the [FrameSink] port.
  */
 class DiscardingFrameSink : FrameSink {
-
     /**
      * Accept and drop one opaque NAL.
      *
@@ -28,5 +27,8 @@ class DiscardingFrameSink : FrameSink {
      * decode. The relay's byte-exactness guarantee is what the E2E asserts at the
      * port boundary.
      */
-    override fun GoAcceptVideo(sessionId: String, h264Nal: ByteArray) = Unit
+    override fun GoAcceptVideo(
+        sessionId: String,
+        h264Nal: ByteArray,
+    ) = Unit
 }

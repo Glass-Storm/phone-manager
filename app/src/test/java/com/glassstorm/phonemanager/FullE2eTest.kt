@@ -2,8 +2,6 @@ package com.glassstorm.phonemanager
 
 import android.app.Application
 import androidx.test.core.app.ApplicationProvider
-import com.google.common.truth.Truth.assertThat
-import com.google.common.truth.Truth.assertWithMessage
 import com.glassstorm.phonemanager.adapter.transport.grpc.HubServerAdapter
 import com.glassstorm.phonemanager.domain.adapter.relay.FrameSink
 import com.glassstorm.phonemanager.domain.adapter.transport.HubServer
@@ -17,8 +15,8 @@ import com.glassstorm.phonemanager.testkit.GoRun
 import com.glassstorm.phonemanager.testkit.GoSyntheticVideoNal
 import com.glassstorm.phonemanager.testkit.MockPeerDriver
 import com.glassstorm.phonemanager.testkit.MockPeerTranscript
-import java.io.File
-import java.util.Collections
+import com.google.common.truth.Truth.assertThat
+import com.google.common.truth.Truth.assertWithMessage
 import org.junit.After
 import org.junit.Before
 import org.junit.Rule
@@ -27,6 +25,8 @@ import org.junit.rules.Timeout
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.io.File
+import java.util.Collections
 
 /**
  * T18 harness (b): the FULL scenario against the **Robolectric-hosted `:app` hub**.
@@ -50,7 +50,6 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [29])
 class FullE2eTest {
-
     @get:Rule
     val GoDeadline: Timeout = Timeout.seconds(300)
 
@@ -59,7 +58,10 @@ class FullE2eTest {
         private val GoNals = Collections.synchronizedList(mutableListOf<ByteArray>())
         val GoVideoNals: List<ByteArray> get() = synchronized(GoNals) { GoNals.toList() }
 
-        override fun GoAcceptVideo(sessionId: String, h264Nal: ByteArray) {
+        override fun GoAcceptVideo(
+            sessionId: String,
+            h264Nal: ByteArray,
+        ) {
             GoNals += h264Nal
         }
     }
@@ -101,11 +103,12 @@ class FullE2eTest {
     fun `the full scenario passes against the robolectric app hub with byte exact video`() {
         // Given a driver bound to the app hub's ephemeral port
         val GoPairing = FromContext<PairingService>(GoCtx)
-        GoDriver = MockPeerDriver(
-            GoPort = GoHub.GoBoundPort(),
-            GoOpenWindow = { GoPairing.GoOpenWindow(ttlMs = 120_000).GoPin },
-            GoRevokeAll = { GoPairing.GoListPaired().forEach { GoPairing.GoRevoke(it.GoDeviceId) } },
-        )
+        GoDriver =
+            MockPeerDriver(
+                GoPort = GoHub.GoBoundPort(),
+                GoOpenWindow = { GoPairing.GoOpenWindow(ttlMs = 120_000).GoPin },
+                GoRevokeAll = { GoPairing.GoListPaired().forEach { GoPairing.GoRevoke(it.GoDeviceId) } },
+            )
 
         // When the peer walks the full protocol against the Android wiring
         val GoRun = GoDriver!!.GoPairHeartbeatStream(frames = 10)
@@ -118,18 +121,20 @@ class FullE2eTest {
         assertThat(GoRun.stdout).contains("pair-ok")
         assertThat(GoRun.stdout).contains("heartbeat-ok")
         assertThat(GoRun.stdout).contains("session-ok frames=")
-        assertThat(GoDriver!!.GoFullLines(GoRun)).containsExactly(
-            "pair-ok",
-            "heartbeat-ok",
-            "session-ok frames=20",
-        ).inOrder()
+        assertThat(GoDriver!!.GoFullLines(GoRun))
+            .containsExactly(
+                "pair-ok",
+                "heartbeat-ok",
+                "session-ok frames=20",
+            ).inOrder()
 
         // And the app-hub relay handed the sink the EXACT generator bytes —
         // a real per-index equality check, never a length check.
         assertThat(GoSink.GoVideoNals).hasSize(10)
-        val GoBytesMatch = GoSink.GoVideoNals.withIndex().all { (index, nal) ->
-            nal.contentEquals(GoSyntheticVideoNal(index))
-        }
+        val GoBytesMatch =
+            GoSink.GoVideoNals.withIndex().all { (index, nal) ->
+                nal.contentEquals(GoSyntheticVideoNal(index))
+            }
         GoSink.GoVideoNals.forEachIndexed { index, nal ->
             assertWithMessage("app-hub video NAL #$index was mutated in transit")
                 .that(nal)
@@ -147,26 +152,28 @@ class FullE2eTest {
         val GoRevokedOk = GoRevoked.exitCode != 0 && GoRevoked.stdout.contains("UNAUTHENTICATED")
 
         // And the SAME five ordered evidence lines are emitted as the JVM harness
-        val GoTranscript = MockPeerTranscript.GoLines(
-            pairOk = true,
-            heartbeatOk = true,
-            frames = 20,
-            videoBytesMatch = GoBytesMatch,
-            revokedUnauthenticated = GoRevokedOk,
-        )
+        val GoTranscript =
+            MockPeerTranscript.GoLines(
+                pairOk = true,
+                heartbeatOk = true,
+                frames = 20,
+                videoBytesMatch = GoBytesMatch,
+                revokedUnauthenticated = GoRevokedOk,
+            )
         println("[QA] app evidence transcript: $GoTranscript")
         MockPeerTranscript.GoWrite(
             File(GoRepoRoot(), GO_EVIDENCE_RELATIVE).absolutePath,
             "app-full-e2e (robolectric hub)",
             GoTranscript,
         )
-        assertThat(GoTranscript).containsExactly(
-            "pair-ok",
-            "heartbeat-ok",
-            "session-ok frames=20",
-            "video-bytes-match",
-            "revoked->UNAUTHENTICATED",
-        ).inOrder()
+        assertThat(GoTranscript)
+            .containsExactly(
+                "pair-ok",
+                "heartbeat-ok",
+                "session-ok frames=20",
+                "video-bytes-match",
+                "revoked->UNAUTHENTICATED",
+            ).inOrder()
     }
 
     private companion object {

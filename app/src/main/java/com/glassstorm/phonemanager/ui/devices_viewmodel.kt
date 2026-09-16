@@ -22,8 +22,9 @@ import kotlinx.coroutines.flow.asStateFlow
  * The port is a synchronous JVM API (the adapter owns its threading), so the actions
  * stay synchronous and the UI updates on the frame the user acted.
  */
-class DevicesViewModel(private val GoContext: Context) : ViewModel() {
-
+class DevicesViewModel(
+    private val GoContext: Context,
+) : ViewModel() {
     private val GoRepo: DeviceRepository? = FromContextOrNull<DeviceRepository>(GoContext)
 
     private val GoState = MutableStateFlow(DevicesUiState())

@@ -1,7 +1,5 @@
 package com.glassstorm.phonemanager.service
 
-import com.google.common.truth.Truth.assertThat
-import com.google.common.truth.Truth.assertWithMessage
 import com.glassstorm.phonemanager.domain.adapter.relay.FrameSink
 import com.glassstorm.phonemanager.domain.adapter.repository.DeviceRepository
 import com.glassstorm.phonemanager.domain.adapter.speech.SttPort
@@ -11,6 +9,8 @@ import com.glassstorm.phonemanager.domain.dto.PairOutcome
 import com.glassstorm.phonemanager.domain.service.PairingService
 import com.glassstorm.phonemanager.domain.service.StreamService
 import com.glassstorm.phonemanager.service.security.AuthInterceptor
+import com.google.common.truth.Truth.assertThat
+import com.google.common.truth.Truth.assertWithMessage
 import ecosys.v1.DeviceRole
 import ecosys.v1.HeartbeatRequest
 import ecosys.v1.PairRequest
@@ -25,13 +25,13 @@ import io.grpc.StatusException
 import io.grpc.StatusRuntimeException
 import io.grpc.inprocess.InProcessChannelBuilder
 import io.grpc.inprocess.InProcessServerBuilder
-import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
+import java.util.concurrent.TimeUnit
 
 /**
  * End-to-end in-process gRPC auth suite. No sockets, no device: an in-process
@@ -42,7 +42,6 @@ import org.junit.Test
  * coroutine leaks between tests.
  */
 class AuthGrpcTest {
-
     private lateinit var GoServer: Server
     private lateinit var GoChannel: ManagedChannel
     private lateinit var GoPairing: PairingServiceImpl
@@ -69,13 +68,15 @@ class AuthGrpcTest {
         Register<FrameSink>(GoCtx, GoSink)
 
         val GoName = InProcessServerBuilder.generateName()
-        GoServer = InProcessServerBuilder.forName(GoName)
-            .directExecutor()
-            .addService(PairingGrpcService(GoCtx))
-            .addService(StreamGrpcService(GoCtx))
-            .intercept(AuthInterceptor(GoPairing))
-            .build()
-            .start()
+        GoServer =
+            InProcessServerBuilder
+                .forName(GoName)
+                .directExecutor()
+                .addService(PairingGrpcService(GoCtx))
+                .addService(StreamGrpcService(GoCtx))
+                .intercept(AuthInterceptor(GoPairing))
+                .build()
+                .start()
         GoChannel = InProcessChannelBuilder.forName(GoName).directExecutor().build()
     }
 
@@ -176,9 +177,10 @@ class AuthGrpcTest {
         val GoTampered = GoTamper(GoToken)
 
         // When/Then Heartbeat with the tampered token is UNAUTHENTICATED
-        val GoStatus = GoUnauthenticatedStatus {
-            runBlocking { GoBlocking().heartbeat(HeartbeatRequest.getDefaultInstance(), GoBearer(GoTampered)) }
-        }
+        val GoStatus =
+            GoUnauthenticatedStatus {
+                runBlocking { GoBlocking().heartbeat(HeartbeatRequest.getDefaultInstance(), GoBearer(GoTampered)) }
+            }
         println("[QA] tampered token raw status = $GoStatus")
         assertThat(GoStatus.code).isEqualTo(Status.Code.UNAUTHENTICATED)
     }
@@ -191,9 +193,10 @@ class AuthGrpcTest {
         GoPairing.GoRevoke(GoPaired.deviceId)
 
         // When/Then Heartbeat with the revoked token is UNAUTHENTICATED
-        val GoStatus = GoUnauthenticatedStatus {
-            runBlocking { GoBlocking().heartbeat(HeartbeatRequest.getDefaultInstance(), GoBearer(GoPaired.token)) }
-        }
+        val GoStatus =
+            GoUnauthenticatedStatus {
+                runBlocking { GoBlocking().heartbeat(HeartbeatRequest.getDefaultInstance(), GoBearer(GoPaired.token)) }
+            }
         println("[QA] revoked token raw status = $GoStatus")
         assertThat(GoStatus.code).isEqualTo(Status.Code.UNAUTHENTICATED)
     }
@@ -202,21 +205,23 @@ class AuthGrpcTest {
     fun `malformed authorization headers are rejected with UNAUTHENTICATED`() {
         // Given a token and a set of malformed header values (adversarial: malformed_input)
         val GoToken = GoPairOnce()
-        val GoMalformed = listOf(
-            "Bearer",           // scheme with no value
-            "Bearer ",          // scheme with an empty token
-            GoToken,            // token with no scheme at all
-            "Basic $GoToken",   // wrong scheme
-            "bearerx $GoToken", // scheme that merely starts like Bearer
-        )
+        val GoMalformed =
+            listOf(
+                "Bearer", // scheme with no value
+                "Bearer ", // scheme with an empty token
+                GoToken, // token with no scheme at all
+                "Basic $GoToken", // wrong scheme
+                "bearerx $GoToken", // scheme that merely starts like Bearer
+            )
 
         // When/Then each one is rejected on the exact status
         GoMalformed.forEach { GoHeader ->
-            val GoStatus = GoUnauthenticatedStatus {
-                runBlocking {
-                    GoBlocking().heartbeat(HeartbeatRequest.getDefaultInstance(), GoRawAuth(GoHeader))
+            val GoStatus =
+                GoUnauthenticatedStatus {
+                    runBlocking {
+                        GoBlocking().heartbeat(HeartbeatRequest.getDefaultInstance(), GoRawAuth(GoHeader))
+                    }
                 }
-            }
             println("[QA] malformed header <$GoHeader> raw status = $GoStatus")
             assertWithMessage("malformed header <$GoHeader>")
                 .that(GoStatus.code)
@@ -228,16 +233,22 @@ class AuthGrpcTest {
     fun `audio frame round trips through the stt port and returns a transcript frame`() {
         // Given a paired device and an opaque PCM16 audio frame
         val GoToken = GoPairOnce()
-        val GoAudio = StreamFrame.newBuilder()
-            .setAudioPcm1616K(com.google.protobuf.ByteString.copyFrom(ByteArray(320) { 7 }))
-            .build()
+        val GoAudio =
+            StreamFrame
+                .newBuilder()
+                .setAudioPcm1616K(
+                    com.google.protobuf.ByteString
+                        .copyFrom(ByteArray(320) { 7 }),
+                ).build()
 
         // When it is pushed through OpenStream
-        val GoResponses = runBlocking {
-            StreamServiceGrpcKt.StreamServiceCoroutineStub(GoChannel)
-                .openStream(flowOf(GoAudio), GoBearer(GoToken))
-                .toList()
-        }
+        val GoResponses =
+            runBlocking {
+                StreamServiceGrpcKt
+                    .StreamServiceCoroutineStub(GoChannel)
+                    .openStream(flowOf(GoAudio), GoBearer(GoToken))
+                    .toList()
+            }
 
         // Then the STT fake really saw the frame and a transcript came back
         assertThat(GoStt.GoAudioFrameCount).isEqualTo(1)
@@ -250,13 +261,15 @@ class AuthGrpcTest {
     fun `stream without a token is rejected with UNAUTHENTICATED`() {
         // Given no token
         // When OpenStream is opened
-        val GoStatus = GoUnauthenticatedStatus {
-            runBlocking {
-                StreamServiceGrpcKt.StreamServiceCoroutineStub(GoChannel)
-                    .openStream(flowOf(StreamFrame.getDefaultInstance()))
-                    .toList()
+        val GoStatus =
+            GoUnauthenticatedStatus {
+                runBlocking {
+                    StreamServiceGrpcKt
+                        .StreamServiceCoroutineStub(GoChannel)
+                        .openStream(flowOf(StreamFrame.getDefaultInstance()))
+                        .toList()
+                }
             }
-        }
 
         // Then the stream itself is rejected on the exact status
         println("[QA] unauthenticated stream raw status = $GoStatus")
@@ -265,8 +278,7 @@ class AuthGrpcTest {
 
     // ---------------------------------------------------------------- helpers
 
-    private fun GoStub(): PairingServiceGrpcKt.PairingServiceCoroutineStub =
-        PairingServiceGrpcKt.PairingServiceCoroutineStub(GoChannel)
+    private fun GoStub(): PairingServiceGrpcKt.PairingServiceCoroutineStub = PairingServiceGrpcKt.PairingServiceCoroutineStub(GoChannel)
 
     /** Blocking surface: the coroutine stub driven synchronously, which takes metadata headers. */
     private fun GoBlocking(): PairingServiceGrpcKt.PairingServiceCoroutineStub = GoStub()
@@ -275,11 +287,13 @@ class AuthGrpcTest {
 
     private fun GoRawAuth(header: String): Metadata = Metadata().apply { put(GoAuthKey, header) }
 
-    private fun GoPairRequest(pin: String): PairRequest = PairRequest.newBuilder()
-        .setPin(pin)
-        .setDeviceName("glass-1")
-        .setRole(DeviceRole.DEVICE_ROLE_GLASS)
-        .build()
+    private fun GoPairRequest(pin: String): PairRequest =
+        PairRequest
+            .newBuilder()
+            .setPin(pin)
+            .setDeviceName("glass-1")
+            .setRole(DeviceRole.DEVICE_ROLE_GLASS)
+            .build()
 
     private fun GoPairOnce(): String {
         val GoWindow = GoPairing.GoOpenWindow(ttlMs = 60_000)
@@ -295,14 +309,15 @@ class AuthGrpcTest {
      * surface [StatusRuntimeException]. Both carry the same [Status].
      */
     private fun GoUnauthenticatedStatus(GoCall: () -> Unit): Status {
-        val GoFailure = try {
-            GoCall()
-            null
-        } catch (GoException: StatusException) {
-            GoException.status
-        } catch (GoException: StatusRuntimeException) {
-            GoException.status
-        }
+        val GoFailure =
+            try {
+                GoCall()
+                null
+            } catch (GoException: StatusException) {
+                GoException.status
+            } catch (GoException: StatusRuntimeException) {
+                GoException.status
+            }
         assertThat(GoFailure).isNotNull()
         return GoFailure!!
     }

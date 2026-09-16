@@ -16,7 +16,6 @@ import org.robolectric.RobolectricTestRunner
  */
 @RunWith(RobolectricTestRunner::class)
 class RuntimeConfigStoreTest {
-
     private lateinit var GoContext: Context
     private lateinit var GoStore: RuntimeConfigStore
 
@@ -24,7 +23,8 @@ class RuntimeConfigStoreTest {
     fun setUp() {
         GoContext = ApplicationProvider.getApplicationContext()
         // Each test starts from empty prefs, independent of the others.
-        GoContext.getSharedPreferences(RuntimeConfigStore.GO_PREFS_NAME, Context.MODE_PRIVATE)
+        GoContext
+            .getSharedPreferences(RuntimeConfigStore.GO_PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
             .clear()
             .commit()
@@ -47,7 +47,8 @@ class RuntimeConfigStoreTest {
 
     @Test
     fun `an unknown persisted adapter value falls back to mock`() {
-        GoContext.getSharedPreferences(RuntimeConfigStore.GO_PREFS_NAME, Context.MODE_PRIVATE)
+        GoContext
+            .getSharedPreferences(RuntimeConfigStore.GO_PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
             .putString(RuntimeConfigStore.GO_KEY_STT_ADAPTER, "not-an-engine")
             .commit()
@@ -159,7 +160,8 @@ class RuntimeConfigStoreTest {
 
     @Test
     fun `an unknown persisted hotspot mode falls back to manual`() {
-        GoContext.getSharedPreferences(RuntimeConfigStore.GO_PREFS_NAME, Context.MODE_PRIVATE)
+        GoContext
+            .getSharedPreferences(RuntimeConfigStore.GO_PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
             .putString(RuntimeConfigStore.GO_KEY_HOTSPOT_MODE, "not-a-mode")
             .commit()

@@ -7,9 +7,9 @@ import android.location.LocationManager
 import android.net.wifi.SoftApConfiguration
 import android.net.wifi.WifiManager
 import androidx.test.core.app.ApplicationProvider
-import com.google.common.truth.Truth.assertThat
 import com.glassstorm.phonemanager.domain.network.HotspotState
 import com.glassstorm.phonemanager.domain.network.HotspotUnavailableException
+import com.google.common.truth.Truth.assertThat
 import org.junit.Assert.assertThrows
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -24,7 +24,10 @@ import org.robolectric.annotation.Config
  * SDK stub (only `setChannels`/`build` are exposed), so the test drives them
  * reflectively — exactly what the Robolectric android-all jar supports.
  */
-private fun GoBuildSoftApConfig(ssid: String, passphrase: String): SoftApConfiguration {
+private fun GoBuildSoftApConfig(
+    ssid: String,
+    passphrase: String,
+): SoftApConfiguration {
     val GoBuilder = SoftApConfiguration.Builder()
     val GoBuilderClass = SoftApConfiguration.Builder::class.java
     GoBuilderClass.getMethod("setSsid", String::class.java).invoke(GoBuilder, ssid)
@@ -44,11 +47,9 @@ private fun GoBuildSoftApConfig(ssid: String, passphrase: String): SoftApConfigu
  * still locked by tests so a future SDK bump cannot silently regress them.
  */
 class LocalOnlyHotspotAdapterApiBranchTest {
-
     @RunWith(RobolectricTestRunner::class)
     @Config(sdk = [30])
     class OnApi30 {
-
         private val GoApp: Application = ApplicationProvider.getApplicationContext()
         private val GoWifi: WifiManager =
             GoApp.getSystemService(Context.WIFI_SERVICE) as WifiManager
@@ -58,8 +59,9 @@ class LocalOnlyHotspotAdapterApiBranchTest {
             passphrase: String,
         ): WifiManager.LocalOnlyHotspotReservation {
             val GoConfig = GoBuildSoftApConfig(ssid, passphrase)
-            val GoCtor = WifiManager.LocalOnlyHotspotReservation::class.java
-                .getDeclaredConstructor(WifiManager::class.java, SoftApConfiguration::class.java)
+            val GoCtor =
+                WifiManager.LocalOnlyHotspotReservation::class.java
+                    .getDeclaredConstructor(WifiManager::class.java, SoftApConfiguration::class.java)
             GoCtor.isAccessible = true
             return GoCtor.newInstance(GoWifi, GoConfig)
         }
@@ -70,13 +72,15 @@ class LocalOnlyHotspotAdapterApiBranchTest {
             Shadows.shadowOf(GoApp).grantPermissions(Manifest.permission.ACCESS_FINE_LOCATION)
             val GoLoc = GoApp.getSystemService(Context.LOCATION_SERVICE) as LocationManager
             Shadows.shadowOf(GoLoc).setLocationEnabled(true)
-            val GoHotspot = LocalOnlyHotspotAdapter(
-                GoContext = GoApp,
-                GoLauncher = HotspotLauncher {
-                    HotspotLaunch.Granted(GoBuildSoftApReservation("Api30-AP", "api30-pass"))
-                },
-                GoTetherProbe = TetherProbe { emptyList() },
-            )
+            val GoHotspot =
+                LocalOnlyHotspotAdapter(
+                    GoContext = GoApp,
+                    GoLauncher =
+                        HotspotLauncher {
+                            HotspotLaunch.Granted(GoBuildSoftApReservation("Api30-AP", "api30-pass"))
+                        },
+                    GoTetherProbe = TetherProbe { emptyList() },
+                )
 
             // When started
             val GoInfo = GoHotspot.GoStartHotspot()
@@ -91,7 +95,6 @@ class LocalOnlyHotspotAdapterApiBranchTest {
     @RunWith(RobolectricTestRunner::class)
     @Config(sdk = [33])
     class OnApi33 {
-
         private val GoApp: Application = ApplicationProvider.getApplicationContext()
 
         @Test
@@ -99,11 +102,12 @@ class LocalOnlyHotspotAdapterApiBranchTest {
             // Given API 33 with neither permission granted
             val GoLoc = GoApp.getSystemService(Context.LOCATION_SERVICE) as LocationManager
             Shadows.shadowOf(GoLoc).setLocationEnabled(true)
-            val GoHotspot = LocalOnlyHotspotAdapter(
-                GoContext = GoApp,
-                GoLauncher = HotspotLauncher { HotspotLaunch.TimedOut },
-                GoTetherProbe = TetherProbe { emptyList() },
-            )
+            val GoHotspot =
+                LocalOnlyHotspotAdapter(
+                    GoContext = GoApp,
+                    GoLauncher = HotspotLauncher { HotspotLaunch.TimedOut },
+                    GoTetherProbe = TetherProbe { emptyList() },
+                )
 
             // When started
             assertThrows(HotspotUnavailableException::class.java) { GoHotspot.GoStartHotspot() }
@@ -121,15 +125,17 @@ class LocalOnlyHotspotAdapterApiBranchTest {
             Shadows.shadowOf(GoLoc).setLocationEnabled(true)
             val GoWifi = GoApp.getSystemService(Context.WIFI_SERVICE) as WifiManager
             val GoConfig = GoBuildSoftApConfig("Api33-AP", "api33-pass")
-            val GoCtor = WifiManager.LocalOnlyHotspotReservation::class.java
-                .getDeclaredConstructor(WifiManager::class.java, SoftApConfiguration::class.java)
+            val GoCtor =
+                WifiManager.LocalOnlyHotspotReservation::class.java
+                    .getDeclaredConstructor(WifiManager::class.java, SoftApConfiguration::class.java)
             GoCtor.isAccessible = true
             val GoReservation = GoCtor.newInstance(GoWifi, GoConfig)
-            val GoHotspot = LocalOnlyHotspotAdapter(
-                GoContext = GoApp,
-                GoLauncher = HotspotLauncher { HotspotLaunch.Granted(GoReservation) },
-                GoTetherProbe = TetherProbe { emptyList() },
-            )
+            val GoHotspot =
+                LocalOnlyHotspotAdapter(
+                    GoContext = GoApp,
+                    GoLauncher = HotspotLauncher { HotspotLaunch.Granted(GoReservation) },
+                    GoTetherProbe = TetherProbe { emptyList() },
+                )
 
             // When started
             val GoInfo = GoHotspot.GoStartHotspot()

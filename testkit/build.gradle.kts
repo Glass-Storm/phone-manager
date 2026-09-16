@@ -1,5 +1,6 @@
 plugins {
     alias(libs.plugins.kotlin.jvm)
+    alias(libs.plugins.ktlint)
 }
 
 // Pure Kotlin/JVM: no Android, no runtime dependencies. It only carries the

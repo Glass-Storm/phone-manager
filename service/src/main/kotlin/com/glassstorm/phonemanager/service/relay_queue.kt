@@ -17,8 +17,10 @@ import kotlinx.coroutines.channels.Channel
  *  * [GoVideo] — drop-oldest. [GoAdmitVideo] evicts the oldest queued frame when
  *    the buffer is full, so the live edge keeps flowing.
  */
-internal class RelayQueue(audioCapacity: Int, videoCapacity: Int) {
-
+internal class RelayQueue(
+    audioCapacity: Int,
+    videoCapacity: Int,
+) {
     val GoAudio: Channel<ByteArray> = Channel(capacity = audioCapacity)
 
     val GoVideo: Channel<ByteArray> = Channel(capacity = videoCapacity)

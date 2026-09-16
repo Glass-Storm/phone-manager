@@ -4,9 +4,9 @@ import android.content.Context
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.net.wifi.WifiManager
-import com.google.common.truth.Truth.assertThat
 import com.glassstorm.phonemanager.domain.dto.PeerAddress
 import com.glassstorm.phonemanager.domain.network.DiscoveryState
+import com.google.common.truth.Truth.assertThat
 import org.junit.After
 import org.junit.Assert.fail
 import org.junit.Test
@@ -29,7 +29,6 @@ import org.robolectric.shadows.ShadowWifiManager
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [29])
 class NsdDiscoveryAdapterTest {
-
     private val GoContext: Context = RuntimeEnvironment.getApplication()
     private val GoNsd: NsdManager =
         GoContext.getSystemService(Context.NSD_SERVICE) as NsdManager
@@ -42,13 +41,13 @@ class NsdDiscoveryAdapterTest {
     private val GoServiceType = NsdDiscoveryAdapter.GoDefaultServiceType
     private val GoGateway = PeerAddress("192.168.43.1", 9000, PeerAddress.GoSourceGateway)
 
-    private fun GoAdapter(): NsdDiscoveryAdapter =
-        NsdDiscoveryAdapter(GoContext, GoGateway)
+    private fun GoAdapter(): NsdDiscoveryAdapter = NsdDiscoveryAdapter(GoContext, GoGateway)
 
-    private fun GoRegisteredInfo(): NsdServiceInfo = NsdServiceInfo().apply {
-        serviceName = GoServiceName
-        serviceType = GoServiceType
-    }
+    private fun GoRegisteredInfo(): NsdServiceInfo =
+        NsdServiceInfo().apply {
+            serviceName = GoServiceName
+            serviceType = GoServiceType
+        }
 
     @After
     fun GoResetShadows() {
@@ -164,9 +163,10 @@ class NsdDiscoveryAdapterTest {
         GoDiscovery.GoAdvertise(GoServiceName, 9000)
 
         // When a peer is resolved on a worker thread and mDNS fails
-        val GoResult = GoResolveOnWorker(GoDiscovery, timeoutMs = 2_000) { _, GoListener, _ ->
-            GoListener.onResolveFailed(GoListener.GoServiceInfo, 0)
-        }
+        val GoResult =
+            GoResolveOnWorker(GoDiscovery, timeoutMs = 2_000) { _, GoListener, _ ->
+                GoListener.onResolveFailed(GoListener.GoServiceInfo, 0)
+            }
 
         // Then the returned peer is the gateway, not an exception
         assertThat(GoResult.GoPeer).isEqualTo(GoGateway)
@@ -199,15 +199,17 @@ class NsdDiscoveryAdapterTest {
         GoDiscovery.GoAdvertise(GoServiceName, 9000)
 
         // When the shadow reports a resolved peer with a real host and port
-        val GoResult = GoResolveOnWorker(GoDiscovery, timeoutMs = 2_000) { _, GoListener, _ ->
-            val GoResolved = NsdServiceInfo().apply {
-                serviceName = GoServiceName
-                serviceType = GoServiceType
-                setHost(java.net.InetAddress.getByName("192.168.43.7"))
-                port = 9100
+        val GoResult =
+            GoResolveOnWorker(GoDiscovery, timeoutMs = 2_000) { _, GoListener, _ ->
+                val GoResolved =
+                    NsdServiceInfo().apply {
+                        serviceName = GoServiceName
+                        serviceType = GoServiceType
+                        setHost(java.net.InetAddress.getByName("192.168.43.7"))
+                        port = 9100
+                    }
+                GoListener.onServiceResolved(GoResolved)
             }
-            GoListener.onServiceResolved(GoResolved)
-        }
 
         // Then that peer is returned with source mdns, and the fallback is not used
         assertThat(GoResult.GoPeer).isEqualTo(
@@ -225,7 +227,11 @@ class NsdDiscoveryAdapterTest {
         val GoServiceInfo: NsdServiceInfo,
         val GoListener: NsdManager.ResolveListener,
     ) {
-        fun onResolveFailed(info: NsdServiceInfo, code: Int) = GoListener.onResolveFailed(info, code)
+        fun onResolveFailed(
+            info: NsdServiceInfo,
+            code: Int,
+        ) = GoListener.onResolveFailed(info, code)
+
         fun onServiceResolved(info: NsdServiceInfo) = GoListener.onServiceResolved(info)
     }
 
@@ -240,18 +246,20 @@ class NsdDiscoveryAdapterTest {
     ): GoResolveOutcome {
         var GoPeer: PeerAddress? = null
         var GoElapsed = 0L
-        val GoThread = Thread {
-            val GoStarted = System.nanoTime()
-            GoPeer = discovery.GoResolveFirst(timeoutMs)
-            GoElapsed = (System.nanoTime() - GoStarted) / 1_000_000
-        }
+        val GoThread =
+            Thread {
+                val GoStarted = System.nanoTime()
+                GoPeer = discovery.GoResolveFirst(timeoutMs)
+                GoElapsed = (System.nanoTime() - GoStarted) / 1_000_000
+            }
         GoThread.start()
 
         val GoDiscoveryListeners = GoAwaitDiscoveryListener()
-        val GoFound = NsdServiceInfo().apply {
-            serviceName = GoServiceName
-            serviceType = GoServiceType
-        }
+        val GoFound =
+            NsdServiceInfo().apply {
+                serviceName = GoServiceName
+                serviceType = GoServiceType
+            }
         GoDiscoveryListeners.onServiceFound(GoFound)
 
         val GoResolveListener = GoAwaitResolveListener(GoFound)

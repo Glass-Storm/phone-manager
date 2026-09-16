@@ -23,7 +23,6 @@ import org.robolectric.RobolectricTestRunner
  */
 @RunWith(RobolectricTestRunner::class)
 class AppShellTest {
-
     @get:Rule
     val composeRule = createComposeRule()
 

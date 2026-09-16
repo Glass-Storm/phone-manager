@@ -45,8 +45,9 @@ fun interface TokenVerifier {
  * description is deliberately uniform: it never distinguishes "missing" from
  * "unknown" from "tampered", and it never echoes the token or the PIN.
  */
-class AuthInterceptor(private val GoTokenVerifier: TokenVerifier) : ServerInterceptor {
-
+class AuthInterceptor(
+    private val GoTokenVerifier: TokenVerifier,
+) : ServerInterceptor {
     override fun <ReqT : Any, RespT : Any> interceptCall(
         method: ServerCall<ReqT, RespT>,
         headers: Metadata,
@@ -57,8 +58,9 @@ class AuthInterceptor(private val GoTokenVerifier: TokenVerifier) : ServerInterc
             return next.startCall(method, headers)
         }
 
-        val GoDevice = GoResolveDevice(headers)
-            ?: return GoReject(method)
+        val GoDevice =
+            GoResolveDevice(headers)
+                ?: return GoReject(method)
 
         // Attach the authenticated identity to THIS call's Context only.
         val GoAuthenticated = Context.current().withValue(GoDeviceIdKey, GoDevice.GoDeviceId)
@@ -106,7 +108,8 @@ class AuthInterceptor(private val GoTokenVerifier: TokenVerifier) : ServerInterc
         val GoDeviceIdKey: Context.Key<String> = Context.key("ecosys-device-id")
 
         /** Uniform rejection: never says WHY (no oracle), never echoes secrets. */
-        private val GO_UNAUTHENTICATED: Status = Status.UNAUTHENTICATED
-            .withDescription("missing or invalid bearer token")
+        private val GO_UNAUTHENTICATED: Status =
+            Status.UNAUTHENTICATED
+                .withDescription("missing or invalid bearer token")
     }
 }

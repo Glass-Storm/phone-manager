@@ -1,6 +1,5 @@
 package com.glassstorm.phonemanager
 
-import com.google.common.truth.Truth.assertThat
 import com.glassstorm.phonemanager.domain.adapter.repository.DeviceRepository
 import com.glassstorm.phonemanager.domain.adapter.transport.HubServer
 import com.glassstorm.phonemanager.domain.context.Context
@@ -10,6 +9,7 @@ import com.glassstorm.phonemanager.domain.service.DeviceService
 import com.glassstorm.phonemanager.domain.service.PairingService
 import com.glassstorm.phonemanager.domain.service.StreamService
 import com.glassstorm.phonemanager.service.security.TokenVerifier
+import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 
 /**
@@ -21,7 +21,6 @@ import org.junit.Test
  * forgot any of these would fail at `GoStart`, not at first use.
  */
 class AppCompositionTest {
-
     @Test
     fun `composition root registers all three layers into one Context`() {
         // Given the app composition root
@@ -42,7 +41,7 @@ class AppCompositionTest {
                 GoTokenHash = "hash-d-1",
                 GoPairedAtMs = 1_000L,
                 GoLastSeenMs = null,
-            )
+            ),
         )
         assertThat(GoService.GoListDevices().map { it.GoDeviceId }).containsExactly("d-1")
     }
@@ -62,7 +61,7 @@ class AppCompositionTest {
                 GoTokenHash = "hash-d-2",
                 GoPairedAtMs = 2_000L,
                 GoLastSeenMs = null,
-            )
+            ),
         )
 
         // Then the adapter bound under the port type sees the same write

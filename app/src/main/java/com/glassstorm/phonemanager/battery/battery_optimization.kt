@@ -31,7 +31,6 @@ import android.provider.Settings
  * No new permission is introduced here.
  */
 object BatteryOptimization {
-
     /**
      * Whether this app is already exempt from battery optimization.
      *
@@ -39,8 +38,9 @@ object BatteryOptimization {
      * unoptimizable platform is not reported as exempt.
      */
     fun GoIsExempt(goContext: Context): Boolean {
-        val GoPower = goContext.getSystemService(Context.POWER_SERVICE) as? PowerManager
-            ?: return false
+        val GoPower =
+            goContext.getSystemService(Context.POWER_SERVICE) as? PowerManager
+                ?: return false
         return GoPower.isIgnoringBatteryOptimizations(goContext.packageName)
     }
 
@@ -61,6 +61,5 @@ object BatteryOptimization {
      * `Uri.fromParts` is used rather than string concatenation so the scheme and
      * the opaque part are built by the platform parser.
      */
-    fun GoPackageUri(goContext: Context): Uri =
-        Uri.fromParts("package", goContext.packageName, null)
+    fun GoPackageUri(goContext: Context): Uri = Uri.fromParts("package", goContext.packageName, null)
 }

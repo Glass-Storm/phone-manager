@@ -24,7 +24,11 @@ interface SttPort {
      * Returns the recognized text, or `null` when the chunk produced no complete
      * utterance. Implementations MUST NOT throw on ordinary `null` outcomes.
      */
-    suspend fun GoTranscribe(sessionId: String, audioPcm16: ByteArray, sampleRateHz: Int): String?
+    suspend fun GoTranscribe(
+        sessionId: String,
+        audioPcm16: ByteArray,
+        sampleRateHz: Int,
+    ): String?
 
     /** Release any engine state for [sessionId]. Idempotent. */
     suspend fun GoClose(sessionId: String)

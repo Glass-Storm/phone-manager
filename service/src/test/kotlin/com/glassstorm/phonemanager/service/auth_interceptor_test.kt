@@ -1,9 +1,9 @@
 package com.glassstorm.phonemanager.service
 
-import com.google.common.truth.Truth.assertThat
 import com.glassstorm.phonemanager.domain.dto.Device
 import com.glassstorm.phonemanager.service.security.AuthInterceptor
 import com.glassstorm.phonemanager.service.security.TokenVerifier
+import com.google.common.truth.Truth.assertThat
 import ecosys.v1.PairingServiceGrpc
 import io.grpc.Metadata
 import io.grpc.MethodDescriptor
@@ -22,19 +22,28 @@ import org.junit.Test
  * `Heartbeat`) fails here.
  */
 class AuthInterceptorTest {
-
     private val GoAuthKey: Metadata.Key<String> =
         Metadata.Key.of("authorization", Metadata.ASCII_STRING_MARSHALLER)
 
-    private class GoRecordingCall<ReqT : Any, RespT : Any>(private val GoDescriptor: MethodDescriptor<ReqT, RespT>) :
-        ServerCall<ReqT, RespT>() {
+    private class GoRecordingCall<ReqT : Any, RespT : Any>(
+        private val GoDescriptor: MethodDescriptor<ReqT, RespT>,
+    ) : ServerCall<ReqT, RespT>() {
         var GoClosed: Status? = null
+
         override fun request(requests: Int) = Unit
+
         override fun sendHeaders(headers: Metadata) = Unit
+
         override fun sendMessage(message: RespT) = Unit
+
         override fun isReady(): Boolean = true
+
         override fun isCancelled(): Boolean = false
-        override fun close(status: Status, trailers: Metadata) {
+
+        override fun close(
+            status: Status,
+            trailers: Metadata,
+        ) {
             GoClosed = status
         }
 
@@ -43,26 +52,32 @@ class AuthInterceptorTest {
 
     private class GoRecordingHandler<ReqT : Any, RespT : Any> : ServerCallHandler<ReqT, RespT> {
         var GoCalled: Boolean = false
-        override fun startCall(call: ServerCall<ReqT, RespT>, headers: Metadata): ServerCall.Listener<ReqT> {
+
+        override fun startCall(
+            call: ServerCall<ReqT, RespT>,
+            headers: Metadata,
+        ): ServerCall.Listener<ReqT> {
             GoCalled = true
             return object : ServerCall.Listener<ReqT>() {}
         }
     }
 
-    private val GoDevice = Device(
-        GoDeviceId = "d-1",
-        GoDeviceName = "glass-1",
-        GoRole = "GLASS",
-        GoTokenHash = "hash-d-1",
-        GoPairedAtMs = 1_000L,
-        GoLastSeenMs = null,
-    )
+    private val GoDevice =
+        Device(
+            GoDeviceId = "d-1",
+            GoDeviceName = "glass-1",
+            GoRole = "GLASS",
+            GoTokenHash = "hash-d-1",
+            GoPairedAtMs = 1_000L,
+            GoLastSeenMs = null,
+        )
 
     private val GoVerifier = TokenVerifier { token -> GoDevice.takeIf { token == "good-token" } }
 
-    private fun GoMetadata(header: String?): Metadata = Metadata().apply {
-        if (header != null) put(GoAuthKey, header)
-    }
+    private fun GoMetadata(header: String?): Metadata =
+        Metadata().apply {
+            if (header != null) put(GoAuthKey, header)
+        }
 
     private fun <ReqT : Any, RespT : Any> GoIntercept(
         descriptor: MethodDescriptor<ReqT, RespT>,
@@ -122,10 +137,11 @@ class AuthInterceptorTest {
     @Test
     fun `only the exact Pair method name is allowlisted, not other Pair-ish descriptors`() {
         // Given descriptors whose full method names resemble Pair
-        val GoNames = listOf(
-            PairingServiceGrpc.getPairMethod().fullMethodName,
-            PairingServiceGrpc.getHeartbeatMethod().fullMethodName,
-        )
+        val GoNames =
+            listOf(
+                PairingServiceGrpc.getPairMethod().fullMethodName,
+                PairingServiceGrpc.getHeartbeatMethod().fullMethodName,
+            )
 
         // Then the allowlist constant is exactly the generated Pair name
         assertThat(AuthInterceptor.GO_PAIR_METHOD).isEqualTo("ecosys.v1.PairingService/Pair")

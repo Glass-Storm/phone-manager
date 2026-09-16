@@ -46,7 +46,6 @@ class HubServerAdapter(
     private val GoCtx: Context,
     private val GoBindAddress: String = GO_LOOPBACK_ADDRESS,
 ) : HubServer {
-
     private val GoHub: GrpcHubServer = GrpcHubServer { GoNewBuilder(it) }
 
     override fun GoStart(port: Int) = GoHub.GoStart(port)
@@ -66,7 +65,8 @@ class HubServerAdapter(
      * populated when the adapter object is constructed is fine.
      */
     private fun GoNewBuilder(port: Int): ServerBuilder<*> =
-        NettyServerBuilder.forAddress(InetSocketAddress(GoBindAddress, port))
+        NettyServerBuilder
+            .forAddress(InetSocketAddress(GoBindAddress, port))
             .addService(PairingGrpcService(GoCtx))
             .addService(StreamGrpcService(GoCtx))
             .intercept(AuthInterceptor(GoTokenVerifier()))
@@ -90,7 +90,6 @@ class HubServerAdapter(
         const val GO_ALL_INTERFACES_ADDRESS: String = "0.0.0.0"
 
         /** The adapter the app uses: reachable by hotspot peers on the LAN. */
-        fun GoForLanPeers(GoCtx: Context): HubServerAdapter =
-            HubServerAdapter(GoCtx, GO_ALL_INTERFACES_ADDRESS)
+        fun GoForLanPeers(GoCtx: Context): HubServerAdapter = HubServerAdapter(GoCtx, GO_ALL_INTERFACES_ADDRESS)
     }
 }

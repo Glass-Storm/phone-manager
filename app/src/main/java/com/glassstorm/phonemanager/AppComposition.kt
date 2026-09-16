@@ -1,6 +1,5 @@
 package com.glassstorm.phonemanager
 
-import android.content.Context as GoAndroidContext
 import com.glassstorm.phonemanager.adapter.config.RuntimeConfigStore
 import com.glassstorm.phonemanager.adapter.network.nsd.NsdDiscoveryAdapter
 import com.glassstorm.phonemanager.adapter.network.wifi.LocalOnlyHotspotAdapter
@@ -29,6 +28,7 @@ import com.glassstorm.phonemanager.service.DeviceServiceImpl
 import com.glassstorm.phonemanager.service.PairingServiceImpl
 import com.glassstorm.phonemanager.service.StreamServiceImpl
 import com.glassstorm.phonemanager.service.security.TokenVerifier
+import android.content.Context as GoAndroidContext
 
 /**
  * Composition root. The ONLY place that knows every layer at once: it binds the
@@ -43,7 +43,6 @@ import com.glassstorm.phonemanager.service.security.TokenVerifier
  * before [HubServer.GoStart] is ever called.
  */
 object AppComposition {
-
     /**
      * The hub's default listening port. Reachable by hotspot peers via the
      * gateway address, and the port the discovery adapter advertises.
@@ -145,7 +144,10 @@ object AppComposition {
      * fallback is left unconfigured: it is a settings-owned value, and the hub's
      * own use of the port is advertising, which needs no fallback.
      */
-    private fun GoRegisterAndroidBacked(GoCtx: Context, goAndroidContext: GoAndroidContext?) {
+    private fun GoRegisterAndroidBacked(
+        GoCtx: Context,
+        goAndroidContext: GoAndroidContext?,
+    ) {
         if (goAndroidContext == null) return
         if (FromContextOrNull<AppConfig>(GoCtx) != null) return
 

@@ -67,7 +67,10 @@ fun SettingsScreen(
 }
 
 @Composable
-private fun GoSpeechCard(GoState: SettingsUiState, GoViewModel: SettingsViewModel) {
+private fun GoSpeechCard(
+    GoState: SettingsUiState,
+    GoViewModel: SettingsViewModel,
+) {
     Card {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -132,7 +135,10 @@ private fun GoSpeechCard(GoState: SettingsUiState, GoViewModel: SettingsViewMode
 }
 
 @Composable
-private fun GoHotspotCard(GoState: SettingsUiState, GoViewModel: SettingsViewModel) {
+private fun GoHotspotCard(
+    GoState: SettingsUiState,
+    GoViewModel: SettingsViewModel,
+) {
     Card {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -158,7 +164,10 @@ private fun GoHotspotCard(GoState: SettingsUiState, GoViewModel: SettingsViewMod
 }
 
 @Composable
-private fun GoBatteryCard(GoState: SettingsUiState, GoViewModel: SettingsViewModel) {
+private fun GoBatteryCard(
+    GoState: SettingsUiState,
+    GoViewModel: SettingsViewModel,
+) {
     Card {
         Column(
             modifier = Modifier.padding(16.dp),

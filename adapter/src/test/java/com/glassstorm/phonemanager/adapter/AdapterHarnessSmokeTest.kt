@@ -12,7 +12,6 @@ import org.robolectric.RuntimeEnvironment
  */
 @RunWith(RobolectricTestRunner::class)
 class AdapterHarnessSmokeTest {
-
     @Test
     fun `robolectric provides an application instance`() {
         assertNotNull(RuntimeEnvironment.getApplication())

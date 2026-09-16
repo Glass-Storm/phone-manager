@@ -11,7 +11,6 @@ import com.glassstorm.phonemanager.domain.dto.Device
  * composition root can be exercised on a plain JVM.
  */
 class MemoryDeviceRepository : DeviceRepository {
-
     private val GoRows: MutableMap<String, Device> = LinkedHashMap()
 
     override fun GoUpsert(device: Device) {
@@ -20,12 +19,14 @@ class MemoryDeviceRepository : DeviceRepository {
 
     override fun GoGet(deviceId: String): Device? = GoRows[deviceId]
 
-    override fun GoGetByTokenHash(tokenHash: String): Device? =
-        GoRows.values.firstOrNull { it.GoTokenHash == tokenHash }
+    override fun GoGetByTokenHash(tokenHash: String): Device? = GoRows.values.firstOrNull { it.GoTokenHash == tokenHash }
 
     override fun GoList(): List<Device> = GoRows.values.toList()
 
-    override fun GoTouch(deviceId: String, seenAtMs: Long) {
+    override fun GoTouch(
+        deviceId: String,
+        seenAtMs: Long,
+    ) {
         val GoExisting = GoRows[deviceId] ?: return
         GoRows[deviceId] = GoExisting.copy(GoLastSeenMs = seenAtMs)
     }

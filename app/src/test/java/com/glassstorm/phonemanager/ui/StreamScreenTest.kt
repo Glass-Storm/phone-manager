@@ -12,12 +12,12 @@ import com.glassstorm.phonemanager.domain.context.Context
 import com.glassstorm.phonemanager.domain.context.Register
 import com.glassstorm.phonemanager.domain.service.StreamService
 import com.google.common.truth.Truth.assertThat
-import java.time.Duration
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
+import java.time.Duration
 
 /**
  * Stream screen behaviour on the JVM, asserted on text selectors (no screenshots).
@@ -37,7 +37,6 @@ import org.robolectric.Shadows.shadowOf
  */
 @RunWith(RobolectricTestRunner::class)
 class StreamScreenTest {
-
     @get:Rule
     val composeRule = createComposeRule()
 

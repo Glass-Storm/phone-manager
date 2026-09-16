@@ -29,7 +29,11 @@ interface PairingService {
      * Returns [PairOutcome.GoOk] with the device id and the one-time token, or a
      * typed [PairOutcome.GoRejected] carrying a `PairOutcome.GoReason*` value.
      */
-    fun GoPair(pin: String, deviceName: String, role: String): PairOutcome
+    fun GoPair(
+        pin: String,
+        deviceName: String,
+        role: String,
+    ): PairOutcome
 
     /**
      * Resolve the device owning [token] AND bump its last-seen instant.
@@ -40,7 +44,10 @@ interface PairingService {
     fun GoVerifyToken(token: String): Device?
 
     /** Record that [deviceId] was seen at [seenAtMs] without re-deriving its token. */
-    fun GoTouchLastSeen(deviceId: String, seenAtMs: Long)
+    fun GoTouchLastSeen(
+        deviceId: String,
+        seenAtMs: Long,
+    )
 
     /** Revoke [deviceId]: its token stops verifying immediately. Idempotent. */
     fun GoRevoke(deviceId: String)

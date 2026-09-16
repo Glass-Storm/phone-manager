@@ -4,11 +4,11 @@ import android.content.Context
 import android.content.pm.PackageManager
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
-import java.io.BufferedReader
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.io.BufferedReader
 
 /**
  * Proves the backup exclusions are real: the manifest wires both rule files, and
@@ -21,15 +21,15 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [29])
 class BackupRulesTest {
-
     private val GoContext: Context = ApplicationProvider.getApplicationContext()
 
     @Test
     fun `the packaged manifest wires the full-backup rules`() {
         // Given the packaged application
-        val GoApp = GoContext.packageManager
-            .getPackageInfo(GoContext.packageName, PackageManager.GET_PERMISSIONS)
-            .applicationInfo!!
+        val GoApp =
+            GoContext.packageManager
+                .getPackageInfo(GoContext.packageName, PackageManager.GET_PERMISSIONS)
+                .applicationInfo!!
 
         // When the full-backup resource is read reflectively (it is @hide in the
         // public SDK stub, exactly like networkSecurityConfigRes)
@@ -100,7 +100,8 @@ class BackupRulesTest {
 
     private fun GoReadSource(path: String): String =
         // Gradle runs unit tests with the MODULE root as the working directory.
-        java.io.File(path)
+        java.io
+            .File(path)
             .takeIf { it.exists() }
             ?.bufferedReader()
             ?.use(BufferedReader::readText)

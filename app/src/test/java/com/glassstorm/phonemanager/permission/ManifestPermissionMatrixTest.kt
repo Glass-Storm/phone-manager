@@ -6,8 +6,8 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import androidx.test.core.app.ApplicationProvider
-import com.google.common.truth.Truth.assertThat
 import com.glassstorm.phonemanager.HubForegroundService
+import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -21,7 +21,6 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [29])
 class ManifestPermissionMatrixTest {
-
     private val GoContext: Context = ApplicationProvider.getApplicationContext()
 
     private fun GoRequestedPermissions(): List<String> =
@@ -54,10 +53,11 @@ class ManifestPermissionMatrixTest {
     @Test
     fun `the hub service stays unexported and connected-device typed`() {
         // Given the merged manifest's service entry
-        val GoService = GoContext.packageManager.getServiceInfo(
-            ComponentName(GoContext, HubForegroundService::class.java),
-            0,
-        )
+        val GoService =
+            GoContext.packageManager.getServiceInfo(
+                ComponentName(GoContext, HubForegroundService::class.java),
+                0,
+            )
 
         // Then it is not exported and declares the connectedDevice foreground type,
         // so only this app may start its hub and the OS accepts the type

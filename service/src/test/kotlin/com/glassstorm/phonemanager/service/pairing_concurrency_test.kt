@@ -1,18 +1,18 @@
 package com.glassstorm.phonemanager.service
 
-import com.google.common.truth.Truth.assertThat
 import com.glassstorm.phonemanager.domain.adapter.repository.DeviceRepository
 import com.glassstorm.phonemanager.domain.context.Context
 import com.glassstorm.phonemanager.domain.context.Register
 import com.glassstorm.phonemanager.domain.dto.PairOutcome
 import com.glassstorm.phonemanager.domain.dto.Pairing
-import java.util.concurrent.CyclicBarrier
-import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
+import com.google.common.truth.Truth.assertThat
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.Timeout
+import java.util.concurrent.CyclicBarrier
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 
 /**
  * Concurrency proof for [PairingServiceImpl]'s single-use window.
@@ -30,7 +30,6 @@ import org.junit.rules.Timeout
  * weakened to `atLeast(1)`: only a genuinely serialized implementation passes.
  */
 class PairingConcurrencyTest {
-
     @get:Rule
     val GoDeadline: Timeout = Timeout.seconds(60)
 
@@ -58,19 +57,21 @@ class PairingConcurrencyTest {
 
         try {
             // When all N fire GoPair with the CORRECT pin simultaneously
-            val GoFutures = (0 until GoWorkers).map { GoIndex ->
-                GoPool.submit<PairOutcome> {
-                    GoGate.await()
-                    GoPairing.GoPair(GoWindow.GoPin, "peer-$GoIndex", "phone")
+            val GoFutures =
+                (0 until GoWorkers).map { GoIndex ->
+                    GoPool.submit<PairOutcome> {
+                        GoGate.await()
+                        GoPairing.GoPair(GoWindow.GoPin, "peer-$GoIndex", "phone")
+                    }
                 }
-            }
             val GoOutcomes = GoFutures.map { it.get() }
 
             // Then EXACTLY one succeeded and every other caller saw the PIN consumed
             val GoOkCount = GoOutcomes.count { it is PairOutcome.GoOk }
-            val GoConsumedCount = GoOutcomes.count {
-                it is PairOutcome.GoRejected && it.GoReason == PairOutcome.GoReasonPinConsumed
-            }
+            val GoConsumedCount =
+                GoOutcomes.count {
+                    it is PairOutcome.GoRejected && it.GoReason == PairOutcome.GoReasonPinConsumed
+                }
             assertThat(GoOkCount).isEqualTo(1)
             assertThat(GoConsumedCount).isEqualTo(GoWorkers - 1)
 
@@ -96,12 +97,13 @@ class PairingConcurrencyTest {
 
         try {
             // When all N wrong attempts land together
-            val GoFutures = (0 until GoWorkers).map { GoIndex ->
-                GoPool.submit<PairOutcome> {
-                    GoGate.await()
-                    GoPairing.GoPair(GoWrong, "peer-$GoIndex", "phone")
+            val GoFutures =
+                (0 until GoWorkers).map { GoIndex ->
+                    GoPool.submit<PairOutcome> {
+                        GoGate.await()
+                        GoPairing.GoPair(GoWrong, "peer-$GoIndex", "phone")
+                    }
                 }
-            }
             GoFutures.forEach { it.get() }
 
             // Then the cap was reached, so even the CORRECT pin is now locked out

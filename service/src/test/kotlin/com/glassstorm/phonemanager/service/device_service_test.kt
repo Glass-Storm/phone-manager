@@ -1,6 +1,5 @@
 package com.glassstorm.phonemanager.service
 
-import com.google.common.truth.Truth.assertThat
 import com.glassstorm.phonemanager.domain.adapter.repository.DeviceRepository
 import com.glassstorm.phonemanager.domain.context.Context
 import com.glassstorm.phonemanager.domain.context.FromContext
@@ -8,6 +7,7 @@ import com.glassstorm.phonemanager.domain.context.MissingFromContextException
 import com.glassstorm.phonemanager.domain.context.Register
 import com.glassstorm.phonemanager.domain.dto.Device
 import com.glassstorm.phonemanager.domain.service.DeviceService
+import com.google.common.truth.Truth.assertThat
 import org.junit.Assert.assertThrows
 import org.junit.Test
 
@@ -16,19 +16,24 @@ import org.junit.Test
  * from the Context registry (never a constructor-injected concrete adapter).
  */
 class DeviceServiceTest {
-
     /** Test-local fake of the domain port — deliberately NOT the `:adapter` class. */
     private class GoFakeDeviceRepository : DeviceRepository {
         private val GoRows: MutableMap<String, Device> = mutableMapOf()
+
         override fun GoUpsert(device: Device) {
             GoRows[device.GoDeviceId] = device
         }
 
         override fun GoGet(deviceId: String): Device? = GoRows[deviceId]
-        override fun GoGetByTokenHash(tokenHash: String): Device? =
-            GoRows.values.firstOrNull { it.GoTokenHash == tokenHash }
+
+        override fun GoGetByTokenHash(tokenHash: String): Device? = GoRows.values.firstOrNull { it.GoTokenHash == tokenHash }
+
         override fun GoList(): List<Device> = GoRows.values.sortedBy { it.GoDeviceId }
-        override fun GoTouch(deviceId: String, seenAtMs: Long) {
+
+        override fun GoTouch(
+            deviceId: String,
+            seenAtMs: Long,
+        ) {
             val GoExisting = GoRows[deviceId] ?: return
             GoRows[deviceId] = GoExisting.copy(GoLastSeenMs = seenAtMs)
         }
@@ -44,14 +49,15 @@ class DeviceServiceTest {
         val GoCtx = Context()
         Register<DeviceRepository>(GoCtx, GoFakeDeviceRepository())
         val GoService = DeviceServiceImpl(GoCtx)
-        val GoDevice = Device(
-            GoDeviceId = "d-1",
-            GoDeviceName = "glass",
-            GoRole = "GLASS",
-            GoTokenHash = "hash-d-1",
-            GoPairedAtMs = 1_000L,
-            GoLastSeenMs = null,
-        )
+        val GoDevice =
+            Device(
+                GoDeviceId = "d-1",
+                GoDeviceName = "glass",
+                GoRole = "GLASS",
+                GoTokenHash = "hash-d-1",
+                GoPairedAtMs = 1_000L,
+                GoLastSeenMs = null,
+            )
 
         // When the service is used
         GoService.GoRegisterDevice(GoDevice)
@@ -78,7 +84,7 @@ class DeviceServiceTest {
                 GoTokenHash = "hash-a",
                 GoPairedAtMs = 1_000L,
                 GoLastSeenMs = null,
-            )
+            ),
         )
         GoServiceB.GoRegisterDevice(
             Device(
@@ -88,7 +94,7 @@ class DeviceServiceTest {
                 GoTokenHash = "hash-b",
                 GoPairedAtMs = 2_000L,
                 GoLastSeenMs = null,
-            )
+            ),
         )
 
         // Then their stores are independent, proving resolution is by interface binding
@@ -125,7 +131,7 @@ class DeviceServiceTest {
                 GoTokenHash = "hash-x",
                 GoPairedAtMs = 1_000L,
                 GoLastSeenMs = null,
-            )
+            ),
         )
 
         // Then it is usable through the port

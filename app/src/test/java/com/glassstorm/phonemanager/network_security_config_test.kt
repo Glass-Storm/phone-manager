@@ -4,12 +4,12 @@ import android.content.Context
 import android.content.pm.PackageManager
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
-import java.io.BufferedReader
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.xmlpull.v1.XmlPullParser
+import java.io.BufferedReader
 
 /**
  * Proves the dev cleartext policy is both wired and honest about being dev-only.
@@ -23,15 +23,15 @@ import org.xmlpull.v1.XmlPullParser
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [29])
 class NetworkSecurityConfigTest {
-
     private val GoContext: Context = ApplicationProvider.getApplicationContext()
 
     @Test
     fun `the manifest wires this config into the application`() {
         // Given the packaged application
-        val GoApp = GoContext.packageManager
-            .getPackageInfo(GoContext.packageName, PackageManager.GET_PERMISSIONS)
-            .applicationInfo!!
+        val GoApp =
+            GoContext.packageManager
+                .getPackageInfo(GoContext.packageName, PackageManager.GET_PERMISSIONS)
+                .applicationInfo!!
 
         // When the network security config resource is read reflectively
         // (ApplicationInfo exposes the field only privately in the public SDK stub)
@@ -76,7 +76,8 @@ class NetworkSecurityConfigTest {
     private fun GoReadConfigSource(): String =
         // Gradle runs unit tests with the MODULE root as the working directory, so
         // this resolves to app/src/main/res/xml/network_security_config.xml.
-        java.io.File("src/main/res/xml/network_security_config.xml")
+        java.io
+            .File("src/main/res/xml/network_security_config.xml")
             .takeIf { it.exists() }
             ?.bufferedReader()
             ?.use(BufferedReader::readText)

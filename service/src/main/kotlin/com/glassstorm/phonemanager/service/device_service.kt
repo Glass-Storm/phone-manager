@@ -14,8 +14,9 @@ import com.glassstorm.phonemanager.domain.service.DeviceService
  * build edge to `:adapter`, so the concrete implementation is unknowable here
  * by construction.
  */
-class DeviceServiceImpl(private val GoCtx: Context) : DeviceService {
-
+class DeviceServiceImpl(
+    private val GoCtx: Context,
+) : DeviceService {
     private fun GoRepo(): DeviceRepository = FromContext<DeviceRepository>(GoCtx)
 
     override fun GoRegisterDevice(device: Device): Device {

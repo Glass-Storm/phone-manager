@@ -38,7 +38,6 @@ class NsdDiscoveryAdapter(
     private val GoContext: Context,
     private val GoGatewayFallback: PeerAddress?,
 ) : Discovery {
-
     private val GoNsd: NsdManager =
         GoContext.getSystemService(Context.NSD_SERVICE) as NsdManager
 
@@ -56,14 +55,18 @@ class NsdDiscoveryAdapter(
 
     fun GoIsAdvertising(): Boolean = GoRegistrationListener != null
 
-    override fun GoAdvertise(name: String, port: Int) {
+    override fun GoAdvertise(
+        name: String,
+        port: Int,
+    ) {
         if (GoRegistrationListener != null) return
 
-        val GoInfo = NsdServiceInfo().apply {
-            serviceName = name
-            serviceType = GoDefaultServiceType
-            this.port = port
-        }
+        val GoInfo =
+            NsdServiceInfo().apply {
+                serviceName = name
+                serviceType = GoDefaultServiceType
+                this.port = port
+            }
         val GoListener = GoRegistrationListenerImpl()
         GoRegistrationListener = GoListener
         GoMachine.GoAccept(DiscoveryEvent.START_ADVERTISE)
@@ -85,11 +88,12 @@ class NsdDiscoveryAdapter(
     }
 
     override fun GoStopAdvertise() {
-        val GoListener = GoRegistrationListener ?: run {
-            GoReleaseMulticastLock()
-            GoMachine.GoAccept(DiscoveryEvent.STOP_REQUESTED)
-            return
-        }
+        val GoListener =
+            GoRegistrationListener ?: run {
+                GoReleaseMulticastLock()
+                GoMachine.GoAccept(DiscoveryEvent.STOP_REQUESTED)
+                return
+            }
         GoRegistrationListener = null
         try {
             GoNsd.unregisterService(GoListener)
@@ -109,16 +113,18 @@ class NsdDiscoveryAdapter(
         GoMachine.GoAccept(DiscoveryEvent.START_RESOLVE)
 
         val GoDiscoveryListener = GoDiscoveryListenerImpl(GoLatch, GoResolved)
-        val GoDiscovery = try {
-            GoNsd.discoverServices(GoDefaultServiceType, NsdManager.PROTOCOL_DNS_SD, GoDiscoveryListener)
-            true
-        } catch (goFailure: RuntimeException) {
-            false
-        }
+        val GoDiscovery =
+            try {
+                GoNsd.discoverServices(GoDefaultServiceType, NsdManager.PROTOCOL_DNS_SD, GoDiscoveryListener)
+                true
+            } catch (goFailure: RuntimeException) {
+                false
+            }
 
         val GoRemainingMs = TimeUnit.NANOSECONDS.toMillis(GoDeadlineNanos - System.nanoTime())
-        val GoAnswered = GoRemainingMs > 0 &&
-            GoLatch.await(GoRemainingMs, TimeUnit.MILLISECONDS)
+        val GoAnswered =
+            GoRemainingMs > 0 &&
+                GoLatch.await(GoRemainingMs, TimeUnit.MILLISECONDS)
 
         if (GoDiscovery) {
             runCatching { GoNsd.stopServiceDiscovery(GoDiscoveryListener) }
@@ -145,9 +151,10 @@ class NsdDiscoveryAdapter(
     }
 
     private fun GoAcquireMulticastLock() {
-        val GoNeeded = GoNeedsMulticastLock(Build.VERSION.SDK_INT) {
-            GoTiramisuExtensionVersion()
-        }
+        val GoNeeded =
+            GoNeedsMulticastLock(Build.VERSION.SDK_INT) {
+                GoTiramisuExtensionVersion()
+            }
         if (!GoNeeded) return
         val GoLock = GoWifi.createMulticastLock(GoMulticastLockTag)
         GoLock.setReferenceCounted(false)
@@ -185,7 +192,10 @@ class NsdDiscoveryAdapter(
             GoMachine.GoAccept(DiscoveryEvent.ADVERTISE_REGISTERED)
         }
 
-        override fun onRegistrationFailed(goInfo: NsdServiceInfo, goCode: Int) {
+        override fun onRegistrationFailed(
+            goInfo: NsdServiceInfo,
+            goCode: Int,
+        ) {
             GoMachine.GoAccept(
                 DiscoveryEvent.ADVERTISE_FAILED,
                 DiscoveryFailure.AdvertiseFailed(
@@ -196,14 +206,16 @@ class NsdDiscoveryAdapter(
 
         override fun onServiceUnregistered(goInfo: NsdServiceInfo) = Unit
 
-        override fun onUnregistrationFailed(goInfo: NsdServiceInfo, goCode: Int) = Unit
+        override fun onUnregistrationFailed(
+            goInfo: NsdServiceInfo,
+            goCode: Int,
+        ) = Unit
     }
 
     private inner class GoDiscoveryListenerImpl(
         private val GoLatch: CountDownLatch,
         private val GoResolved: AtomicReference<PeerAddress?>,
     ) : NsdManager.DiscoveryListener {
-
         override fun onDiscoveryStarted(goServiceType: String) = Unit
 
         override fun onServiceFound(goInfo: NsdServiceInfo) {
@@ -214,11 +226,17 @@ class NsdDiscoveryAdapter(
 
         override fun onDiscoveryStopped(goServiceType: String) = Unit
 
-        override fun onStartDiscoveryFailed(goServiceType: String, goCode: Int) {
+        override fun onStartDiscoveryFailed(
+            goServiceType: String,
+            goCode: Int,
+        ) {
             GoLatch.countDown()
         }
 
-        override fun onStopDiscoveryFailed(goServiceType: String, goCode: Int) = Unit
+        override fun onStopDiscoveryFailed(
+            goServiceType: String,
+            goCode: Int,
+        ) = Unit
     }
 
     private fun GoResolve(
@@ -239,15 +257,19 @@ class NsdDiscoveryAdapter(
         goResolved: AtomicReference<PeerAddress?>,
     ) {
         @Suppress("DEPRECATION")
-        val GoListener = object : NsdManager.ResolveListener {
-            override fun onServiceResolved(goResolvedInfo: NsdServiceInfo) {
-                GoPublishResolved(goResolvedInfo, goResolved, goLatch)
-            }
+        val GoListener =
+            object : NsdManager.ResolveListener {
+                override fun onServiceResolved(goResolvedInfo: NsdServiceInfo) {
+                    GoPublishResolved(goResolvedInfo, goResolved, goLatch)
+                }
 
-            override fun onResolveFailed(goFailedInfo: NsdServiceInfo, goCode: Int) {
-                goLatch.countDown()
+                override fun onResolveFailed(
+                    goFailedInfo: NsdServiceInfo,
+                    goCode: Int,
+                ) {
+                    goLatch.countDown()
+                }
             }
-        }
         @Suppress("DEPRECATION")
         GoNsd.resolveService(goInfo, GoListener)
     }
@@ -269,21 +291,22 @@ class NsdDiscoveryAdapter(
         goLatch: CountDownLatch,
         goResolved: AtomicReference<PeerAddress?>,
     ) {
-        val GoCallback = object : NsdManager.ServiceInfoCallback {
-            override fun onServiceUpdated(goResolvedInfo: NsdServiceInfo) {
-                GoPublishResolved(goResolvedInfo, goResolved, goLatch)
-            }
+        val GoCallback =
+            object : NsdManager.ServiceInfoCallback {
+                override fun onServiceUpdated(goResolvedInfo: NsdServiceInfo) {
+                    GoPublishResolved(goResolvedInfo, goResolved, goLatch)
+                }
 
-            override fun onServiceLost() {
-                goLatch.countDown()
-            }
+                override fun onServiceLost() {
+                    goLatch.countDown()
+                }
 
-            override fun onServiceInfoCallbackRegistrationFailed(goCode: Int) {
-                goLatch.countDown()
-            }
+                override fun onServiceInfoCallbackRegistrationFailed(goCode: Int) {
+                    goLatch.countDown()
+                }
 
-            override fun onServiceInfoCallbackUnregistered() = Unit
-        }
+                override fun onServiceInfoCallbackUnregistered() = Unit
+            }
         GoNsd.registerServiceInfoCallback(goInfo, GoContext.mainExecutor, GoCallback)
     }
 

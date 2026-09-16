@@ -10,10 +10,15 @@ package com.glassstorm.phonemanager.domain.dto
  */
 sealed interface PairOutcome {
     /** A device was paired: [GoDeviceId] plus the one-time-visible [GoToken]. */
-    data class GoOk(val GoDeviceId: String, val GoToken: String) : PairOutcome
+    data class GoOk(
+        val GoDeviceId: String,
+        val GoToken: String,
+    ) : PairOutcome
 
     /** The attempt was refused for [GoReason]. Nothing was persisted, no token exists. */
-    data class GoRejected(val GoReason: String) : PairOutcome
+    data class GoRejected(
+        val GoReason: String,
+    ) : PairOutcome
 
     companion object {
         /** No pairing window is currently open. */

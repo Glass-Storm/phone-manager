@@ -10,6 +10,8 @@ import com.glassstorm.phonemanager.domain.dto.Device
  */
 interface DeviceService {
     fun GoRegisterDevice(device: Device): Device
+
     fun GoListDevices(): List<Device>
+
     fun GoRemoveDevice(deviceId: String)
 }

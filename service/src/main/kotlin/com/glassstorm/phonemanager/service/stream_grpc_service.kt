@@ -32,38 +32,44 @@ import kotlinx.coroutines.withContext
  * run under [NonCancellable]. Closing the session closes the results channel,
  * which completes the results collector, so no coroutine is left behind.
  */
-class StreamGrpcService(GoCtx: Context) : StreamServiceGrpcKt.StreamServiceCoroutineImplBase() {
-
+class StreamGrpcService(
+    GoCtx: Context,
+) : StreamServiceGrpcKt.StreamServiceCoroutineImplBase() {
     private val GoStream: StreamService = FromContext<StreamService>(GoCtx)
 
-    override fun openStream(requests: Flow<StreamFrame>): Flow<StreamFrame> = channelFlow {
-        // Never trust a frame field for identity: use the token-proved device id.
-        val GoDeviceId = AuthInterceptor.GoDeviceIdKey.get()
-            ?: throw StatusException(Status.UNAUTHENTICATED.withDescription("missing bearer token"))
-        val GoSession = GoStream.GoOpenSession(GoDeviceId)
-        try {
-            coroutineScope {
-                // Relayed utterances are forwarded as they are produced.
-                launch {
-                    GoStream.GoResults(GoSession.GoSessionId).collect { GoResult ->
-                        send(GoTranscriptFrame(GoResult.GoText))
+    override fun openStream(requests: Flow<StreamFrame>): Flow<StreamFrame> =
+        channelFlow {
+            // Never trust a frame field for identity: use the token-proved device id.
+            val GoDeviceId =
+                AuthInterceptor.GoDeviceIdKey.get()
+                    ?: throw StatusException(Status.UNAUTHENTICATED.withDescription("missing bearer token"))
+            val GoSession = GoStream.GoOpenSession(GoDeviceId)
+            try {
+                coroutineScope {
+                    // Relayed utterances are forwarded as they are produced.
+                    launch {
+                        GoStream.GoResults(GoSession.GoSessionId).collect { GoResult ->
+                            send(GoTranscriptFrame(GoResult.GoText))
+                        }
+                    }
+                    try {
+                        requests.collect { GoFrame -> GoDispatch(GoSession.GoSessionId, GoFrame) }
+                    } finally {
+                        // Closes the results channel -> the launched collector completes.
+                        withContext(NonCancellable) { GoStream.GoCloseSession(GoSession.GoSessionId) }
                     }
                 }
-                try {
-                    requests.collect { GoFrame -> GoDispatch(GoSession.GoSessionId, GoFrame) }
-                } finally {
-                    // Closes the results channel -> the launched collector completes.
-                    withContext(NonCancellable) { GoStream.GoCloseSession(GoSession.GoSessionId) }
-                }
+            } finally {
+                // Idempotent safety net for the cancel/error paths that skip the inner
+                // finally (e.g. cancellation while collecting the inbound flow).
+                withContext(NonCancellable) { GoStream.GoCloseSession(GoSession.GoSessionId) }
             }
-        } finally {
-            // Idempotent safety net for the cancel/error paths that skip the inner
-            // finally (e.g. cancellation while collecting the inbound flow).
-            withContext(NonCancellable) { GoStream.GoCloseSession(GoSession.GoSessionId) }
         }
-    }
 
-    private suspend fun GoDispatch(sessionId: String, frame: StreamFrame) {
+    private suspend fun GoDispatch(
+        sessionId: String,
+        frame: StreamFrame,
+    ) {
         when (frame.payloadCase) {
             StreamFrame.PayloadCase.AUDIO_PCM16_16K ->
                 GoStream.GoPushAudio(
@@ -85,7 +91,9 @@ class StreamGrpcService(GoCtx: Context) : StreamServiceGrpcKt.StreamServiceCorou
         }
     }
 
-    private fun GoTranscriptFrame(text: String): StreamFrame = StreamFrame.newBuilder()
-        .setTranscript(text)
-        .build()
+    private fun GoTranscriptFrame(text: String): StreamFrame =
+        StreamFrame
+            .newBuilder()
+            .setTranscript(text)
+            .build()
 }

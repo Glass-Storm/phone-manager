@@ -37,7 +37,6 @@ import org.robolectric.RobolectricTestRunner
  */
 @RunWith(RobolectricTestRunner::class)
 class SettingsScreenTest {
-
     @get:Rule
     val composeRule = createComposeRule()
 
@@ -51,10 +50,11 @@ class SettingsScreenTest {
 
     @Test
     fun `the configured engine and region render as the current selection`() {
-        val GoConfig = FakeAppConfig(
-            GoEngine = SttEngine.SPEECHMATICS,
-            GoRegionValue = "eu",
-        )
+        val GoConfig =
+            FakeAppConfig(
+                GoEngine = SttEngine.SPEECHMATICS,
+                GoRegionValue = "eu",
+            )
         val GoCtx = Context().also { Register<AppConfig>(it, GoConfig) }
 
         composeRule.GoSetSettingsContent(GoCtx)
@@ -181,10 +181,11 @@ class SettingsScreenTest {
     fun `the exemption button reflects the current state and requests when pressed`() {
         val GoConfig = FakeAppConfig()
         val GoBattery = FakeBatteryExemption(GoExempt = false)
-        val GoCtx = Context().also {
-            Register<AppConfig>(it, GoConfig)
-            Register<BatteryExemption>(it, GoBattery)
-        }
+        val GoCtx =
+            Context().also {
+                Register<AppConfig>(it, GoConfig)
+                Register<BatteryExemption>(it, GoBattery)
+            }
 
         composeRule.GoSetSettingsContent(GoCtx)
         composeRule.GoAssertText("Battery optimization: not exempt")
@@ -196,10 +197,11 @@ class SettingsScreenTest {
 
     @Test
     fun `an already exempt app renders the exempt state`() {
-        val GoCtx = Context().also {
-            Register<AppConfig>(it, FakeAppConfig())
-            Register<BatteryExemption>(it, FakeBatteryExemption(GoExempt = true))
-        }
+        val GoCtx =
+            Context().also {
+                Register<AppConfig>(it, FakeAppConfig())
+                Register<BatteryExemption>(it, FakeBatteryExemption(GoExempt = true))
+            }
 
         composeRule.GoSetSettingsContent(GoCtx)
 
@@ -208,10 +210,11 @@ class SettingsScreenTest {
 
     @Test
     fun `the protocol and the bound hub port are displayed`() {
-        val GoCtx = Context().also {
-            Register<AppConfig>(it, FakeAppConfig())
-            Register<HubServer>(it, FakeHubServer(GoBoundPortValue = 40404).also { it.GoStart(0) })
-        }
+        val GoCtx =
+            Context().also {
+                Register<AppConfig>(it, FakeAppConfig())
+                Register<HubServer>(it, FakeHubServer(GoBoundPortValue = 40404).also { it.GoStart(0) })
+            }
 
         composeRule.GoSetSettingsContent(GoCtx)
 
@@ -221,10 +224,11 @@ class SettingsScreenTest {
 
     @Test
     fun `a stopped hub renders a zero port without crashing`() {
-        val GoCtx = Context().also {
-            Register<AppConfig>(it, FakeAppConfig())
-            Register<HubServer>(it, FakeHubServer(GoBoundPortValue = 40404))
-        }
+        val GoCtx =
+            Context().also {
+                Register<AppConfig>(it, FakeAppConfig())
+                Register<HubServer>(it, FakeHubServer(GoBoundPortValue = 40404))
+            }
 
         composeRule.GoSetSettingsContent(GoCtx)
 

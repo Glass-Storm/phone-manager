@@ -32,10 +32,17 @@ interface StreamService {
     fun GoOpenSession(deviceId: String): RelaySession
 
     /** Enqueue opaque PCM16 audio. Parks (suspends) while the audio queue is full: audio is NEVER dropped. */
-    suspend fun GoPushAudio(sessionId: String, audioPcm16: ByteArray, sampleRateHz: Int)
+    suspend fun GoPushAudio(
+        sessionId: String,
+        audioPcm16: ByteArray,
+        sampleRateHz: Int,
+    )
 
     /** Enqueue an opaque H.264 NAL. Evicts the OLDEST queued video frame when full. */
-    fun GoPushVideo(sessionId: String, h264Nal: ByteArray)
+    fun GoPushVideo(
+        sessionId: String,
+        h264Nal: ByteArray,
+    )
 
     /** Relayed utterances for [sessionId]; completes when the session closes. */
     fun GoResults(sessionId: String): Flow<RelayResult>

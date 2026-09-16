@@ -20,7 +20,6 @@ import org.robolectric.annotation.Config
  */
 @RunWith(RobolectricTestRunner::class)
 class HubPermissionsTest {
-
     @Test
     @Config(sdk = [29])
     fun `api 29 demands fine location and never the notification permission`() {

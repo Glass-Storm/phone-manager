@@ -39,7 +39,6 @@ import javax.crypto.spec.PBEKeySpec
  * This object never logs, prints, or otherwise surfaces a PIN or token.
  */
 object TokenCodec {
-
     /** 256-bit derived tokens. */
     const val GoTokenBits: Int = 256
 
@@ -69,7 +68,11 @@ object TokenCodec {
      * Throws [IllegalArgumentException] for a salt shorter than [GoSaltBytes] or
      * an iteration count below [GoMinIterations] — a caller must not weaken the KDF.
      */
-    fun GoDeriveToken(pin: String, salt: ByteArray, iterations: Int): String {
+    fun GoDeriveToken(
+        pin: String,
+        salt: ByteArray,
+        iterations: Int,
+    ): String {
         require(salt.size >= GoSaltBytes) {
             "salt must be at least $GoSaltBytes bytes, was ${salt.size}"
         }
@@ -101,8 +104,10 @@ object TokenCodec {
      * are not secret here, and the comparison is still constant over equal-size
      * inputs).
      */
-    fun GoConstantTimeEquals(left: String, right: String): Boolean =
-        MessageDigest.isEqual(left.toByteArray(Charsets.UTF_8), right.toByteArray(Charsets.UTF_8))
+    fun GoConstantTimeEquals(
+        left: String,
+        right: String,
+    ): Boolean = MessageDigest.isEqual(left.toByteArray(Charsets.UTF_8), right.toByteArray(Charsets.UTF_8))
 
     /**
      * A uniform 6-digit PIN, drawn from [SecureRandom] (never `java.util.Random`).

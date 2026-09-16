@@ -3,7 +3,9 @@ package com.glassstorm.phonemanager.domain.context
 import kotlin.reflect.KClass
 
 /** Thrown when a type is requested from a [Context] that never registered it. */
-class MissingFromContextException(message: String) : IllegalStateException(message)
+class MissingFromContextException(
+    message: String,
+) : IllegalStateException(message)
 
 /**
  * Type-keyed service registry, sing-box style.
@@ -17,7 +19,10 @@ class Context {
     @PublishedApi
     internal val registry: MutableMap<KClass<*>, Any> = mutableMapOf()
 
-    fun <T : Any> Register(type: KClass<T>, instance: T) {
+    fun <T : Any> Register(
+        type: KClass<T>,
+        instance: T,
+    ) {
         registry[type] = instance
     }
 
@@ -30,13 +35,15 @@ class Context {
 }
 
 /** Register [instance] under its reified static type. */
-inline fun <reified T : Any> Register(ctx: Context, instance: T): Unit =
-    ctx.Register(T::class, instance)
+inline fun <reified T : Any> Register(
+    ctx: Context,
+    instance: T,
+): Unit = ctx.Register(T::class, instance)
 
 /** Resolve the registered instance of [T], or throw [MissingFromContextException]. */
 inline fun <reified T : Any> FromContext(ctx: Context): T =
     ctx.GoLookup(T::class) ?: throw MissingFromContextException(
-        "no ${T::class.qualifiedName} registered in Context"
+        "no ${T::class.qualifiedName} registered in Context",
     )
 
 /** Resolve the registered instance of [T], or `null` when absent. */

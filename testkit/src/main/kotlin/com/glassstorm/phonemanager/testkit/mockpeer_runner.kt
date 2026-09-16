@@ -33,17 +33,21 @@ data class GoProcessRun(
  * Launch [command] in [workingDir] under a hard deadline, draining both pipes on
  * daemon threads so a verbose child cannot deadlock on a full OS pipe buffer.
  */
-fun GoRun(command: List<String>, workingDir: File): GoProcessRun {
-    val GoProcess = try {
-        ProcessBuilder(command).directory(workingDir).redirectErrorStream(false).start()
-    } catch (GoFailure: Exception) {
-        return GoProcessRun(
-            exitCode = GO_ERROR,
-            stdout = "",
-            stderr = GoFailure.message ?: "spawn failed",
-            process = null,
-        )
-    }
+fun GoRun(
+    command: List<String>,
+    workingDir: File,
+): GoProcessRun {
+    val GoProcess =
+        try {
+            ProcessBuilder(command).directory(workingDir).redirectErrorStream(false).start()
+        } catch (GoFailure: Exception) {
+            return GoProcessRun(
+                exitCode = GO_ERROR,
+                stdout = "",
+                stderr = GoFailure.message ?: "spawn failed",
+                process = null,
+            )
+        }
 
     val GoStdout = StringBuilder()
     val GoStderr = StringBuilder()
@@ -84,17 +88,21 @@ fun GoRepoRoot(): File {
     error("could not locate the repo root (tools/mockpeer/go.mod) from ${System.getProperty("user.dir")}")
 }
 
-private fun GoDrain(reader: Reader, sink: StringBuilder): Thread {
-    val GoThread = Thread {
-        reader.use { GoSource ->
-            val GoBuf = CharArray(4_096)
-            while (true) {
-                val GoRead = GoSource.read(GoBuf)
-                if (GoRead < 0) break
-                synchronized(sink) { sink.append(GoBuf, 0, GoRead) }
+private fun GoDrain(
+    reader: Reader,
+    sink: StringBuilder,
+): Thread {
+    val GoThread =
+        Thread {
+            reader.use { GoSource ->
+                val GoBuf = CharArray(4_096)
+                while (true) {
+                    val GoRead = GoSource.read(GoBuf)
+                    if (GoRead < 0) break
+                    synchronized(sink) { sink.append(GoBuf, 0, GoRead) }
+                }
             }
         }
-    }
     GoThread.isDaemon = true
     GoThread.start()
     return GoThread

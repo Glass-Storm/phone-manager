@@ -21,7 +21,6 @@ import java.util.concurrent.TimeUnit
 class GrpcHubServer(
     private val GoNewBuilder: (port: Int) -> ServerBuilder<*>,
 ) : HubServer {
-
     private var GoServer: Server? = null
 
     override fun GoStart(port: Int) {

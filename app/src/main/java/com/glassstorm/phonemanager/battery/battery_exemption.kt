@@ -19,8 +19,9 @@ interface BatteryExemption {
 }
 
 /** The Android-backed implementation, delegating to [BatteryOptimization]. */
-class AndroidBatteryExemption(private val GoContext: Context) : BatteryExemption {
-
+class AndroidBatteryExemption(
+    private val GoContext: Context,
+) : BatteryExemption {
     override fun GoIsExempt(): Boolean = BatteryOptimization.GoIsExempt(GoContext)
 
     override fun GoRequestExemption() {

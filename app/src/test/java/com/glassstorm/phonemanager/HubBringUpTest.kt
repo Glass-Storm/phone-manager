@@ -1,6 +1,5 @@
 package com.glassstorm.phonemanager
 
-import com.google.common.truth.Truth.assertThat
 import com.glassstorm.phonemanager.domain.adapter.network.Discovery
 import com.glassstorm.phonemanager.domain.adapter.network.HotspotController
 import com.glassstorm.phonemanager.domain.adapter.transport.HubServer
@@ -10,6 +9,7 @@ import com.glassstorm.phonemanager.domain.dto.HotspotInfo
 import com.glassstorm.phonemanager.domain.dto.PeerAddress
 import com.glassstorm.phonemanager.domain.network.HotspotFailure
 import com.glassstorm.phonemanager.domain.network.HotspotUnavailableException
+import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 
 /**
@@ -20,7 +20,6 @@ import org.junit.Test
  * types and the ordering is observed through recorded calls.
  */
 class HubBringUpTest {
-
     /** Records the call order shared by every collaborator. */
     private class GoCallLog {
         val calls: MutableList<String> = mutableListOf()
@@ -31,6 +30,7 @@ class HubBringUpTest {
         private val GoPort: Int = 40404,
     ) : HubServer {
         private var GoRunning = false
+
         override fun GoStart(port: Int) {
             GoLog.calls += "server.start"
             GoRunning = true
@@ -42,6 +42,7 @@ class HubBringUpTest {
         }
 
         override fun GoIsRunning(): Boolean = GoRunning
+
         override fun GoBoundPort(): Int = if (GoRunning) GoPort else 0
     }
 
@@ -51,6 +52,7 @@ class HubBringUpTest {
         private val GoFail: HotspotFailure? = null,
     ) : HotspotController {
         private var GoActive = false
+
         override fun GoStartHotspot(): HotspotInfo {
             GoLog.calls += "hotspot.start"
             GoFail?.let { throw HotspotUnavailableException(it) }
@@ -64,14 +66,20 @@ class HubBringUpTest {
         }
 
         override fun GoIsActive(): Boolean = GoActive
+
         override fun GoDetectManualTether(): HotspotInfo? = GoManual
     }
 
-    private class RecordingDiscovery(private val GoLog: GoCallLog) : Discovery {
+    private class RecordingDiscovery(
+        private val GoLog: GoCallLog,
+    ) : Discovery {
         var GoAdvertisedPort: Int? = null
             private set
 
-        override fun GoAdvertise(name: String, port: Int) {
+        override fun GoAdvertise(
+            name: String,
+            port: Int,
+        ) {
             GoLog.calls += "discovery.advertise:$port"
             GoAdvertisedPort = port
         }
@@ -103,11 +111,12 @@ class HubBringUpTest {
 
         // Then the order respects the data dependencies (discovery advertises the
         // port the listener actually bound) and the report is honest
-        assertThat(GoLog.calls).containsExactly(
-            "hotspot.start",
-            "server.start",
-            "discovery.advertise:40404",
-        ).inOrder()
+        assertThat(GoLog.calls)
+            .containsExactly(
+                "hotspot.start",
+                "server.start",
+                "discovery.advertise:40404",
+            ).inOrder()
         assertThat(GoReport.GoHotspot).isInstanceOf(HotspotBringUp.Hotspot::class.java)
         assertThat(GoReport.GoPort).isEqualTo(40404)
         assertThat(GoReport.GoAdvertising).isTrue()
@@ -126,11 +135,12 @@ class HubBringUpTest {
         GoBringUp.GoTearDown()
 
         // Then discovery stops before the listener before the hotspot
-        assertThat(GoLog.calls).containsExactly(
-            "discovery.stop",
-            "server.stop",
-            "hotspot.stop",
-        ).inOrder()
+        assertThat(GoLog.calls)
+            .containsExactly(
+                "discovery.stop",
+                "server.stop",
+                "hotspot.stop",
+            ).inOrder()
     }
 
     @Test
@@ -169,8 +179,9 @@ class HubBringUpTest {
         val (GoCtx, GoLog, GoDiscovery) = GoWired()
 
         // When the hub is brought up with a permission blocker
-        val GoReport = HubBringUp(GoCtx) { "android.permission.ACCESS_FINE_LOCATION" }
-            .GoBringUp(requestedPort = 0)
+        val GoReport =
+            HubBringUp(GoCtx) { "android.permission.ACCESS_FINE_LOCATION" }
+                .GoBringUp(requestedPort = 0)
 
         // Then the hotspot never started, no ACTIVE claim is made, and the listener
         // + discovery still came up so the hub is reachable by wired peers

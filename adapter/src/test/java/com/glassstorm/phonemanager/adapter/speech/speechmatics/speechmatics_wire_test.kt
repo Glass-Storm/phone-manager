@@ -1,12 +1,12 @@
 package com.glassstorm.phonemanager.adapter.speech.speechmatics
 
 import com.google.common.truth.Truth.assertThat
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
 import org.json.JSONObject
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 
 /**
  * Structural/contract tests for the Speechmatics WIRE FORMAT, exercised as PURE
@@ -18,7 +18,6 @@ import org.robolectric.RobolectricTestRunner
  */
 @RunWith(RobolectricTestRunner::class)
 class SpeechmaticsWireTest {
-
     @Test
     fun `region maps to the documented websocket host`() {
         assertThat(GoRegionToWsUrl("global")).isEqualTo("wss://global.rt.speechmatics.com/v2")
@@ -43,11 +42,15 @@ class SpeechmaticsWireTest {
     @Test
     fun `pcm16 converts to little-endian float32`() {
         // 0 -> 0.0f, +32767 -> ~1.0f, -32768 -> -1.0f (little-endian pairs).
-        val GoPcm = byteArrayOf(
-            0x00, 0x00, // 0
-            0xFF.toByte(), 0x7F, // +32767
-            0x00, 0x80.toByte(), // -32768
-        )
+        val GoPcm =
+            byteArrayOf(
+                0x00,
+                0x00, // 0
+                0xFF.toByte(),
+                0x7F, // +32767
+                0x00,
+                0x80.toByte(), // -32768
+            )
 
         val GoFloats = GoPcm16ToFloat32Le(GoPcm)
 

@@ -30,8 +30,9 @@ import kotlinx.coroutines.flow.asStateFlow
  * The ports are synchronous JVM APIs, so every action is synchronous and the UI
  * updates on the frame the user acted.
  */
-class SettingsViewModel(private val GoContext: Context) : ViewModel() {
-
+class SettingsViewModel(
+    private val GoContext: Context,
+) : ViewModel() {
     private val GoConfig: AppConfig? = FromContextOrNull<AppConfig>(GoContext)
     private val GoHub: HubServer? = FromContextOrNull<HubServer>(GoContext)
     private val GoBattery: BatteryExemption? = FromContextOrNull<BatteryExemption>(GoContext)
@@ -94,19 +95,20 @@ class SettingsViewModel(private val GoContext: Context) : ViewModel() {
             GoState.value = SettingsUiState(GoConfigAvailable = false)
             return
         }
-        GoState.value = SettingsUiState(
-            GoConfigAvailable = true,
-            GoSttEngine = GoPort.GoSttEngine().GoLabel(),
-            GoRegion = GoPort.GoRegion(),
-            GoHotspotMode = GoPort.GoHotspotMode().GoLabel(),
-            GoApiKeyConfigured = GoPort.GoApiKey().isNotEmpty(),
-            GoApiKeyDraft = GoPort.GoApiKey(),
-            GoApiKeyVisible = GoState.value.GoApiKeyVisible,
-            GoBatteryExempt = GoBattery?.GoIsExempt() ?: false,
-            GoBatteryAvailable = GoBattery != null,
-            GoProtocol = GO_PROTOCOL,
-            GoHubPort = GoHub?.GoBoundPort() ?: 0,
-        )
+        GoState.value =
+            SettingsUiState(
+                GoConfigAvailable = true,
+                GoSttEngine = GoPort.GoSttEngine().GoLabel(),
+                GoRegion = GoPort.GoRegion(),
+                GoHotspotMode = GoPort.GoHotspotMode().GoLabel(),
+                GoApiKeyConfigured = GoPort.GoApiKey().isNotEmpty(),
+                GoApiKeyDraft = GoPort.GoApiKey(),
+                GoApiKeyVisible = GoState.value.GoApiKeyVisible,
+                GoBatteryExempt = GoBattery?.GoIsExempt() ?: false,
+                GoBatteryAvailable = GoBattery != null,
+                GoProtocol = GO_PROTOCOL,
+                GoHubPort = GoHub?.GoBoundPort() ?: 0,
+            )
     }
 
     companion object {
@@ -115,12 +117,14 @@ class SettingsViewModel(private val GoContext: Context) : ViewModel() {
     }
 }
 
-private fun SttEngine.GoLabel(): String = when (this) {
-    SttEngine.MOCK -> "Mock (offline)"
-    SttEngine.SPEECHMATICS -> "Speechmatics"
-}
+private fun SttEngine.GoLabel(): String =
+    when (this) {
+        SttEngine.MOCK -> "Mock (offline)"
+        SttEngine.SPEECHMATICS -> "Speechmatics"
+    }
 
-private fun HotspotMode.GoLabel(): String = when (this) {
-    HotspotMode.MANUAL -> "Manual"
-    HotspotMode.AUTO -> "Auto"
-}
+private fun HotspotMode.GoLabel(): String =
+    when (this) {
+        HotspotMode.MANUAL -> "Manual"
+        HotspotMode.AUTO -> "Auto"
+    }

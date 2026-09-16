@@ -16,13 +16,14 @@ const val GoRouteStream = "stream"
 const val GoRouteDevices = "devices"
 const val GoRouteSettings = "settings"
 
-val GO_ROUTES: List<String> = listOf(
-    GoRouteDashboard,
-    GoRoutePairing,
-    GoRouteStream,
-    GoRouteDevices,
-    GoRouteSettings,
-)
+val GO_ROUTES: List<String> =
+    listOf(
+        GoRouteDashboard,
+        GoRoutePairing,
+        GoRouteStream,
+        GoRouteDevices,
+        GoRouteSettings,
+    )
 
 /**
  * The app shell: one [NavHost] over the five routes the hub exposes.

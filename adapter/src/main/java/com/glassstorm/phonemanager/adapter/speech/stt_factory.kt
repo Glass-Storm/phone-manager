@@ -25,16 +25,17 @@ class SttFactory(
     private val GoConfig: RuntimeConfigStore,
     private val GoTransport: SpeechmaticsTransport = SpeechmaticsTransport(),
 ) {
-
     /** Build the configured engine. */
-    fun GoCreateSttPort(): SttPort = when (GoConfig.GoSttAdapterKind()) {
-        SttAdapterKind.MOCK -> MockSttAdapter()
-        SttAdapterKind.SPEECHMATICS -> SpeechmaticsSttAdapter(
-            SpeechmaticsConfig(
-                GoApiKey = GoConfig.GoApiKey(),
-                GoRegion = GoConfig.GoRegion(),
-            ),
-            GoTransport,
-        )
-    }
+    fun GoCreateSttPort(): SttPort =
+        when (GoConfig.GoSttAdapterKind()) {
+            SttAdapterKind.MOCK -> MockSttAdapter()
+            SttAdapterKind.SPEECHMATICS ->
+                SpeechmaticsSttAdapter(
+                    SpeechmaticsConfig(
+                        GoApiKey = GoConfig.GoApiKey(),
+                        GoRegion = GoConfig.GoRegion(),
+                    ),
+                    GoTransport,
+                )
+        }
 }

@@ -1,13 +1,12 @@
 package com.glassstorm.phonemanager.domain.context
 
-import com.google.common.truth.Truth.assertThat
 import com.glassstorm.phonemanager.domain.dto.Device
+import com.google.common.truth.Truth.assertThat
 import org.junit.Assert.assertThrows
 import org.junit.Test
 
 /** Given/When/Then unit tests for the sing-box-style Context registry. */
 class ContextTest {
-
     private class GoCounter {
         var GoValue: Int = 0
     }
@@ -81,14 +80,15 @@ class ContextTest {
         // Given two different types registered under the same context
         val GoCtx = Context()
         val GoCounterInstance = GoCounter()
-        val GoDevice = Device(
-            GoDeviceId = "d-1",
-            GoDeviceName = "glass",
-            GoRole = "GLASS",
-            GoTokenHash = "hash-d-1",
-            GoPairedAtMs = 1_000L,
-            GoLastSeenMs = null,
-        )
+        val GoDevice =
+            Device(
+                GoDeviceId = "d-1",
+                GoDeviceName = "glass",
+                GoRole = "GLASS",
+                GoTokenHash = "hash-d-1",
+                GoPairedAtMs = 1_000L,
+                GoLastSeenMs = null,
+            )
         Register(GoCtx, GoCounterInstance)
         Register(GoCtx, GoDevice)
 

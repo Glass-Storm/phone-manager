@@ -17,13 +17,19 @@ import com.glassstorm.phonemanager.domain.network.HotspotUnavailableException
  */
 sealed interface HotspotBringUp {
     /** The programmatic LocalOnlyHotspot reservation is live. */
-    data class Hotspot(val GoInfo: HotspotInfo) : HotspotBringUp
+    data class Hotspot(
+        val GoInfo: HotspotInfo,
+    ) : HotspotBringUp
 
     /** An already-active system tether was detected and adopted. */
-    data class ManualTether(val GoInfo: HotspotInfo) : HotspotBringUp
+    data class ManualTether(
+        val GoInfo: HotspotInfo,
+    ) : HotspotBringUp
 
     /** No access point could be brought up; [GoReason] names the cause. */
-    data class Unavailable(val GoReason: String) : HotspotBringUp
+    data class Unavailable(
+        val GoReason: String,
+    ) : HotspotBringUp
 }
 
 /** The observable result of one hub bring-up, kept for the UI and for tests. */
@@ -58,13 +64,13 @@ class HubBringUp(
     private val GoCtx: Context,
     private val GoPermissionBlocker: () -> String?,
 ) {
-
     private var GoWasStarted: Boolean = false
 
     /** Bring the hub up in dependency order and report what actually came up. */
     fun GoBringUp(requestedPort: Int): HubBringUpReport {
-        val GoHub = FromContextOrNull<HubServer>(GoCtx)
-            ?: throw MissingComponentException("HubServer")
+        val GoHub =
+            FromContextOrNull<HubServer>(GoCtx)
+                ?: throw MissingComponentException("HubServer")
 
         val GoHotspot = GoBringUpHotspot()
         val GoPort = GoStartListener(GoHub, requestedPort)
@@ -84,8 +90,9 @@ class HubBringUp(
     }
 
     private fun GoBringUpHotspot(): HotspotBringUp {
-        val GoController = FromContextOrNull<HotspotController>(GoCtx)
-            ?: return HotspotBringUp.Unavailable("no HotspotController registered")
+        val GoController =
+            FromContextOrNull<HotspotController>(GoCtx)
+                ?: return HotspotBringUp.Unavailable("no HotspotController registered")
 
         GoDetectManualTether(GoController)?.let { return it }
 
@@ -106,7 +113,10 @@ class HubBringUp(
             .getOrNull()
             ?.let { HotspotBringUp.ManualTether(it) }
 
-    private fun GoStartListener(GoHub: HubServer, requestedPort: Int): Int {
+    private fun GoStartListener(
+        GoHub: HubServer,
+        requestedPort: Int,
+    ): Int {
         if (!GoHub.GoIsRunning()) {
             GoHub.GoStart(requestedPort)
         }
@@ -143,6 +153,8 @@ class HubBringUp(
 }
 
 /** Thrown when the hub cannot come up because a required port was never registered. */
-class MissingComponentException(GoComponent: String) : IllegalStateException(
-    "hub bring-up needs a registered $GoComponent"
-)
+class MissingComponentException(
+    GoComponent: String,
+) : IllegalStateException(
+        "hub bring-up needs a registered $GoComponent",
+    )

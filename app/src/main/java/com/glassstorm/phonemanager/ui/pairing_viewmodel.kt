@@ -29,7 +29,6 @@ class PairingViewModel(
     private val GoContext: Context,
     private val GoNowMs: () -> Long = { System.currentTimeMillis() },
 ) : ViewModel() {
-
     private val GoPairing: PairingService? = FromContextOrNull<PairingService>(GoContext)
 
     private val GoState = MutableStateFlow(PairingUiState(GoAvailable = GoPairing != null))
@@ -46,10 +45,11 @@ class PairingViewModel(
         // Replacing the previous window is the service's contract; storing only the
         // newest PIN is what guarantees a single live window in the UI.
         val GoWindow = GoService.GoOpenWindow(GoWindowTtlMs)
-        GoState.value = GoState.value.copy(
-            GoPin = GoWindow.GoPin,
-            GoExpiresInSeconds = GoWindow.GoRemainingSeconds(),
-        )
+        GoState.value =
+            GoState.value.copy(
+                GoPin = GoWindow.GoPin,
+                GoExpiresInSeconds = GoWindow.GoRemainingSeconds(),
+            )
         GoRefresh()
     }
 
@@ -71,10 +71,11 @@ class PairingViewModel(
     }
 
     private fun GoRefresh() {
-        GoState.value = GoState.value.copy(
-            GoAvailable = GoPairing != null,
-            GoDevices = GoPairing?.GoListPaired() ?: emptyList(),
-        )
+        GoState.value =
+            GoState.value.copy(
+                GoAvailable = GoPairing != null,
+                GoDevices = GoPairing?.GoListPaired() ?: emptyList(),
+            )
     }
 
     private fun com.glassstorm.phonemanager.domain.dto.Pairing.GoRemainingSeconds(): Long =

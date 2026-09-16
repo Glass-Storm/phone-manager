@@ -26,10 +26,14 @@ fun interface TetherProbe {
 /** Outcome of asking the platform to start a LocalOnlyHotspot. */
 sealed interface HotspotLaunch {
     /** The platform granted a live reservation that MUST be closed on teardown. */
-    data class Granted(val GoReservation: WifiManager.LocalOnlyHotspotReservation) : HotspotLaunch
+    data class Granted(
+        val GoReservation: WifiManager.LocalOnlyHotspotReservation,
+    ) : HotspotLaunch
 
     /** The platform refused; [GoReasonCode] is one of `LocalOnlyHotspotCallback.ERROR_*`. */
-    data class Denied(val GoReasonCode: Int) : HotspotLaunch
+    data class Denied(
+        val GoReasonCode: Int,
+    ) : HotspotLaunch
 
     /** The platform never answered within the launch timeout. */
     data object TimedOut : HotspotLaunch
@@ -60,8 +64,7 @@ private val AP_INTERFACE_PREFIXES = listOf("ap", "swlan", "softap", "wlan1")
 fun GoPickTetherGateway(candidates: List<TetherCandidate>): TetherCandidate? =
     candidates.firstOrNull { GoIsAccessPointInterface(it.GoName) }
 
-private fun GoIsAccessPointInterface(name: String): Boolean =
-    AP_INTERFACE_PREFIXES.any { name.startsWith(it, ignoreCase = true) }
+private fun GoIsAccessPointInterface(name: String): Boolean = AP_INTERFACE_PREFIXES.any { name.startsWith(it, ignoreCase = true) }
 
 /**
  * Real Android [HotspotLauncher] using `WifiManager.startLocalOnlyHotspot` ONLY.
@@ -73,7 +76,6 @@ class PlatformHotspotLauncher(
     private val GoContext: Context,
     private val GoTimeoutMs: Long = LocalOnlyHotspotAdapter.DEFAULT_LAUNCH_TIMEOUT_MS,
 ) : HotspotLauncher {
-
     /**
      * Starts the platform hotspot.
      *
@@ -88,25 +90,27 @@ class PlatformHotspotLauncher(
      */
     @SuppressLint("MissingPermission") // Guarded by LocalOnlyHotspotAdapter.GoHasRequiredPermission(); SecurityException is handled below.
     override fun GoLaunch(): HotspotLaunch {
-        val GoWifi = GoContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
-            ?: return HotspotLaunch.Denied(LocalOnlyHotspotAdapter.REASON_NO_WIFI_SERVICE)
+        val GoWifi =
+            GoContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
+                ?: return HotspotLaunch.Denied(LocalOnlyHotspotAdapter.REASON_NO_WIFI_SERVICE)
         val GoLatch = CountDownLatch(1)
         val GoOutcome = AtomicReference<HotspotLaunch?>(null)
-        val GoCallback = object : WifiManager.LocalOnlyHotspotCallback() {
-            override fun onStarted(reservation: WifiManager.LocalOnlyHotspotReservation) {
-                GoOutcome.set(HotspotLaunch.Granted(reservation))
-                GoLatch.countDown()
-            }
+        val GoCallback =
+            object : WifiManager.LocalOnlyHotspotCallback() {
+                override fun onStarted(reservation: WifiManager.LocalOnlyHotspotReservation) {
+                    GoOutcome.set(HotspotLaunch.Granted(reservation))
+                    GoLatch.countDown()
+                }
 
-            override fun onFailed(reason: Int) {
-                GoOutcome.set(HotspotLaunch.Denied(reason))
-                GoLatch.countDown()
-            }
+                override fun onFailed(reason: Int) {
+                    GoOutcome.set(HotspotLaunch.Denied(reason))
+                    GoLatch.countDown()
+                }
 
-            override fun onStopped() {
-                GoLatch.countDown()
+                override fun onStopped() {
+                    GoLatch.countDown()
+                }
             }
-        }
         try {
             GoWifi.startLocalOnlyHotspot(GoCallback, null)
         } catch (GoDenied: SecurityException) {
@@ -123,7 +127,8 @@ class PlatformHotspotLauncher(
 /** Enumerate real interfaces for the AP gateway address. */
 internal fun GoEnumerateInterfaces(): List<TetherCandidate> =
     runCatching {
-        NetworkInterface.getNetworkInterfaces()
+        NetworkInterface
+            .getNetworkInterfaces()
             .toList()
             .filter { it.isUp && !it.isLoopback }
             .flatMap { GoInterface ->
