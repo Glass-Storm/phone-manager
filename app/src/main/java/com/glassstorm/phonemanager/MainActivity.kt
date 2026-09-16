@@ -1,12 +1,18 @@
 package com.glassstorm.phonemanager
 
-import android.app.Activity
 import android.os.Bundle
-import android.widget.TextView
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import com.glassstorm.phonemanager.ui.AppShell
+import com.glassstorm.phonemanager.ui.AppTheme
 
-class MainActivity : Activity() {
+class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(TextView(this).apply { text = "Phone Manager" })
+        setContent {
+            AppTheme {
+                AppShell()
+            }
+        }
     }
 }
