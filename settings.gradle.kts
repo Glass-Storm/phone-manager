@@ -17,3 +17,4 @@ dependencyResolutionManagement {
 rootProject.name = "phone-manager"
 
 include(":app")
+include(":domain", ":service", ":adapter")

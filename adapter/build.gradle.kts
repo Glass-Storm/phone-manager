@@ -1,18 +1,14 @@
 plugins {
-    alias(libs.plugins.android.application)
+    alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
 }
 
 android {
-    namespace = "com.glassstorm.phonemanager"
+    namespace = "com.glassstorm.phonemanager.adapter"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.glassstorm.phonemanager"
         minSdk = 29
-        targetSdk = 29
-        versionCode = 1
-        versionName = "1.0-dev"
     }
 
     compileOptions {
@@ -24,24 +20,21 @@ android {
         jvmTarget = "17"
     }
 
-    lint {
-        disable += "ExpiredTargetSdkVersion"
-    }
-
     testOptions {
         unitTests {
             isIncludeAndroidResources = true
         }
     }
+
+    lint {
+        disable += "ExpiredTargetSdkVersion"
+    }
 }
 
 dependencies {
-    implementation(libs.core.ktx)
-
-    // Composition root: :app owns the wiring, so it may see both the services and the adapters.
+    // Adapters implement the domain ports; they depend on :domain and nothing else here.
     implementation(project(":domain"))
-    implementation(project(":service"))
-    implementation(project(":adapter"))
+    implementation(libs.kotlinx.coroutines.core)
 
     testImplementation(libs.junit)
     testImplementation(libs.truth)
