@@ -81,7 +81,14 @@ class ContextTest {
         // Given two different types registered under the same context
         val GoCtx = Context()
         val GoCounterInstance = GoCounter()
-        val GoDevice = Device(GoDeviceId = "d-1", GoDeviceName = "glass", GoRole = "GLASS")
+        val GoDevice = Device(
+            GoDeviceId = "d-1",
+            GoDeviceName = "glass",
+            GoRole = "GLASS",
+            GoTokenHash = "hash-d-1",
+            GoPairedAtMs = 1_000L,
+            GoLastSeenMs = null,
+        )
         Register(GoCtx, GoCounterInstance)
         Register(GoCtx, GoDevice)
 

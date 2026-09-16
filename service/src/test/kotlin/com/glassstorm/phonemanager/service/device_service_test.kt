@@ -25,7 +25,14 @@ class DeviceServiceTest {
         }
 
         override fun GoGet(deviceId: String): Device? = GoRows[deviceId]
+        override fun GoGetByTokenHash(tokenHash: String): Device? =
+            GoRows.values.firstOrNull { it.GoTokenHash == tokenHash }
         override fun GoList(): List<Device> = GoRows.values.sortedBy { it.GoDeviceId }
+        override fun GoTouch(deviceId: String, seenAtMs: Long) {
+            val GoExisting = GoRows[deviceId] ?: return
+            GoRows[deviceId] = GoExisting.copy(GoLastSeenMs = seenAtMs)
+        }
+
         override fun GoDelete(deviceId: String) {
             GoRows.remove(deviceId)
         }
@@ -37,7 +44,14 @@ class DeviceServiceTest {
         val GoCtx = Context()
         Register<DeviceRepository>(GoCtx, GoFakeDeviceRepository())
         val GoService = DeviceServiceImpl(GoCtx)
-        val GoDevice = Device(GoDeviceId = "d-1", GoDeviceName = "glass", GoRole = "GLASS")
+        val GoDevice = Device(
+            GoDeviceId = "d-1",
+            GoDeviceName = "glass",
+            GoRole = "GLASS",
+            GoTokenHash = "hash-d-1",
+            GoPairedAtMs = 1_000L,
+            GoLastSeenMs = null,
+        )
 
         // When the service is used
         GoService.GoRegisterDevice(GoDevice)
@@ -56,8 +70,26 @@ class DeviceServiceTest {
         val GoServiceB = DeviceServiceImpl(Context().also { Register<DeviceRepository>(it, GoFakeDeviceRepository()) })
 
         // When each service registers a distinct device
-        GoServiceA.GoRegisterDevice(Device(GoDeviceId = "a", GoDeviceName = "A", GoRole = "GLASS"))
-        GoServiceB.GoRegisterDevice(Device(GoDeviceId = "b", GoDeviceName = "B", GoRole = "DAEMON"))
+        GoServiceA.GoRegisterDevice(
+            Device(
+                GoDeviceId = "a",
+                GoDeviceName = "A",
+                GoRole = "GLASS",
+                GoTokenHash = "hash-a",
+                GoPairedAtMs = 1_000L,
+                GoLastSeenMs = null,
+            )
+        )
+        GoServiceB.GoRegisterDevice(
+            Device(
+                GoDeviceId = "b",
+                GoDeviceName = "B",
+                GoRole = "DAEMON",
+                GoTokenHash = "hash-b",
+                GoPairedAtMs = 2_000L,
+                GoLastSeenMs = null,
+            )
+        )
 
         // Then their stores are independent, proving resolution is by interface binding
         assertThat(GoServiceA.GoListDevices().map { it.GoDeviceId }).containsExactly("a")
@@ -85,7 +117,16 @@ class DeviceServiceTest {
 
         // When the app resolves the service by interface
         val GoResolved = FromContext<DeviceService>(GoCtx)
-        GoResolved.GoRegisterDevice(Device(GoDeviceId = "x", GoDeviceName = "X", GoRole = "GLASS"))
+        GoResolved.GoRegisterDevice(
+            Device(
+                GoDeviceId = "x",
+                GoDeviceName = "X",
+                GoRole = "GLASS",
+                GoTokenHash = "hash-x",
+                GoPairedAtMs = 1_000L,
+                GoLastSeenMs = null,
+            )
+        )
 
         // Then it is usable through the port
         assertThat(GoResolved.GoListDevices().map { it.GoDeviceId }).containsExactly("x")

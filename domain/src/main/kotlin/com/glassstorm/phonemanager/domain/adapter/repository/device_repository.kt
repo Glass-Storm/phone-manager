@@ -11,6 +11,8 @@ import com.glassstorm.phonemanager.domain.dto.Device
 interface DeviceRepository {
     fun GoUpsert(device: Device)
     fun GoGet(deviceId: String): Device?
+    fun GoGetByTokenHash(tokenHash: String): Device?
     fun GoList(): List<Device>
+    fun GoTouch(deviceId: String, seenAtMs: Long)
     fun GoDelete(deviceId: String)
 }

@@ -20,7 +20,15 @@ class MemoryDeviceRepository : DeviceRepository {
 
     override fun GoGet(deviceId: String): Device? = GoRows[deviceId]
 
+    override fun GoGetByTokenHash(tokenHash: String): Device? =
+        GoRows.values.firstOrNull { it.GoTokenHash == tokenHash }
+
     override fun GoList(): List<Device> = GoRows.values.toList()
+
+    override fun GoTouch(deviceId: String, seenAtMs: Long) {
+        val GoExisting = GoRows[deviceId] ?: return
+        GoRows[deviceId] = GoExisting.copy(GoLastSeenMs = seenAtMs)
+    }
 
     override fun GoDelete(deviceId: String) {
         GoRows.remove(deviceId)

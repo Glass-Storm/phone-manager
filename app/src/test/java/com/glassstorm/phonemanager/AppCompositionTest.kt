@@ -26,7 +26,16 @@ class AppCompositionTest {
         // Then all three registrations are present and usable
         assertThat(GoRepo).isNotNull()
         assertThat(GoService).isNotNull()
-        GoService.GoRegisterDevice(Device(GoDeviceId = "d-1", GoDeviceName = "glass", GoRole = "GLASS"))
+        GoService.GoRegisterDevice(
+            Device(
+                GoDeviceId = "d-1",
+                GoDeviceName = "glass",
+                GoRole = "GLASS",
+                GoTokenHash = "hash-d-1",
+                GoPairedAtMs = 1_000L,
+                GoLastSeenMs = null,
+            )
+        )
         assertThat(GoService.GoListDevices().map { it.GoDeviceId }).containsExactly("d-1")
     }
 
@@ -37,7 +46,16 @@ class AppCompositionTest {
 
         // When the service registers through the port
         val GoService = FromContext<DeviceService>(GoCtx)
-        GoService.GoRegisterDevice(Device(GoDeviceId = "d-2", GoDeviceName = "daemon", GoRole = "DAEMON"))
+        GoService.GoRegisterDevice(
+            Device(
+                GoDeviceId = "d-2",
+                GoDeviceName = "daemon",
+                GoRole = "DAEMON",
+                GoTokenHash = "hash-d-2",
+                GoPairedAtMs = 2_000L,
+                GoLastSeenMs = null,
+            )
+        )
 
         // Then the adapter bound under the port type sees the same write
         val GoRepo = FromContext<DeviceRepository>(GoCtx)
