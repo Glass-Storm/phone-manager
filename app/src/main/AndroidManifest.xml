@@ -1,6 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- The hub is a network listener: it needs sockets (INTERNET covers both bind
+         and connect on Android) and it runs as a foreground service so the OS does
+         not kill the listener while the phone is the hotspot. T12 adds the hotspot
+         and discovery permissions; these four are the minimum the service needs. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <application
         android:label="Phone Manager"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
@@ -12,6 +21,14 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- A started foreground service hosting the gRPC hub. Not exported: only
+             this app may start its own hub. `connectedDevice` matches the type the
+             hub actually provides (a LAN peer connection). -->
+        <service
+            android:name=".HubForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice" />
     </application>
 
 </manifest>

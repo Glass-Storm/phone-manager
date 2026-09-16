@@ -24,10 +24,29 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // Required by the gRPC/netty transport: it uses java.util.concurrent.Flow,
+        // java.time and friends that only exist from API 33 up, while the app's
+        // minSdk is 29.
+        isCoreLibraryDesugaringEnabled = true
     }
 
     kotlinOptions {
         jvmTarget = "17"
+    }
+
+    buildTypes {
+        release {
+            // The whole point of the T7 gate: the hub's runtime-discovered gRPC
+            // transport must survive shrinking, and the adapter's consumer rules
+            // travel into THIS build. Debug stays unminified so tests stay fast
+            // and readable.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
+        }
     }
 
     lint {
@@ -48,6 +67,17 @@ dependencies {
     implementation(project(":domain"))
     implementation(project(":service"))
     implementation(project(":adapter"))
+
+    // The GO gRPC transport (T6 spike verdict: netty-shaded, IPv4 explicit, plaintext).
+    // Declared here as well because every dependency above is `implementation`, so
+    // nothing reaches :app's compile classpath transitively.
+    implementation(libs.grpc.netty.shaded)
+    implementation(libs.grpc.stub)
+    implementation(libs.grpc.protobuf.lite)
+    implementation(libs.grpc.kotlin.stub)
+    implementation(libs.protobuf.javalite)
+
+    coreLibraryDesugaring(libs.desugar.jdk.libs)
 
     val composeBom = platform(libs.compose.bom)
     implementation(composeBom)
