@@ -97,4 +97,75 @@ class HubForegroundServiceTest {
         assertThat(GoHub.GoBoundPort()).isEqualTo(0)
         assertThat(GoPort).isGreaterThan(0)
     }
+
+    @Test
+    fun `repeated onStartCommand never double-starts the listener`() {
+        // Given a started service
+        val GoIntent = Intent(GoContext, HubForegroundService::class.java)
+            .putExtra(HubForegroundService.GO_EXTRA_PORT, 0)
+        val GoController = Robolectric.buildService(HubForegroundService::class.java, GoIntent)
+            .create()
+            .startCommand(0, 0)
+        val GoHub = com.glassstorm.phonemanager.domain.context.FromContext<
+            com.glassstorm.phonemanager.domain.adapter.transport.HubServer
+            >(AppComposition.GoAppContext())
+        val GoPort = GoHub.GoBoundPort()
+
+        // When the OS re-delivers the start command
+        GoController.get().onStartCommand(GoIntent, 0, 1)
+
+        // Then the same listener instance is still bound to the same port (no
+        // double-start, no rebind)
+        assertThat(GoHub.GoIsRunning()).isTrue()
+        assertThat(GoHub.GoBoundPort()).isEqualTo(GoPort)
+
+        GoController.destroy()
+    }
+
+    @Test
+    fun `a missing hotspot permission never leaves the hotspot ACTIVE`() {
+        // Given the location permission is denied (Robolectric's default) and a
+        // started service that therefore cannot bring the access point up
+        shadowOf(GoContext as android.app.Application).denyPermissions(
+            android.Manifest.permission.ACCESS_FINE_LOCATION,
+        )
+        val GoController = Robolectric.buildService(
+            HubForegroundService::class.java,
+            Intent(GoContext, HubForegroundService::class.java).putExtra(HubForegroundService.GO_EXTRA_PORT, 0),
+        ).create().startCommand(0, 0)
+        val GoHotspot = com.glassstorm.phonemanager.domain.context.FromContext<
+            com.glassstorm.phonemanager.domain.adapter.network.HotspotController
+            >(AppComposition.GoAppContext())
+
+        // When the access point state is inspected
+        // Then it never claims ACTIVE, and the hub listener still came up so wired
+        // peers stay reachable
+        assertThat(GoHotspot.GoIsActive()).isFalse()
+        val GoHub = com.glassstorm.phonemanager.domain.context.FromContext<
+            com.glassstorm.phonemanager.domain.adapter.transport.HubServer
+            >(AppComposition.GoAppContext())
+        assertThat(GoHub.GoIsRunning()).isTrue()
+
+        GoController.destroy()
+    }
+
+    @Test
+    fun `the service registers the platform network ports it needs to bring up`() {
+        // Given a created service, which records the Android Context into the
+        // composition root before anything resolves it
+        Robolectric.buildService(HubForegroundService::class.java).create().destroy()
+        val GoCtx = AppComposition.GoAppContext()
+
+        // When the network ports are resolved by their domain types
+        val GoHotspot = com.glassstorm.phonemanager.domain.context.FromContextOrNull<
+            com.glassstorm.phonemanager.domain.adapter.network.HotspotController
+            >(GoCtx)
+        val GoDiscovery = com.glassstorm.phonemanager.domain.context.FromContextOrNull<
+            com.glassstorm.phonemanager.domain.adapter.network.Discovery
+            >(GoCtx)
+
+        // Then the platform-backed adapters are registered, so bring-up is possible
+        assertThat(GoHotspot).isNotNull()
+        assertThat(GoDiscovery).isNotNull()
+    }
 }

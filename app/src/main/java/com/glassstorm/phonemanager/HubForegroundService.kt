@@ -8,28 +8,32 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
-import com.glassstorm.phonemanager.domain.adapter.transport.HubServer
-import com.glassstorm.phonemanager.domain.context.FromContext
+import com.glassstorm.phonemanager.permission.HubPermissions
 
 /**
- * Hosts the gRPC hub behind a foreground notification.
+ * Hosts the whole hub (access point, gRPC listener, discovery) behind a
+ * foreground notification.
  *
  * A started (not bound) service so the hub outlives every activity: the phone is
- * the ecosystem's hub, and the listener must survive the user leaving the UI.
+ * the ecosystem's hub, and the listener must survive the user leaving the UI. It
+ * is the ONE owner of bring-up — no Activity starts the hotspot or the discovery.
  *
- * Thin on purpose — it owns the Android lifecycle only. The listener itself is
- * resolved from the composition root through the [HubServer] port, so this class
- * never names the transport. T12 extends this with the hotspot/discovery
- * bring-up, the permission matrix, and the battery-optimization helper.
+ * Thin on purpose: the Android lifecycle lives here, the ordered bring-up lives
+ * in [HubBringUp], and the listener itself is resolved from the composition root
+ * through the [com.glassstorm.phonemanager.domain.adapter.transport.HubServer]
+ * port. This class names no concrete adapter.
  */
 class HubForegroundService : Service() {
 
-    private var GoStarted: Boolean = false
+    private var GoBringUp: HubBringUp? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
         super.onCreate()
+        // The network adapters need a real WifiManager/NsdManager, so the Android
+        // Context is recorded before anything resolves the registry.
+        AppComposition.GoInitAndroid(this)
         // The channel MUST exist before startForeground on API 26+, or the OS
         // rejects the notification and the service crashes.
         GoEnsureChannel()
@@ -37,9 +41,13 @@ class HubForegroundService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         startForeground(GO_NOTIFICATION_ID, GoNotification())
-        if (!GoStarted) {
-            GoBoundHub().GoStart(GoRequestedPort(intent))
-            GoStarted = true
+        if (GoBringUp == null) {
+            GoBringUp = HubBringUp(
+                GoCtx = AppComposition.GoAppContext(),
+                GoPermissionBlocker = {
+                    HubPermissions.GoBlockingHotspotPermission(applicationContext)
+                },
+            ).also { it.GoBringUp(GoRequestedPort(intent)) }
         }
         // Restart the hub after the OS reclaims the process: the hub is the whole
         // point of this service, so a stolen process must come back.
@@ -47,18 +55,14 @@ class HubForegroundService : Service() {
     }
 
     override fun onDestroy() {
-        if (GoStarted) {
-            GoBoundHub().GoStop()
-            GoStarted = false
-        }
+        GoBringUp?.GoTearDown()
+        GoBringUp = null
         super.onDestroy()
     }
 
     private fun GoRequestedPort(intent: Intent?): Int =
         intent?.getIntExtra(GO_EXTRA_PORT, AppComposition.GO_DEFAULT_HUB_PORT)
             ?: AppComposition.GO_DEFAULT_HUB_PORT
-
-    private fun GoBoundHub(): HubServer = FromContext<HubServer>(AppComposition.GoAppContext())
 
     private fun GoEnsureChannel() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return

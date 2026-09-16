@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ============================================================================
+  DEV-ONLY NETWORK SECURITY CONFIG — NOT PRODUCTION-FINAL
+  ============================================================================
+
+  MARKER: T12-DEV-ONLY-CLEARTEXT
+
+  WHAT THIS FILE DOES
+  ===================
+  Permits cleartext (plain HTTP/WS) traffic for the hub's LAN posture. The hub
+  speaks plaintext to peers that share the phone's own access point; there is no
+  certificate authority on a local-only LAN, so a strict TLS config would simply
+  break every dev connection.
+
+  WHY IT IS SAFE TO SHIP *FOR THIS DEV BUILD* (and why that is not the same as
+  "secure")
+  ==========================================================================
+  * The permissive `base-config` exists to satisfy Android's HTTP-client stacks
+    (the Speechmatics OkHttp/WebSocket path and any future HTTP client).
+  * The netty gRPC listener uses RAW SOCKETS. Raw sockets are NOT subject to this
+    policy at all — neither `cleartextTrafficPermitted` nor
+    `NetworkSecurityPolicy.isCleartextTrafficPermitted()` is consulted for them.
+    This file therefore MUST NOT be presented as the security boundary for the
+    hub's own protocol; it is not, and it never was.
+  * Android's network-security-config supports HOSTNAMES and IP LITERALS only —
+    there is no CIDR/subnet syntax — so a "just the LAN subnet" rule is not
+    expressible. That is precisely why the posture is a permissive base-config
+    rather than a scoped domain-config.
+
+  PRODUCTION UPGRADE PATH (documented, deliberately NOT implemented here)
+  =======================================================================
+  1. Give every peer a certificate (or pin a self-signed CA per hub) and switch
+     the gRPC transport to TLS; keep the hub listener on `TLS`-terminated sockets.
+  2. Change `base-config cleartextTrafficPermitted` to `false` and scope any
+     remaining cleartext to explicit `domain-config` entries.
+  3. Re-test the Speechmatics client against `https://`/`wss://` only.
+
+  Adding TLS is explicitly out of scope for T12 (the plan forbids it); this
+  comment is the upgrade path, not a promise that it exists today.
+  ============================================================================
+-->
+<network-security-config>
+    <!-- DEV-ONLY: see the header. Cleartext stays permitted for the LAN until the
+         TLS upgrade path above is executed. -->
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>
