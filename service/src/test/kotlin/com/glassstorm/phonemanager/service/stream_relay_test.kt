@@ -98,7 +98,8 @@ class StreamRelayTest {
         GoInputs.forEach { GoStream.GoPushVideo(GoSession.GoSessionId, it) }
         advanceUntilIdle()
 
-        // Then the sink saw exactly those bytes, unchanged, and nothing was evicted
+        // Then the sink saw exactly those bytes, unchanged, and nothing was evicted:
+        // offered == evicted-free, so GoVideoFrames is the delivered count here
         assertThat(GoStream.GoStats().GoVideoFrames).isEqualTo(20L)
         assertThat(GoStream.GoStats().GoVideoDropped).isEqualTo(0L)
         assertThat(GoWired.Sink.GoVideoNals).hasSize(20)
@@ -128,12 +129,24 @@ class StreamRelayTest {
         repeat(5) { GoStream.GoPushAudio(GoSession.GoSessionId, GoPcm(it), StreamService.GoAudioSampleRateHz) }
         repeat(20) { GoStream.GoPushVideo(GoSession.GoSessionId, GoNal(it)) }
 
-        // Then every audio frame was admitted and exactly the 16 overflow video
-        // frames were evicted (4 fit, 20 pushed)
+        // Then GoVideoFrames counts every NAL OFFERED to the live session — all 20,
+        // including the 16 that drop-oldest evicted (counted in GoVideoDropped)
         assertThat(GoStream.GoStats().GoAudioFrames).isEqualTo(5L)
         assertThat(GoStream.GoStats().GoVideoFrames).isEqualTo(20L)
         assertThat(GoStream.GoStats().GoVideoDropped).isEqualTo(16L)
+
+        // And the survivors still in the queue are the LAST 4 offered, in order:
+        // the pump then delivers exactly those, proving drop-oldest kept the edge
         assertThat(GoWired.Sink.GoVideoNals).isEmpty()
+        advanceUntilIdle()
+        assertThat(GoWired.Sink.GoVideoNals).hasSize(4)
+        assertThat(GoWired.Sink.GoVideoNals.map { it.toList() })
+            .containsExactlyElementsIn((16 until 20).map { GoNal(it).toList() })
+            .inOrder()
+
+        // The offered/evicted totals are unchanged by draining: they are offer-side
+        assertThat(GoStream.GoStats().GoVideoFrames).isEqualTo(20L)
+        assertThat(GoStream.GoStats().GoVideoDropped).isEqualTo(16L)
 
         GoScope.cancel()
     }

@@ -5,6 +5,7 @@ import com.glassstorm.phonemanager.domain.adapter.repository.DeviceRepository
 import com.glassstorm.phonemanager.domain.adapter.speech.SttPort
 import com.glassstorm.phonemanager.domain.dto.Device
 import java.util.Collections
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
@@ -13,9 +14,14 @@ import java.util.concurrent.atomic.AtomicInteger
  * edge to `:adapter`, so a concrete adapter class is unreachable here by design.
  */
 
-/** In-memory [DeviceRepository] with the same upsert-by-id semantics as SQLite. */
+/**
+ * In-memory [DeviceRepository] with the same upsert-by-id semantics as SQLite.
+ *
+ * Backed by [ConcurrentHashMap] so the concurrency suite can drive it from many
+ * threads without the map itself being the thing under test.
+ */
 class FakeDeviceRepository : DeviceRepository {
-    private val GoRows: MutableMap<String, Device> = mutableMapOf()
+    private val GoRows: MutableMap<String, Device> = ConcurrentHashMap()
 
     override fun GoUpsert(device: Device) {
         GoRows[device.GoDeviceId] = device

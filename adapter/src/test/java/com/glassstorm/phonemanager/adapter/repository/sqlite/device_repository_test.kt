@@ -148,34 +148,15 @@ class SqliteDeviceRepositoryTest {
     }
 
     @Test
-    fun `attempt bookkeeping increments then resets`() {
-        // Given a device with no attempts yet
-        assertThat(GoRepo.GoReadAttempt("d-1")).isNull()
-
-        // When attempts are recorded with a stable first-attempt instant
-        assertThat(GoRepo.GoIncrementAttempt("d-1", 5_000L)).isEqualTo(1)
-        assertThat(GoRepo.GoIncrementAttempt("d-1", 6_000L)).isEqualTo(2)
-        assertThat(GoRepo.GoIncrementAttempt("d-1", 7_000L)).isEqualTo(3)
-
-        // Then the count and the original first-attempt instant are persisted
-        val GoAttempt = GoRepo.GoReadAttempt("d-1")
-        assertThat(GoAttempt?.GoAttemptCount).isEqualTo(3)
-        assertThat(GoAttempt?.GoFirstAttemptMs).isEqualTo(5_000L)
-
-        // When the attempts are reset after a successful pairing
-        GoRepo.GoResetAttempt("d-1")
-
-        // Then the row is removed
-        assertThat(GoRepo.GoReadAttempt("d-1")).isNull()
-    }
-
-    @Test
-    fun `onCreate provisions both required tables`() {
+    fun `onCreate provisions exactly one application table`() {
         // Given the helper opened the database for the first time
         GoRepo.writableDatabase
 
-        // Then both tables exist in the schema
-        assertThat(GoTableNames()).containsAtLeast("paired_device", "pairing_attempt")
+        // Then paired_device exists and the schema carries no other app table
+        // (android_metadata is the framework's own, not ours)
+        assertThat(GoTableNames()).contains("paired_device")
+        assertThat(GoTableNames().filterNot { it.startsWith("android_") })
+            .containsExactly("paired_device")
     }
 
     @Test

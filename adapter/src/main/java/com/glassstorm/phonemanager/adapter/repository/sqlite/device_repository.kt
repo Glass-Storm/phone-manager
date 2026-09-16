@@ -8,13 +8,6 @@ import android.database.sqlite.SQLiteOpenHelper
 import com.glassstorm.phonemanager.domain.adapter.repository.DeviceRepository
 import com.glassstorm.phonemanager.domain.dto.Device
 
-/** Pairing-attempt bookkeeping for one device. Adapter-local; not part of the domain port. */
-data class PairingAttempt(
-    val GoDeviceId: String,
-    val GoAttemptCount: Int,
-    val GoFirstAttemptMs: Long,
-)
-
 /**
  * SQLite-backed [DeviceRepository], built directly on [SQLiteOpenHelper]
  * (no Room, no SQLDelight).
@@ -44,14 +37,12 @@ class SqliteDeviceRepository(
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(CREATE_PAIRED_DEVICE)
-        db.execSQL(CREATE_PAIRING_ATTEMPT)
     }
 
     // No versioned migration exists: the v1 schema is authoritative, so a version bump
-    // rebuilds the tables instead of altering them.
+    // rebuilds the table instead of altering it.
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         db.execSQL("DROP TABLE IF EXISTS $TABLE_PAIRED_DEVICE")
-        db.execSQL("DROP TABLE IF EXISTS $TABLE_PAIRING_ATTEMPT")
         onCreate(db)
     }
 
@@ -98,51 +89,6 @@ class SqliteDeviceRepository(
         writableDatabase.delete(TABLE_PAIRED_DEVICE, "$COLUMN_DEVICE_ID = ?", arrayOf(deviceId))
     }
 
-    fun GoIncrementAttempt(deviceId: String, attemptAtMs: Long): Int {
-        val GoDb = writableDatabase
-        GoDb.beginTransaction()
-        try {
-            val GoExisting = GoReadAttempt(deviceId)
-            val GoNextCount = (GoExisting?.GoAttemptCount ?: 0) + 1
-            GoDb.insertWithOnConflict(
-                TABLE_PAIRING_ATTEMPT,
-                null,
-                ContentValues().apply {
-                    put(COLUMN_DEVICE_ID, deviceId)
-                    put(COLUMN_ATTEMPT_COUNT, GoNextCount)
-                    put(COLUMN_FIRST_ATTEMPT_MS, GoExisting?.GoFirstAttemptMs ?: attemptAtMs)
-                },
-                SQLiteDatabase.CONFLICT_REPLACE,
-            )
-            GoDb.setTransactionSuccessful()
-            return GoNextCount
-        } finally {
-            GoDb.endTransaction()
-        }
-    }
-
-    fun GoResetAttempt(deviceId: String) {
-        writableDatabase.delete(TABLE_PAIRING_ATTEMPT, "$COLUMN_DEVICE_ID = ?", arrayOf(deviceId))
-    }
-
-    fun GoReadAttempt(deviceId: String): PairingAttempt? =
-        readableDatabase.query(
-            TABLE_PAIRING_ATTEMPT,
-            null,
-            "$COLUMN_DEVICE_ID = ?",
-            arrayOf(deviceId),
-            null,
-            null,
-            null,
-        ).use { cursor ->
-            if (!cursor.moveToFirst()) return@use null
-            PairingAttempt(
-                GoDeviceId = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_DEVICE_ID)),
-                GoAttemptCount = cursor.getInt(cursor.getColumnIndexOrThrow(COLUMN_ATTEMPT_COUNT)),
-                GoFirstAttemptMs = cursor.getLong(cursor.getColumnIndexOrThrow(COLUMN_FIRST_ATTEMPT_MS)),
-            )
-        }
-
     private fun GoQueryDevice(selection: String, selectionArgs: Array<String>): Device? =
         readableDatabase.query(
             TABLE_PAIRED_DEVICE,
@@ -183,7 +129,6 @@ class SqliteDeviceRepository(
         const val DEFAULT_DATABASE_NAME = "phone_manager.db"
 
         const val TABLE_PAIRED_DEVICE = "paired_device"
-        const val TABLE_PAIRING_ATTEMPT = "pairing_attempt"
 
         const val COLUMN_DEVICE_ID = "device_id"
         const val COLUMN_DEVICE_NAME = "device_name"
@@ -191,8 +136,6 @@ class SqliteDeviceRepository(
         const val COLUMN_TOKEN_HASH = "token_hash"
         const val COLUMN_PAIRED_AT_MS = "paired_at_ms"
         const val COLUMN_LAST_SEEN_MS = "last_seen_ms"
-        const val COLUMN_ATTEMPT_COUNT = "attempt_count"
-        const val COLUMN_FIRST_ATTEMPT_MS = "first_attempt_ms"
 
         const val CREATE_PAIRED_DEVICE =
             "CREATE TABLE IF NOT EXISTS $TABLE_PAIRED_DEVICE (" +
@@ -202,11 +145,5 @@ class SqliteDeviceRepository(
                 "$COLUMN_TOKEN_HASH TEXT NOT NULL, " +
                 "$COLUMN_PAIRED_AT_MS INTEGER NOT NULL, " +
                 "$COLUMN_LAST_SEEN_MS INTEGER)"
-
-        const val CREATE_PAIRING_ATTEMPT =
-            "CREATE TABLE IF NOT EXISTS $TABLE_PAIRING_ATTEMPT (" +
-                "$COLUMN_DEVICE_ID TEXT PRIMARY KEY, " +
-                "$COLUMN_ATTEMPT_COUNT INTEGER NOT NULL, " +
-                "$COLUMN_FIRST_ATTEMPT_MS INTEGER NOT NULL)"
     }
 }

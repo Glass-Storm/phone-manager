@@ -30,7 +30,21 @@ import java.security.SecureRandom
  *
  * [DeviceRepository] has no attempt API, so the failed-attempt counter lives here
  * alongside the window it guards. Once [PairingService.GoMaxPinAttempts] failures
- * accumulate, the current PIN is locked; only a fresh window clears it.
+ * accumulate, the current PIN is locked; only a fresh window clears it. The
+ * counter is PER-WINDOW and IN-MEMORY: a hub restart clears it. That is acceptable
+ * because the window it guards is itself in-memory and short-lived — a restart
+ * also closes the window, so there is nothing left to brute-force.
+ *
+ * ## Concurrency
+ *
+ * [GoPair] is the ONE unauthenticated RPC, and grpc-kotlin dispatches calls
+ * concurrently on the server executor, so several `Pair` calls can be in flight at
+ * once. All window state is therefore guarded: [GoOpenWindow], [GoStopWindow] and
+ * [GoPair] are `@Synchronized` on this instance. That makes the single-use
+ * check-and-consume and the failed-attempt increment each atomic. Without it two
+ * callers holding the correct PIN could both pass the "not consumed" check and
+ * mint two tokens from one single-use PIN, and concurrent bad PINs could lose
+ * increments and let a brute-force slip past [PairingService.GoMaxPinAttempts].
  *
  * @param GoClock now-provider, injectable so TTL/expiry are deterministic in tests.
  */
@@ -47,6 +61,7 @@ class PairingServiceImpl(
 
     private fun GoRepo(): DeviceRepository = FromContext<DeviceRepository>(GoCtx)
 
+    @Synchronized
     override fun GoOpenWindow(ttlMs: Long): Pairing {
         val GoFresh = Pairing(GoPin = TokenCodec.GoNewPin(), GoExpiresAtMs = GoClock() + ttlMs)
         GoWindow = GoFresh
@@ -55,12 +70,14 @@ class PairingServiceImpl(
         return GoFresh
     }
 
+    @Synchronized
     override fun GoStopWindow() {
         GoWindow = null
         GoWindowConsumed = false
         GoFailedAttempts = 0
     }
 
+    @Synchronized
     override fun GoPair(pin: String, deviceName: String, role: String): PairOutcome {
         if (pin.isBlank()) return GoReject(PairOutcome.GoReasonPinMissing)
         if (deviceName.isBlank()) return GoReject(PairOutcome.GoReasonNameMissing)
