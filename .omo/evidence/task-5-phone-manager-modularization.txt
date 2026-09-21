@@ -1,0 +1,197 @@
+TASK 5 - phone-manager-modularization
+docs: document kotlin naming convention and correct the record
+
+HEAD at start: e490692 (T4 "chore(build): enable ktlint naming rules after normalization")
+Wave 1 (T1-T5 naming normalisation) FINAL todo. Docs + notepad only; ZERO source changes.
+
+================================================================================
+1. GREP SWEEP - BEFORE (swept the HEAD/e490692 content)
+================================================================================
+
+$ git show HEAD:README.md | grep -nE 'Go-style|snake_case|GoFooBar|PascalCase members'
+README.md:200:- **Naming.** Single-word folders, snake_case files, Go-style PascalCase members
+
+$ git show HEAD:docs/protocol.md | grep -nE '\bGo[A-Z]'
+docs/protocol.md:143:   TTL is **120 seconds** (`PairingViewModel.GoWindowTtlMs = 120_000L`).
+docs/protocol.md:154:(`PairingService.GoMaxPinAttempts = 5`) the current PIN is locked; only a fresh
+docs/protocol.md:222:  `StreamService.GoAudioSampleRateHz = 16_000`. The canonical chunk is 20 ms,
+docs/protocol.md:241:| Video | **Drops the OLDEST queued frame** under load.                 | The hub tracks a drop counter (`GoVideoDropped`), so a peer can see that frames were shed. |
+
+$ git show HEAD:build.gradle.kts | grep -n -i 'disable'
+(none - T4 already rewrote this; confirmed clean at HEAD)
+
+decisions.md decision #5 (pre-append, reproduced from the restored original):
+## [2026-09-16] Locked decisions
+1. Wire protocol gRPC + protobuf (user). Fallback WS-over-HTTP/Ktor with same protos.
+2. Auth = gRPC interceptor bearer token (PIN -> HKDF-SHA256), reject unauth with UNAUTHENTICATED. No TLS-PSK (unsupported on gRPC); plaintext LAN v1; TLS documented upgrade.
+3. Modules: :domain (kotlin jvm, interfaces+DTOs only), :service (kotlin jvm, impls, depends only on :domain), :adapter (android lib, impls + gRPC transport + Android ports), :app (android app, Compose UI + composition root).
+4. Context registry: domain/context/context.kt with class Context + top-level inline fun <reified T> FromContext(ctx): T  (sing-box style).
+5. Naming: variables GoStyle (PascalCase), folders single word, files snake_case, DTO files single word in domain/dto/.
+6. SQLite direct (android.database.sqlite), no Room. androidId com.glassstorm.phonemanager. targetSdk 29 / minSdk 29 / compileSdk 36, JDK 17 bytecode.
+7. Tests-after per module; all QA agent-executable (JVM + Robolectric + Go mockpeer subprocess). CI: JDK21 + gradlew test + Go job.
+
+Full sweep across .omo/notepads/ additionally matched learnings.md (many
+historical `Go*` identifier references) and decisions.md. learnings.md is a
+HISTORICAL running log written while the code still carried the Go prefix; the
+append-only notepad discipline forbids rewriting existing entries, so
+learnings.md is intentionally left untouched. T5 only APPENDS to decisions.md.
+
+================================================================================
+2. GREP SWEEP - AFTER
+================================================================================
+
+$ grep -nE 'Go-style|snake_case|GoFooBar|PascalCase members' README.md
+(0 matches)
+
+$ grep -nE '\bGo[A-Z]' README.md docs/protocol.md
+(0 matches)
+
+$ grep -n -i 'disable' build.gradle.kts
+(none - 0 matches)
+
+$ grep -nE 'ktlint_(standard_)?[a-z-]+ *= *disabled' .editorconfig
+(none - 0 rules disabled; .editorconfig NOT regressed)
+
+$ grep -c 'No rule is disabled' .editorconfig
+1  (T4 text preserved)
+
+Plan acceptance guards:
+  grep -n 'Go-style|GoFooBar|snake_case' README.md          -> 0 matches (target 0)
+  grep -rnE '\bGo[A-Z]' docs/ README.md                      -> 0 matches (target 0)
+  grep -c 'mis-reading' decisions.md                          -> 1 (target >= 1)
+  grep -c 'SUPERSEDED' decisions.md                           -> 2
+
+================================================================================
+3. README.md DIFF (Repo conventions -> Naming bullet)
+================================================================================
+
+diff --git a/README.md b/README.md
+index 85edcfe..30c2ab8 100644
+--- a/README.md
++++ b/README.md
+@@ -197,8 +197,12 @@ suite as evidence that on-device behaviour works.
+ - **The Context registry is the only DI.** Collaborators are registered as types
+   and resolved with `FromContext<T>(ctx)` against the domain INTERFACE, never by
+   a concrete class. There is no Hilt, Koin, or Room anywhere in this repo.
+-- **Naming.** Single-word folders, snake_case files, Go-style PascalCase members
+-  (`GoStart`, `GoBoundPort`). DTOs are single-word files under `domain/dto/`.
++- **Naming.** Standard Kotlin convention. Files are PascalCase and match their
++  primary class (`PairingService.kt`, `Context.kt`, `Device.kt`); functions,
++  members, locals, and parameters are lowerCamelCase (`startHotspot`,
++  `boundPort`, `ctx`, `fromContext`); constants are UPPER_SNAKE_CASE
++  (`DEFAULT_HUB_PORT`, `CHANNEL_ID`, `REASON_NO_WINDOW`, `MAX_PIN_ATTEMPTS`);
++  types are PascalCase; package names are all-lowercase reverse-domain.
+ 
+ ## Security posture
+ 
+
+Surrounding bullets left intact: the hexagonal-boundaries bullet and the
+Context-registry bullet are UNCHANGED (the registry still exists at this point in
+the plan; T16 removes it). Module names / build / test command blocks are
+UNCHANGED (module restructure is T9-T14).
+
+================================================================================
+4. docs/protocol.md DIFF (SYMBOL references only; WIRE content frozen)
+================================================================================
+
+diff --git a/docs/protocol.md b/docs/protocol.md
+index d3a0bcd..815ca15 100644
+--- a/docs/protocol.md
++++ b/docs/protocol.md
+@@ -140,7 +140,7 @@ silently claims a role or a media kind.
+ 
+ 1. **The hub opens a pairing window.** At most ONE window exists at a time. It
+    carries a 6-digit PIN drawn from `SecureRandom`, and a TTL. The app's default
+-   TTL is **120 seconds** (`PairingViewModel.GoWindowTtlMs = 120_000L`).
++   TTL is **120 seconds** (`PairingViewModel.WINDOW_TTL_MS = 120_000L`).
+ 2. **The peer calls `Pair` with that PIN**, its device name, and its role.
+ 3. **The hub validates the PIN** in constant time, then:
+    - burns the PIN first (single-use: a successful `Pair` consumes it, and a
+@@ -151,7 +151,7 @@ silently claims a role or a media kind.
+    metadata `authorization: Bearer <token>`.
+ 
+ Wrong PINs are counted. After **5 failed attempts**
+-(`PairingService.GoMaxPinAttempts = 5`) the current PIN is locked; only a fresh
++(`PairingService.MAX_PIN_ATTEMPTS = 5`) the current PIN is locked; only a fresh
+ window clears the counter and issues a new PIN. The failed-attempt counter lives
+ with the window, in memory.
+ 
+@@ -219,7 +219,7 @@ sends media frames; the hub emits `transcript` / `result` frames back on the
+ SAME stream.
+ 
+ - **Audio is raw little-endian PCM16, mono, at 16 kHz.** The hub's constant is
+-  `StreamService.GoAudioSampleRateHz = 16_000`. The canonical chunk is 20 ms,
++  `StreamService.AUDIO_SAMPLE_RATE_HZ = 16_000`. The canonical chunk is 20 ms,
+   which is 320 samples, 640 bytes. The hub never decodes the audio; it forwards
+   it to the configured STT engine.
+ - **Video is raw H.264 NAL units, OPAQUE.** The hub never decodes, re-encodes,
+@@ -238,7 +238,7 @@ both policies.
+ | Media | Policy                                                        | Observable effect                                                                          |
+ | ----- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+ | Audio | **NEVER dropped.** The producer PARKS when the queue is full. | The audio counter only ever grows for accepted frames; no audio is silently lost.          |
+-| Video | **Drops the OLDEST queued frame** under load.                 | The hub tracks a drop counter (`GoVideoDropped`), so a peer can see that frames were shed. |
++| Video | **Drops the OLDEST queued frame** under load.                 | The hub tracks a drop counter (`videoDropped`), so a peer can see that frames were shed. |
+ 
+ Session teardown DRAINS rather than cancels: closing a session joins the pumps,
+ then closes the STT session exactly once. A peer cancel or a downstream failure
+
+Only Kotlin SYMBOL names changed to their post-T4 spelling. WIRE content is
+untouched: field names, reject-reason strings, RPC names, enum values all
+unchanged. `videoDropped` is the RelayStats DTO property name (not a wire field
+literal).
+
+================================================================================
+5. NOTEPAD APPEND (append-only discipline respected)
+================================================================================
+
+File: .omo/notepads/phone-manager-bootstrap/decisions.md
+Action: APPENDED a new section "## Naming decision #5 - SUPERSEDED
+(T5 of phone-manager-modularization)". Existing entries #1-#12 are NOT rewritten.
+Verified append-only: the first 22 lines are BYTE-IDENTICAL to the pre-append
+content (startswith check = True), and the file grew from 22 to 53 lines.
+
+The appended entry records:
+  * decision #5 ("variables GoStyle (PascalCase)") was a MIS-READING of the
+    user's phrase "reference Go's naming style";
+  * the `Go` prefix carried no FFI/interop meaning;
+  * the project now follows standard Kotlin naming: PascalCase files matching the
+    primary class, lowerCamelCase functions/members/locals/parameters,
+    UPPER_SNAKE_CASE constants, PascalCase types, all-lowercase packages.
+
+grep -c 'mis-reading'   decisions.md = 1
+grep -c 'SUPERSEDED'    decisions.md = 2
+
+================================================================================
+6. NO SOURCE CHANGES
+================================================================================
+
+$ git status --porcelain (excluding untracked) filtered to source extensions
+(none)
+
+No .kt, .java, .proto, or .kts file was modified by T5. The only tracked files
+changed are README.md and docs/protocol.md; the notepad append is in the
+(intentionally untracked) .omo/notepads/ tree.
+
+Tracked working-tree changes:
+ M .gitignore
+ M README.md
+ M docs/protocol.md
+
+(.gitignore carried a PRE-EXISTING unrelated modification - bin/ + .vscode/ +
+out/ - that T5 did not make and deliberately does NOT stage/commit.)
+
+================================================================================
+7. VERIFICATION SUMMARY
+================================================================================
+- README naming section describes the Kotlin-standard convention.           PASS
+- Zero Go-prefixed identifier refs in README.md or docs/.                    PASS
+- Zero old Go-style / snake_case convention refs in README.md.               PASS
+- decisions.md has an APPENDED superseded entry for #5.                      PASS
+- Append-only: existing notepad lines 1-22 byte-identical (True).      PASS
+- build.gradle.kts has no stale "disabled rules" comment.                     PASS
+- .editorconfig not regressed (0 rules disabled, T4 text intact).            PASS
+- No source-code changes (.kt/.java/.proto/.kts).                            PASS
+- Module names / build+test commands unchanged (T9-T14 owns restructure).    PASS
+- Commit ONCE with the required message.                                     PASS
+
+Tests: 311 / 0 failures (unchanged - docs-only change does not touch any code).

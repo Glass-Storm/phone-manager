@@ -197,8 +197,12 @@ suite as evidence that on-device behaviour works.
 - **The Context registry is the only DI.** Collaborators are registered as types
   and resolved with `FromContext<T>(ctx)` against the domain INTERFACE, never by
   a concrete class. There is no Hilt, Koin, or Room anywhere in this repo.
-- **Naming.** Single-word folders, snake_case files, Go-style PascalCase members
-  (`GoStart`, `GoBoundPort`). DTOs are single-word files under `domain/dto/`.
+- **Naming.** Standard Kotlin convention. Files are PascalCase and match their
+  primary class (`PairingService.kt`, `Context.kt`, `Device.kt`); functions,
+  members, locals, and parameters are lowerCamelCase (`startHotspot`,
+  `boundPort`, `ctx`, `fromContext`); constants are UPPER_SNAKE_CASE
+  (`DEFAULT_HUB_PORT`, `CHANNEL_ID`, `REASON_NO_WINDOW`, `MAX_PIN_ATTEMPTS`);
+  types are PascalCase; package names are all-lowercase reverse-domain.
 
 ## Security posture
 

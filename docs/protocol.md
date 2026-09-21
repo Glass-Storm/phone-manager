@@ -140,7 +140,7 @@ silently claims a role or a media kind.
 
 1. **The hub opens a pairing window.** At most ONE window exists at a time. It
    carries a 6-digit PIN drawn from `SecureRandom`, and a TTL. The app's default
-   TTL is **120 seconds** (`PairingViewModel.GoWindowTtlMs = 120_000L`).
+   TTL is **120 seconds** (`PairingViewModel.WINDOW_TTL_MS = 120_000L`).
 2. **The peer calls `Pair` with that PIN**, its device name, and its role.
 3. **The hub validates the PIN** in constant time, then:
    - burns the PIN first (single-use: a successful `Pair` consumes it, and a
@@ -151,7 +151,7 @@ silently claims a role or a media kind.
    metadata `authorization: Bearer <token>`.
 
 Wrong PINs are counted. After **5 failed attempts**
-(`PairingService.GoMaxPinAttempts = 5`) the current PIN is locked; only a fresh
+(`PairingService.MAX_PIN_ATTEMPTS = 5`) the current PIN is locked; only a fresh
 window clears the counter and issues a new PIN. The failed-attempt counter lives
 with the window, in memory.
 
@@ -219,7 +219,7 @@ sends media frames; the hub emits `transcript` / `result` frames back on the
 SAME stream.
 
 - **Audio is raw little-endian PCM16, mono, at 16 kHz.** The hub's constant is
-  `StreamService.GoAudioSampleRateHz = 16_000`. The canonical chunk is 20 ms,
+  `StreamService.AUDIO_SAMPLE_RATE_HZ = 16_000`. The canonical chunk is 20 ms,
   which is 320 samples, 640 bytes. The hub never decodes the audio; it forwards
   it to the configured STT engine.
 - **Video is raw H.264 NAL units, OPAQUE.** The hub never decodes, re-encodes,
@@ -238,7 +238,7 @@ both policies.
 | Media | Policy                                                        | Observable effect                                                                          |
 | ----- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
 | Audio | **NEVER dropped.** The producer PARKS when the queue is full. | The audio counter only ever grows for accepted frames; no audio is silently lost.          |
-| Video | **Drops the OLDEST queued frame** under load.                 | The hub tracks a drop counter (`GoVideoDropped`), so a peer can see that frames were shed. |
+| Video | **Drops the OLDEST queued frame** under load.                 | The hub tracks a drop counter (`videoDropped`), so a peer can see that frames were shed. |
 
 Session teardown DRAINS rather than cancels: closing a session joins the pumps,
 then closes the STT session exactly once. A peer cancel or a downstream failure
