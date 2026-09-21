@@ -15,17 +15,17 @@ repo ships the hub plus the contract they generate their clients from.
 
 ## Module layout
 
-| Module             | Kind                | Owns                                                                                                                                                                     |
-| ------------------ | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `:app`             | Android application | Compose UI (Lumo components), the five screens, and the composition root. The only module allowed to see the services AND the adapters.                                  |
-| `:core:model`      | pure Kotlin/JVM     | The hand-written domain DTOs: pure data types with zero dependencies, the shared language spoken across every layer.                                                     |
-| `:core:domain`     | pure Kotlin/JVM     | Ports (interfaces), the two deterministic state machines, and the Context registry. Zero implementation, zero framework annotations, no contract edge.                   |
-| `:core:service`    | pure Kotlin/JVM     | The use-case implementations (device, pairing, relay). Contract-free and gRPC-free by construction.                                                                      |
-| `:transport:grpc`  | pure Kotlin/JVM     | The gRPC service implementations, the bearer-token interceptor, the netty-backed hub server, and the DTO↔proto mapping. The ONE module allowed to depend on `:contract`. |
-| `:contract`        | pure Kotlin/JVM     | The FROZEN `ecosys.v1` wire contract: the `.proto` source of truth and its protobuf/gRPC-lite codegen. The ONE artifact the out-of-scope peers consume.                  |
-| `:adapter:jvm`     | pure Kotlin/JVM     | Android-free port implementations: the STT engines, the discarding frame sink, and the in-memory repository.                                                             |
-| `:adapter:android` | Android library     | Platform-backed adapters: SQLite, LocalOnlyHotspot, NSD discovery, the runtime config store, and the battery-exemption helper.                                           |
-| `:testing:testkit` | pure Kotlin/JVM     | Test support: the bounded child-process runner and the deterministic media generators, shared by the `:transport:grpc` and `:app` test suites. No runtime dependencies.  |
+| Module             | Kind                | Owns                                                                                                                                                                           |
+| ------------------ | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `:app`             | Android application | Compose UI (Lumo components), the five screens, and the composition root. The only module allowed to see the services AND the adapters.                                        |
+| `:core:model`      | pure Kotlin/JVM     | The hand-written domain DTOs: pure data types with zero dependencies, the shared language spoken across every layer.                                                           |
+| `:core:domain`     | pure Kotlin/JVM     | Ports (interfaces), the two deterministic state machines, and the Context registry. Zero implementation, zero framework annotations, no contract edge.                         |
+| `:core:service`    | pure Kotlin/JVM     | The use-case implementations (device, pairing, relay). Contract-free and gRPC-free by construction.                                                                            |
+| `:transport:grpc`  | pure Kotlin/JVM     | The gRPC service implementations, the bearer-token interceptor, the netty-backed hub server, and the DTO↔proto mapping. The ONE module allowed to depend on `:contract`.       |
+| `:contract`        | pure Kotlin/JVM     | The FROZEN `ecosys.v1` wire contract: the `.proto` source of truth and its protobuf/gRPC-lite codegen. The ONE artifact the out-of-scope peers consume.                        |
+| `:adapter:jvm`     | pure Kotlin/JVM     | Android-free port implementations: the STT engines, the discarding frame sink, and the in-memory repository.                                                                   |
+| `:adapter:android` | Android library     | Platform-backed adapters: SQLite, LocalOnlyHotspot, NSD discovery, and the runtime config store. The battery-exemption helper lives in `:app` (it is app-owned platform glue). |
+| `:testing:testkit` | pure Kotlin/JVM     | Test support: the bounded child-process runner and the deterministic media generators, shared by the `:transport:grpc` and `:app` test suites. No runtime dependencies.        |
 
 `tools/mockpeer` (the Go reference peer) is NOT a Gradle module; it stays at the
 repo root because the root `go.work` and the Go module are root-relative.
