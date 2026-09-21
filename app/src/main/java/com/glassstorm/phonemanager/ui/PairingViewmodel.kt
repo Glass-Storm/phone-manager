@@ -44,7 +44,7 @@ class PairingViewModel(
         val service = pairing ?: return
         // Replacing the previous window is the service's contract; storing only the
         // newest PIN is what guarantees a single live window in the UI.
-        val window = service.openWindow(GoWindowTtlMs)
+        val window = service.openWindow(WINDOW_TTL_MS)
         state.value =
             state.value.copy(
                 pin = window.pin,
@@ -83,6 +83,6 @@ class PairingViewModel(
 
     companion object {
         /** How long a pairing window stays open. Two minutes is the v1 default. */
-        const val GoWindowTtlMs: Long = 120_000L
+        const val WINDOW_TTL_MS: Long = 120_000L
     }
 }

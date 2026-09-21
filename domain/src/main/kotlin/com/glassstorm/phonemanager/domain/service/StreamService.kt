@@ -55,6 +55,6 @@ interface StreamService {
 
     companion object {
         /** Sample rate of the frozen `audio_pcm16_16k` wire payload. */
-        const val GoAudioSampleRateHz: Int = 16_000
+        const val AUDIO_SAMPLE_RATE_HZ: Int = 16_000
     }
 }

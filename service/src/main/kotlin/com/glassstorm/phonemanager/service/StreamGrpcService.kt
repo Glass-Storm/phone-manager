@@ -75,7 +75,7 @@ class StreamGrpcService(
                 stream.pushAudio(
                     sessionId = sessionId,
                     audioPcm16 = frame.audioPcm1616K.toByteArray(),
-                    sampleRateHz = StreamService.GoAudioSampleRateHz,
+                    sampleRateHz = StreamService.AUDIO_SAMPLE_RATE_HZ,
                 )
 
             StreamFrame.PayloadCase.VIDEO_H264_NAL ->

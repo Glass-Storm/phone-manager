@@ -64,7 +64,7 @@ class NsdDiscoveryAdapter(
         val info =
             NsdServiceInfo().apply {
                 serviceName = name
-                serviceType = GoDefaultServiceType
+                serviceType = DEFAULT_SERVICE_TYPE
                 this.port = port
             }
         val listener = RegistrationListenerImpl()
@@ -115,7 +115,7 @@ class NsdDiscoveryAdapter(
         val discoveryListener = DiscoveryListenerImpl(latch, resolved)
         val discovery =
             try {
-                nsd.discoverServices(GoDefaultServiceType, NsdManager.PROTOCOL_DNS_SD, discoveryListener)
+                nsd.discoverServices(DEFAULT_SERVICE_TYPE, NsdManager.PROTOCOL_DNS_SD, discoveryListener)
                 true
             } catch (goFailure: RuntimeException) {
                 false
@@ -156,7 +156,7 @@ class NsdDiscoveryAdapter(
                 tiramisuExtensionVersion()
             }
         if (!needed) return
-        val lock = wifi.createMulticastLock(GoMulticastLockTag)
+        val lock = wifi.createMulticastLock(MULTICAST_LOCK_TAG)
         lock.setReferenceCounted(false)
         lock.acquire()
         multicastLock = lock
@@ -176,7 +176,7 @@ class NsdDiscoveryAdapter(
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             SdkExtensions.getExtensionVersion(Build.VERSION_CODES.TIRAMISU)
         } else {
-            GoTiramisuExtensionAbsent
+            TIRAMISU_EXTENSION_ABSENT
         }
 
     private fun releaseMulticastLock() {
@@ -318,22 +318,22 @@ class NsdDiscoveryAdapter(
         val host = goInfo.host?.hostAddress ?: return
         goResolved.compareAndSet(
             null,
-            PeerAddress(host, goInfo.port, PeerAddress.GoSourceMdns),
+            PeerAddress(host, goInfo.port, PeerAddress.SOURCE_MDNS),
         )
         goLatch.countDown()
     }
 
     companion object {
         /** The DNS-SD service type every ecosys hub advertises. */
-        const val GoDefaultServiceType: String = "_ecosys._tcp"
+        const val DEFAULT_SERVICE_TYPE: String = "_ecosys._tcp"
 
-        const val GoMulticastLockTag: String = "phone-manager:mdns"
+        const val MULTICAST_LOCK_TAG: String = "phone-manager:mdns"
 
         /**
          * Extension version reported below API 30, where `SdkExtensions` does not
          * exist. `0` is below every meaningful Tiramisu extension, so the
          * multicast-lock predicate can never be weakened by the fallback.
          */
-        const val GoTiramisuExtensionAbsent: Int = 0
+        const val TIRAMISU_EXTENSION_ABSENT: Int = 0
     }
 }

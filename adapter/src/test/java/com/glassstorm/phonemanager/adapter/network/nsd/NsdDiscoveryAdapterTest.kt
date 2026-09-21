@@ -38,8 +38,8 @@ class NsdDiscoveryAdapterTest {
     private val shadowWifi = shadowOf(wifi) as ShadowWifiManager
 
     private val serviceName = "phone-hub"
-    private val serviceType = NsdDiscoveryAdapter.GoDefaultServiceType
-    private val gateway = PeerAddress("192.168.43.1", 9000, PeerAddress.GoSourceGateway)
+    private val serviceType = NsdDiscoveryAdapter.DEFAULT_SERVICE_TYPE
+    private val gateway = PeerAddress("192.168.43.1", 9000, PeerAddress.SOURCE_GATEWAY)
 
     private fun adapter(): NsdDiscoveryAdapter = NsdDiscoveryAdapter(context, gateway)
 
@@ -172,7 +172,7 @@ class NsdDiscoveryAdapterTest {
         assertThat(result.peer).isEqualTo(gateway)
         assertThat(result.peer!!.host).isEqualTo("192.168.43.1")
         assertThat(result.peer.port).isEqualTo(9000)
-        assertThat(result.peer.source).isEqualTo(PeerAddress.GoSourceGateway)
+        assertThat(result.peer.source).isEqualTo(PeerAddress.SOURCE_GATEWAY)
         assertThat(result.elapsedMs).isLessThan(2_000)
         assertThat(discovery.state).isEqualTo(DiscoveryState.FALLBACK)
     }
@@ -188,7 +188,7 @@ class NsdDiscoveryAdapterTest {
 
         // Then the gateway fallback is selected rather than throwing
         assertThat(result.peer).isEqualTo(gateway)
-        assertThat(result.peer!!.source).isEqualTo(PeerAddress.GoSourceGateway)
+        assertThat(result.peer!!.source).isEqualTo(PeerAddress.SOURCE_GATEWAY)
         assertThat(discovery.state).isEqualTo(DiscoveryState.FALLBACK)
     }
 
@@ -213,7 +213,7 @@ class NsdDiscoveryAdapterTest {
 
         // Then that peer is returned with source mdns, and the fallback is not used
         assertThat(result.peer).isEqualTo(
-            PeerAddress("192.168.43.7", 9100, PeerAddress.GoSourceMdns),
+            PeerAddress("192.168.43.7", 9100, PeerAddress.SOURCE_MDNS),
         )
         assertThat(discovery.state).isEqualTo(DiscoveryState.RESOLVED)
     }
@@ -266,7 +266,7 @@ class NsdDiscoveryAdapterTest {
         poke(discovery, resolveListener, found)
 
         thread.join(10_000)
-        if (thread.isAlive) fail("GoResolveFirst did not return within the test window")
+        if (thread.isAlive) fail("resolveFirst did not return within the test window")
         return ResolveOutcome(peer, elapsed)
     }
 

@@ -47,7 +47,7 @@ object AppComposition {
      * The hub's default listening port. Reachable by hotspot peers via the
      * gateway address, and the port the discovery adapter advertises.
      */
-    const val GO_DEFAULT_HUB_PORT: Int = 9000
+    const val DEFAULT_HUB_PORT: Int = 9000
 
     @Volatile
     private var androidAppContext: AndroidContext? = null

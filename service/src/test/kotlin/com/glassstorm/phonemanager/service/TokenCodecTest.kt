@@ -18,8 +18,8 @@ class TokenCodecTest {
         val saltB = TokenCodec.newSalt()
 
         // When the same PIN is derived against each
-        val tokenA = TokenCodec.deriveToken("123456", saltA, TokenCodec.GoDefaultIterations)
-        val tokenB = TokenCodec.deriveToken("123456", saltB, TokenCodec.GoDefaultIterations)
+        val tokenA = TokenCodec.deriveToken("123456", saltA, TokenCodec.DEFAULT_ITERATIONS)
+        val tokenB = TokenCodec.deriveToken("123456", saltB, TokenCodec.DEFAULT_ITERATIONS)
 
         // Then the tokens differ (the salt is actually mixed in) and both differ from the PIN
         assertThat(tokenA).isNotEqualTo(tokenB)
@@ -30,11 +30,11 @@ class TokenCodecTest {
     @Test
     fun `derivation is deterministic for the same pin salt and iteration count`() {
         // Given fixed KDF inputs
-        val salt = ByteArray(TokenCodec.GoSaltBytes) { it.toByte() }
+        val salt = ByteArray(TokenCodec.SALT_BYTES) { it.toByte() }
 
         // When derived twice
-        val first = TokenCodec.deriveToken("654321", salt, TokenCodec.GoDefaultIterations)
-        val second = TokenCodec.deriveToken("654321", salt, TokenCodec.GoDefaultIterations)
+        val first = TokenCodec.deriveToken("654321", salt, TokenCodec.DEFAULT_ITERATIONS)
+        val second = TokenCodec.deriveToken("654321", salt, TokenCodec.DEFAULT_ITERATIONS)
 
         // Then the derivation is reproducible
         assertThat(first).isEqualTo(second)
@@ -44,10 +44,10 @@ class TokenCodecTest {
     fun `derived token is 256 bits of base64url material`() {
         // Given the codec contract
         // When a token is derived
-        val token = TokenCodec.deriveToken("000000", newFixedSalt(), TokenCodec.GoDefaultIterations)
+        val token = TokenCodec.deriveToken("000000", newFixedSalt(), TokenCodec.DEFAULT_ITERATIONS)
 
         // Then it is exactly 32 bytes, unpadded base64url (43 chars)
-        assertThat(TokenCodec.GoTokenBits).isEqualTo(256)
+        assertThat(TokenCodec.TOKEN_BITS).isEqualTo(256)
         assertThat(token.length).isEqualTo(43)
         assertThat(token).matches("[A-Za-z0-9_-]+")
     }
@@ -55,7 +55,7 @@ class TokenCodecTest {
     @Test
     fun `hash round trip is stable and never returns the token itself`() {
         // Given a derived token
-        val token = TokenCodec.deriveToken("111111", TokenCodec.newSalt(), TokenCodec.GoDefaultIterations)
+        val token = TokenCodec.deriveToken("111111", TokenCodec.newSalt(), TokenCodec.DEFAULT_ITERATIONS)
 
         // When it is hashed for persistence, twice
         val hash = TokenCodec.hashToken(token)
@@ -88,8 +88,8 @@ class TokenCodecTest {
         val saltB = TokenCodec.newSalt()
 
         // Then they are the declared size and independent
-        assertThat(saltA.size).isEqualTo(TokenCodec.GoSaltBytes)
-        assertThat(saltB.size).isEqualTo(TokenCodec.GoSaltBytes)
+        assertThat(saltA.size).isEqualTo(TokenCodec.SALT_BYTES)
+        assertThat(saltB.size).isEqualTo(TokenCodec.SALT_BYTES)
         assertThat(saltA).isNotEqualTo(saltB)
     }
 
@@ -121,9 +121,9 @@ class TokenCodecTest {
         val salt = newFixedSalt()
 
         // When/Then the KDF refuses to run weaker than the documented floor
-        assertThat(TokenCodec.GoMinIterations).isAtLeast(100_000)
+        assertThat(TokenCodec.MIN_ITERATIONS).isAtLeast(100_000)
         assertThrows(IllegalArgumentException::class.java) {
-            TokenCodec.deriveToken("123456", salt, TokenCodec.GoMinIterations - 1)
+            TokenCodec.deriveToken("123456", salt, TokenCodec.MIN_ITERATIONS - 1)
         }
     }
 
@@ -132,9 +132,9 @@ class TokenCodecTest {
         // Given a one-byte salt
         // When/Then derivation refuses it
         assertThrows(IllegalArgumentException::class.java) {
-            TokenCodec.deriveToken("123456", ByteArray(1), TokenCodec.GoDefaultIterations)
+            TokenCodec.deriveToken("123456", ByteArray(1), TokenCodec.DEFAULT_ITERATIONS)
         }
     }
 
-    private fun newFixedSalt(): ByteArray = ByteArray(TokenCodec.GoSaltBytes) { (it * 7).toByte() }
+    private fun newFixedSalt(): ByteArray = ByteArray(TokenCodec.SALT_BYTES) { (it * 7).toByte() }
 }

@@ -19,16 +19,16 @@ import java.nio.ByteOrder
  */
 
 /** Realtime JWT endpoint. The key travels in the `Authorization` header, never the URL. */
-const val GO_TOKEN_URL: String = "https://mp.speechmatics.com/v1/api_keys?type=rt"
+const val TOKEN_URL: String = "https://mp.speechmatics.com/v1/api_keys?type=rt"
 
 /** Recognition language when the caller does not override it. */
-const val GO_DEFAULT_LANGUAGE: String = "en"
+const val DEFAULT_LANGUAGE: String = "en"
 
 /** Sample rate the hub relays audio at ([com.glassstorm.phonemanager.domain.service.StreamService]). */
-const val GO_SAMPLE_RATE_HZ: Int = 16_000
+const val SAMPLE_RATE_HZ: Int = 16_000
 
 /** Requested JWT lifetime in seconds (the reference client's value). */
-const val GO_TOKEN_TTL_SECONDS: Int = 600
+const val TOKEN_TTL_SECONDS: Int = 600
 
 private const val BYTES_PER_PCM16_SAMPLE = 2
 private const val FLOAT32_BYTES = 4
@@ -71,7 +71,7 @@ fun pcm16ToFloat32Le(pcm16: ByteArray): ByteArray {
 }
 
 /** The `StartRecognition` handshake frame: raw `pcm_f32le` at 16 kHz. */
-fun startRecognitionJson(language: String = GO_DEFAULT_LANGUAGE): String =
+fun startRecognitionJson(language: String = DEFAULT_LANGUAGE): String =
     JSONObject()
         .put("message", "StartRecognition")
         .put(
@@ -79,7 +79,7 @@ fun startRecognitionJson(language: String = GO_DEFAULT_LANGUAGE): String =
             JSONObject()
                 .put("type", "raw")
                 .put("encoding", "pcm_f32le")
-                .put("sample_rate", GO_SAMPLE_RATE_HZ),
+                .put("sample_rate", SAMPLE_RATE_HZ),
         ).put("transcription_config", JSONObject().put("language", language))
         .toString()
 
@@ -129,7 +129,7 @@ fun transcriptFromMessage(message: String): String? {
         } catch (malformed: JSONException) {
             return null
         }
-    if (frame.optString("message") != GO_ADD_TRANSCRIPT) return null
+    if (frame.optString("message") != ADD_TRANSCRIPT) return null
     val results = frame.optJSONArray("results") ?: return null
     val builder = StringBuilder()
     for (index in 0 until results.length()) {
@@ -141,4 +141,5 @@ fun transcriptFromMessage(message: String): String? {
     return builder.toString().ifBlank { null }
 }
 
-private const val GO_ADD_TRANSCRIPT = "AddTranscript"
+// Public so ConstantValuesTest can assert the wire discriminator literal directly.
+const val ADD_TRANSCRIPT = "AddTranscript"

@@ -144,7 +144,7 @@ class AuthInterceptorTest {
             )
 
         // Then the allowlist constant is exactly the generated Pair name
-        assertThat(AuthInterceptor.GO_PAIR_METHOD).isEqualTo("ecosys.v1.PairingService/Pair")
+        assertThat(AuthInterceptor.PAIR_METHOD).isEqualTo("ecosys.v1.PairingService/Pair")
         assertThat(names.first()).isEqualTo("ecosys.v1.PairingService/Pair")
         assertThat(names.last()).isEqualTo("ecosys.v1.PairingService/Heartbeat")
     }

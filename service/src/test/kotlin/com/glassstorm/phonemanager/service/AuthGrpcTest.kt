@@ -134,7 +134,7 @@ class AuthGrpcTest {
 
         // Then it is rejected, with a machine-checkable reason and no secret material
         assertThat(paired.ok).isFalse()
-        assertThat(paired.rejectReason).isEqualTo(PairOutcome.GoReasonPinInvalid)
+        assertThat(paired.rejectReason).isEqualTo(PairOutcome.REASON_PIN_INVALID)
         assertThat(paired.token).isEmpty()
         assertThat(paired.deviceId).isEmpty()
     }
@@ -150,7 +150,7 @@ class AuthGrpcTest {
 
         // Then it is rejected as expired and no token is issued
         assertThat(paired.ok).isFalse()
-        assertThat(paired.rejectReason).isEqualTo(PairOutcome.GoReasonPinExpired)
+        assertThat(paired.rejectReason).isEqualTo(PairOutcome.REASON_PIN_EXPIRED)
         assertThat(paired.token).isEmpty()
     }
 
@@ -166,7 +166,7 @@ class AuthGrpcTest {
 
         // Then the replay is rejected and no second token escapes
         assertThat(replay.ok).isFalse()
-        assertThat(replay.rejectReason).isEqualTo(PairOutcome.GoReasonPinConsumed)
+        assertThat(replay.rejectReason).isEqualTo(PairOutcome.REASON_PIN_CONSUMED)
         assertThat(replay.token).isEmpty()
     }
 

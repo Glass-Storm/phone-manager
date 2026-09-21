@@ -16,11 +16,11 @@ import javax.crypto.spec.PBEKeySpec
  * ## Documented KDF parameters
  *
  *  * Algorithm: `PBKDF2WithHmacSHA256` (`javax.crypto`, present on JVM 17).
- *  * Output: [GoTokenBits] = 256 bits, rendered as unpadded base64url (43 chars).
- *  * Iterations: [GoDefaultIterations] = 210_000 (OWASP-recommended floor for
- *    PBKDF2-HMAC-SHA256); [GoMinIterations] = 100_000 is the hard floor the codec
+ *  * Output: [TOKEN_BITS] = 256 bits, rendered as unpadded base64url (43 chars).
+ *  * Iterations: [DEFAULT_ITERATIONS] = 210_000 (OWASP-recommended floor for
+ *    PBKDF2-HMAC-SHA256); [MIN_ITERATIONS] = 100_000 is the hard floor the codec
  *    refuses to go below, so a caller cannot silently weaken the work factor.
- *  * Salt: [GoSaltBytes] = 16 cryptographically random bytes per pairing
+ *  * Salt: [SALT_BYTES] = 16 cryptographically random bytes per pairing
  *    ([newSalt], drawn from [SecureRandom]), so the same PIN yields a
  *    different token on every pairing and rainbow tables are useless.
  *
@@ -40,48 +40,48 @@ import javax.crypto.spec.PBEKeySpec
  */
 object TokenCodec {
     /** 256-bit derived tokens. */
-    const val GoTokenBits: Int = 256
+    const val TOKEN_BITS: Int = 256
 
     /** Per-pairing salt size in bytes. */
-    const val GoSaltBytes: Int = 16
+    const val SALT_BYTES: Int = 16
 
     /** Work factor used for a real pairing. */
-    const val GoDefaultIterations: Int = 210_000
+    const val DEFAULT_ITERATIONS: Int = 210_000
 
     /** Hard floor: derivations weaker than this are rejected. */
-    const val GoMinIterations: Int = 100_000
+    const val MIN_ITERATIONS: Int = 100_000
 
-    private const val GO_ALGORITHM = "PBKDF2WithHmacSHA256"
-    private const val GO_TOKEN_BYTES = GoTokenBits / 8
-    private const val GO_PIN_BOUND = 1_000_000
+    private const val ALGORITHM = "PBKDF2WithHmacSHA256"
+    private const val TOKEN_BYTES = TOKEN_BITS / 8
+    private const val PIN_BOUND = 1_000_000
 
     private val encoder: Base64.Encoder = Base64.getUrlEncoder().withoutPadding()
     private val random: SecureRandom = SecureRandom()
 
     /** A fresh 16-byte cryptographically random salt. */
-    fun newSalt(): ByteArray = ByteArray(GoSaltBytes).also { random.nextBytes(it) }
+    fun newSalt(): ByteArray = ByteArray(SALT_BYTES).also { random.nextBytes(it) }
 
     /**
      * Derive a token from [pin] using [salt] and [iterations].
      *
      * Deterministic for fixed inputs (unit-testable) and salted per pairing.
-     * Throws [IllegalArgumentException] for a salt shorter than [GoSaltBytes] or
-     * an iteration count below [GoMinIterations] — a caller must not weaken the KDF.
+     * Throws [IllegalArgumentException] for a salt shorter than [SALT_BYTES] or
+     * an iteration count below [MIN_ITERATIONS] — a caller must not weaken the KDF.
      */
     fun deriveToken(
         pin: String,
         salt: ByteArray,
         iterations: Int,
     ): String {
-        require(salt.size >= GoSaltBytes) {
-            "salt must be at least $GoSaltBytes bytes, was ${salt.size}"
+        require(salt.size >= SALT_BYTES) {
+            "salt must be at least $SALT_BYTES bytes, was ${salt.size}"
         }
-        require(iterations >= GoMinIterations) {
-            "iterations must be at least $GoMinIterations, was $iterations"
+        require(iterations >= MIN_ITERATIONS) {
+            "iterations must be at least $MIN_ITERATIONS, was $iterations"
         }
-        val spec = PBEKeySpec(pin.toCharArray(), salt, iterations, GoTokenBits)
+        val spec = PBEKeySpec(pin.toCharArray(), salt, iterations, TOKEN_BITS)
         try {
-            val derived = SecretKeyFactory.getInstance(GO_ALGORITHM).generateSecret(spec).encoded
+            val derived = SecretKeyFactory.getInstance(ALGORITHM).generateSecret(spec).encoded
             return encoder.encodeToString(derived)
         } finally {
             spec.clearPassword()
@@ -113,5 +113,5 @@ object TokenCodec {
      * A uniform 6-digit PIN, drawn from [SecureRandom] (never `java.util.Random`).
      * Always exactly six characters; leading zeros are preserved.
      */
-    fun newPin(): String = String.format(Locale.ROOT, "%06d", random.nextInt(GO_PIN_BOUND))
+    fun newPin(): String = String.format(Locale.ROOT, "%06d", random.nextInt(PIN_BOUND))
 }

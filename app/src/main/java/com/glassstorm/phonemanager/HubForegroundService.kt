@@ -43,7 +43,7 @@ class HubForegroundService : Service() {
         flags: Int,
         startId: Int,
     ): Int {
-        startForeground(GO_NOTIFICATION_ID, notification())
+        startForeground(NOTIFICATION_ID, notification())
         if (bringUp == null) {
             bringUp =
                 HubBringUp(
@@ -65,17 +65,17 @@ class HubForegroundService : Service() {
     }
 
     private fun requestedPort(intent: Intent?): Int =
-        intent?.getIntExtra(GO_EXTRA_PORT, AppComposition.GO_DEFAULT_HUB_PORT)
-            ?: AppComposition.GO_DEFAULT_HUB_PORT
+        intent?.getIntExtra(EXTRA_PORT, AppComposition.DEFAULT_HUB_PORT)
+            ?: AppComposition.DEFAULT_HUB_PORT
 
     private fun ensureChannel() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        if (manager.getNotificationChannel(GO_CHANNEL_ID) != null) return
+        if (manager.getNotificationChannel(CHANNEL_ID) != null) return
         manager.createNotificationChannel(
             NotificationChannel(
-                GO_CHANNEL_ID,
-                GO_CHANNEL_NAME,
+                CHANNEL_ID,
+                CHANNEL_NAME,
                 NotificationManager.IMPORTANCE_LOW,
             ),
         )
@@ -83,32 +83,32 @@ class HubForegroundService : Service() {
 
     private fun notification(): Notification =
         Notification
-            .Builder(this, GO_CHANNEL_ID)
-            .setContentTitle(GO_NOTIFICATION_TITLE)
-            .setContentText(GO_NOTIFICATION_TEXT)
+            .Builder(this, CHANNEL_ID)
+            .setContentTitle(NOTIFICATION_TITLE)
+            .setContentText(NOTIFICATION_TEXT)
             .setSmallIcon(android.R.drawable.stat_sys_upload)
             .setOngoing(true)
             .build()
 
     companion object {
         /** Notification channel the hub's ongoing notification lives on. */
-        const val GO_CHANNEL_ID: String = "hub-foreground"
+        const val CHANNEL_ID: String = "hub-foreground"
 
         /** Human-readable channel name shown in system settings. */
-        const val GO_CHANNEL_NAME: String = "Ecosystem Hub"
+        const val CHANNEL_NAME: String = "Ecosystem Hub"
 
-        const val GO_NOTIFICATION_ID: Int = 1
+        const val NOTIFICATION_ID: Int = 1
 
-        const val GO_NOTIFICATION_TITLE: String = "Ecosystem Hub running"
+        const val NOTIFICATION_TITLE: String = "Ecosystem Hub running"
 
-        const val GO_NOTIFICATION_TEXT: String = "Waiting for paired devices"
+        const val NOTIFICATION_TEXT: String = "Waiting for paired devices"
 
         /**
          * Optional hub port override. Absent in normal use (the default port is
          * used); tests pass `0` for an ephemeral bind, and a future settings
          * screen can make the port user-visible.
          */
-        const val GO_EXTRA_PORT: String = "com.glassstorm.phonemanager.extra.HUB_PORT"
+        const val EXTRA_PORT: String = "com.glassstorm.phonemanager.extra.HUB_PORT"
 
         /** Start the hub from anywhere in the app. */
         fun startService(context: Context) {

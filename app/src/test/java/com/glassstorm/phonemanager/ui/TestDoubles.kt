@@ -147,7 +147,7 @@ class FakePairingService(
         pin: String,
         deviceName: String,
         role: String,
-    ): PairOutcome = PairOutcome.Rejected(reason = PairOutcome.GoReasonPinInvalid)
+    ): PairOutcome = PairOutcome.Rejected(reason = PairOutcome.REASON_PIN_INVALID)
 
     override fun verifyToken(token: String): Device? = null
 
@@ -330,7 +330,7 @@ class FakeDeviceRepository(
 class FakeAppConfig(
     storedKey: String = "",
     engine: SttEngine = SttEngine.MOCK,
-    regionValue: String = AppConfig.GoDefaultRegion,
+    regionValue: String = AppConfig.DEFAULT_REGION,
     mode: HotspotMode = HotspotMode.MANUAL,
 ) : AppConfig {
     private var keyValue: String = storedKey

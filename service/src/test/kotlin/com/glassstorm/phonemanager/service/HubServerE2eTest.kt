@@ -8,7 +8,7 @@ import com.glassstorm.phonemanager.domain.context.Register
 import com.glassstorm.phonemanager.domain.service.PairingService
 import com.glassstorm.phonemanager.domain.service.StreamService
 import com.glassstorm.phonemanager.service.security.AuthInterceptor
-import com.glassstorm.phonemanager.testkit.GO_REAP_SECONDS
+import com.glassstorm.phonemanager.testkit.REAP_SECONDS
 import com.glassstorm.phonemanager.testkit.goBinary
 import com.glassstorm.phonemanager.testkit.ProcessRun
 import com.glassstorm.phonemanager.testkit.repoRoot
@@ -102,7 +102,7 @@ class HubServerE2ETest {
         // releasing the server socket lets the next ephemeral bind never collide.
         children.forEach { child ->
             if (child.isAlive) child.destroyForcibly()
-            child.waitFor(GO_REAP_SECONDS, TimeUnit.SECONDS)
+            child.waitFor(REAP_SECONDS, TimeUnit.SECONDS)
         }
         children.clear()
         if (this::hub.isInitialized) hub.stop()

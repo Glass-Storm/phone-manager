@@ -210,9 +210,9 @@ class FullE2eTest {
         assertThat(run.stdout).contains("pair-rejected reason=")
     }
 
-    private fun evidencePath(): String = File(repoRoot(), GO_EVIDENCE_RELATIVE).absolutePath
+    private fun evidencePath(): String = File(repoRoot(), EVIDENCE_RELATIVE).absolutePath
 
     private companion object {
-        const val GO_EVIDENCE_RELATIVE: String = ".omo/evidence/task-18-phone-manager-bootstrap.txt"
+        const val EVIDENCE_RELATIVE: String = ".omo/evidence/task-18-phone-manager-bootstrap.txt"
     }
 }

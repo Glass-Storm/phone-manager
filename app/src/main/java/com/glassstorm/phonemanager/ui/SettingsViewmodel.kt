@@ -106,14 +106,14 @@ class SettingsViewModel(
                 apiKeyVisible = state.value.apiKeyVisible,
                 batteryExempt = battery?.isExempt() ?: false,
                 batteryAvailable = battery != null,
-                protocol = GO_PROTOCOL,
+                protocol = PROTOCOL,
                 hubPort = hub?.boundPort() ?: 0,
             )
     }
 
     companion object {
         /** The frozen wire protocol the hub speaks. */
-        const val GO_PROTOCOL: String = "ecosys.v1"
+        const val PROTOCOL: String = "ecosys.v1"
     }
 }
 

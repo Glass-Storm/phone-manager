@@ -32,22 +32,22 @@ fun interface SocketOpener {
 }
 
 /** Bounded timeouts for the cloud path (the reference client used 30s). */
-private const val GO_TIMEOUT_SECONDS: Long = 30L
+private const val TIMEOUT_SECONDS: Long = 30L
 
 /** Connect timeout for the realtime socket; bounds a hung handshake. */
-private const val GO_WS_CONNECT_TIMEOUT_SECONDS: Long = 15L
+private const val WS_CONNECT_TIMEOUT_SECONDS: Long = 15L
 
 /** A 60-minute read timeout keeps an idle session from being reaped mid-utterance. */
-private const val GO_WS_READ_TIMEOUT_SECONDS: Long = 60L
+private const val WS_READ_TIMEOUT_SECONDS: Long = 60L
 
 /** The shared OkHttp client; connection pooling is desirable across sessions. */
 fun speechmaticsHttpClient(): OkHttpClient =
     OkHttpClient
         .Builder()
-        .connectTimeout(GO_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-        .readTimeout(GO_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-        .writeTimeout(GO_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-        .callTimeout(GO_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        .connectTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        .readTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        .writeTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        .callTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS)
         .build()
 
 /**
@@ -60,11 +60,11 @@ class HttpTokenFetcher(
     private val http: OkHttpClient = speechmaticsHttpClient(),
 ) : TokenFetcher {
     override fun fetch(apiKey: String): String? {
-        val body = """{"ttl":$GO_TOKEN_TTL_SECONDS}"""
+        val body = """{"ttl":$TOKEN_TTL_SECONDS}"""
         val request =
             Request
                 .Builder()
-                .url(GO_TOKEN_URL)
+                .url(TOKEN_URL)
                 .addHeader("Content-Type", "application/json")
                 .addHeader("Authorization", "Bearer $apiKey")
                 .post(body.toRequestBody("application/json".toMediaType()))
@@ -93,8 +93,8 @@ class OkHttpSocketOpener(
     ): WebSocket =
         http
             .newBuilder()
-            .connectTimeout(GO_WS_CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-            .readTimeout(GO_WS_READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            .connectTimeout(WS_CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            .readTimeout(WS_READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
             .build()
             .newWebSocket(Request.Builder().url(url).build(), listener)
 }

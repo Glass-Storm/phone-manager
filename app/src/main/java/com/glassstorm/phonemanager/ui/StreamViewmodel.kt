@@ -38,7 +38,7 @@ import kotlinx.coroutines.launch
  */
 class StreamViewModel(
     private val context: Context,
-    private val pollIntervalMs: Long = GoDefaultPollIntervalMs,
+    private val pollIntervalMs: Long = DEFAULT_POLL_INTERVAL_MS,
 ) : ViewModel() {
     private val stream: StreamService? = FromContextOrNull<StreamService>(context)
     private val pairing: PairingService? = FromContextOrNull<PairingService>(context)
@@ -58,7 +58,7 @@ class StreamViewModel(
 
         baseline = service.stats()
         val peerId =
-            pairing?.listPaired()?.firstOrNull()?.deviceId ?: GoDefaultPeerId
+            pairing?.listPaired()?.firstOrNull()?.deviceId ?: DEFAULT_PEER_ID
         val session = service.openSession(peerId)
 
         state.value =
@@ -120,10 +120,10 @@ class StreamViewModel(
 
     companion object {
         /** Counter refresh cadence. Short enough to look live, long enough not to spin. */
-        const val GoDefaultPollIntervalMs: Long = 250L
+        const val DEFAULT_POLL_INTERVAL_MS: Long = 250L
 
         /** Peer used when no paired device exists yet: the session is still real. */
-        const val GoDefaultPeerId: String = "local-peer"
+        const val DEFAULT_PEER_ID: String = "local-peer"
     }
 }
 

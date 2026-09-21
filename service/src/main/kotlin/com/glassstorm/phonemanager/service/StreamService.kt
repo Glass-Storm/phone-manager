@@ -48,8 +48,8 @@ import java.util.concurrent.atomic.AtomicLong
  */
 class StreamServiceImpl(
     private val ctx: Context,
-    private val audioCapacity: Int = GO_DEFAULT_AUDIO_CAPACITY,
-    private val videoCapacity: Int = GO_DEFAULT_VIDEO_CAPACITY,
+    private val audioCapacity: Int = DEFAULT_AUDIO_CAPACITY,
+    private val videoCapacity: Int = DEFAULT_VIDEO_CAPACITY,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
 ) : StreamService {
     private val random = SecureRandom()
@@ -130,7 +130,7 @@ class StreamServiceImpl(
         for (pcm in queue.audio) {
             val text =
                 FromContext<SttPort>(ctx)
-                    .transcribe(sessionId, pcm, StreamService.GoAudioSampleRateHz)
+                    .transcribe(sessionId, pcm, StreamService.AUDIO_SAMPLE_RATE_HZ)
             if (text != null) {
                 transcripts.incrementAndGet()
                 results.send(RelayResult(text = text, speakerLabel = "", ptsMs = 0L))
@@ -162,9 +162,9 @@ class StreamServiceImpl(
 
     private companion object {
         /** Audio buffer depth in frames. Generous: audio must never be dropped. */
-        const val GO_DEFAULT_AUDIO_CAPACITY: Int = 64
+        const val DEFAULT_AUDIO_CAPACITY: Int = 64
 
         /** Video buffer depth in NALs. Beyond this the oldest frame is evicted. */
-        const val GO_DEFAULT_VIDEO_CAPACITY: Int = 256
+        const val DEFAULT_VIDEO_CAPACITY: Int = 256
     }
 }

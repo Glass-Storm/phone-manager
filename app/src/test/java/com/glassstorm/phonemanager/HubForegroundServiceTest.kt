@@ -29,7 +29,7 @@ class HubForegroundServiceTest {
     private fun startService(): HubForegroundService {
         val intent =
             Intent(context, HubForegroundService::class.java)
-                .putExtra(HubForegroundService.GO_EXTRA_PORT, 0)
+                .putExtra(HubForegroundService.EXTRA_PORT, 0)
         return Robolectric
             .buildService(HubForegroundService::class.java, intent)
             .create()
@@ -66,7 +66,7 @@ class HubForegroundServiceTest {
         // Given a service asked to start
         val intent =
             Intent(context, HubForegroundService::class.java)
-                .putExtra(HubForegroundService.GO_EXTRA_PORT, 0)
+                .putExtra(HubForegroundService.EXTRA_PORT, 0)
 
         // When onStartCommand runs
         val controller = Robolectric.buildService(HubForegroundService::class.java, intent).create()
@@ -82,7 +82,7 @@ class HubForegroundServiceTest {
         // Given a running service that bound an ephemeral hub port
         val intent =
             Intent(context, HubForegroundService::class.java)
-                .putExtra(HubForegroundService.GO_EXTRA_PORT, 0)
+                .putExtra(HubForegroundService.EXTRA_PORT, 0)
         val controller =
             Robolectric
                 .buildService(HubForegroundService::class.java, intent)
@@ -109,7 +109,7 @@ class HubForegroundServiceTest {
         // Given a started service
         val intent =
             Intent(context, HubForegroundService::class.java)
-                .putExtra(HubForegroundService.GO_EXTRA_PORT, 0)
+                .putExtra(HubForegroundService.EXTRA_PORT, 0)
         val controller =
             Robolectric
                 .buildService(HubForegroundService::class.java, intent)
@@ -143,7 +143,7 @@ class HubForegroundServiceTest {
             Robolectric
                 .buildService(
                     HubForegroundService::class.java,
-                    Intent(context, HubForegroundService::class.java).putExtra(HubForegroundService.GO_EXTRA_PORT, 0),
+                    Intent(context, HubForegroundService::class.java).putExtra(HubForegroundService.EXTRA_PORT, 0),
                 ).create()
                 .startCommand(0, 0)
         val hotspot =

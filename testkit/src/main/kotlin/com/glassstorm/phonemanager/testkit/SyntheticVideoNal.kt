@@ -41,8 +41,8 @@ fun syntheticVideoNal(index: Int): ByteArray {
  * reproduces the same wrap explicitly before writing the little-endian pair.
  */
 fun syntheticAudioFrame(index: Int): ByteArray {
-    val buf = ByteBuffer.allocate(GO_AUDIO_SAMPLES_PER_FRAME * 2).order(ByteOrder.LITTLE_ENDIAN)
-    for (i in 0 until GO_AUDIO_SAMPLES_PER_FRAME) {
+    val buf = ByteBuffer.allocate(AUDIO_SAMPLES_PER_FRAME * 2).order(ByteOrder.LITTLE_ENDIAN)
+    for (i in 0 until AUDIO_SAMPLES_PER_FRAME) {
         val wide = (index * 31 + i * 7) % 32767
         buf.putShort(wide.toShort())
     }
@@ -50,7 +50,7 @@ fun syntheticAudioFrame(index: Int): ByteArray {
 }
 
 /** Mirrors `audioSamplesPerFrame` in `frames.go` (20 ms of mono audio at 16 kHz). */
-const val GO_AUDIO_SAMPLES_PER_FRAME: Int = 320
+const val AUDIO_SAMPLES_PER_FRAME: Int = 320
 
 /** Mirrors `audioSampleRateHz` in `frames.go`, the frozen wire contract. */
-const val GO_AUDIO_SAMPLE_RATE_HZ: Int = 16_000
+const val AUDIO_SAMPLE_RATE_HZ: Int = 16_000

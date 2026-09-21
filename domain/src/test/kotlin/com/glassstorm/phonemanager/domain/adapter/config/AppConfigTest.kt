@@ -25,7 +25,7 @@ class AppConfigTest {
 
     @Test
     fun `the default region is the us endpoint`() {
-        assertEquals("us", AppConfig.GoDefaultRegion)
+        assertEquals("us", AppConfig.DEFAULT_REGION)
     }
 
     @Test
@@ -54,7 +54,7 @@ class AppConfigTest {
         // Then the safe defaults hold: no network engine, no automatic access point
         assertEquals(SttEngine.MOCK, config.sttEngine())
         assertEquals("", config.apiKey())
-        assertEquals(AppConfig.GoDefaultRegion, config.region())
+        assertEquals(AppConfig.DEFAULT_REGION, config.region())
         assertEquals(HotspotMode.MANUAL, config.hotspotMode())
     }
 
@@ -72,7 +72,7 @@ class AppConfigTest {
     private class MemoryConfig : AppConfig {
         private var engine: SttEngine = SttEngine.MOCK
         private var key: String = ""
-        private var regionValue: String = AppConfig.GoDefaultRegion
+        private var regionValue: String = AppConfig.DEFAULT_REGION
         private var mode: HotspotMode = HotspotMode.MANUAL
 
         override fun sttEngine(): SttEngine = engine

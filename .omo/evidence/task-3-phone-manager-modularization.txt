@@ -1,0 +1,185 @@
+T3 — Normalise constants to UPPER_SNAKE_CASE while preserving values byte-for-byte
+Repo: /home/chaos/workplace/fyp/phone-manager  HEAD before: fe6b1ff (T2)
+Date: 2026-09-21T04:23:04Z
+
+======================================================================
+1. BASELINE (before) — declaration snapshot
+======================================================================
+grep -rnE '(const val|val) +(GO_[A-Z_]+|Go[A-Z][A-Za-z0-9]*) *[:=]' ... -> 81 declarations
+distinct GO_* tokens (baseline): 53
+distinct Go[A-Z] tokens (baseline): 31 (27 const val + 4 test-message string tokens)
+
+======================================================================
+2. BEFORE/AFTER CONSTANT TABLE (value preservation)
+======================================================================
+OLD SYMBOL                         NEW SYMBOL                         VALUE (byte-identical)
+---------------------------------- ---------------------------------- ------------------------------
+GO_ADAPTER_MOCK                    ADAPTER_MOCK                       "mock"
+GO_ADAPTER_SPEECHMATICS            ADAPTER_SPEECHMATICS               "speechmatics"
+GO_ADD_TRANSCRIPT                  ADD_TRANSCRIPT                     "AddTranscript"
+GO_ALGORITHM                       ALGORITHM                          "PBKDF2WithHmacSHA256"
+GO_ALL_INTERFACES_ADDRESS          ALL_INTERFACES_ADDRESS             "0.0.0.0"
+GO_AUDIO_SAMPLES_PER_FRAME         AUDIO_SAMPLES_PER_FRAME            320
+GoAudioSampleRateHz                AUDIO_SAMPLE_RATE_HZ               16_000
+GO_AUDIO_SAMPLE_RATE_HZ            AUDIO_SAMPLE_RATE_HZ               16_000
+GO_AUTHORIZATION_KEY               AUTHORIZATION_KEY                  
+GO_BEARER_PREFIX                   BEARER_PREFIX                      "Bearer"
+GO_CHANNEL_ID                      CHANNEL_ID                         "hub-foreground"
+GO_CHANNEL_NAME                    CHANNEL_NAME                       "Ecosystem Hub"
+GO_DEADLINE_SECONDS                DEADLINE_SECONDS                   90
+GO_DEFAULT_AUDIO_CAPACITY          DEFAULT_AUDIO_CAPACITY             64
+GO_DEFAULT_HUB_PORT                DEFAULT_HUB_PORT                   9000
+GoDefaultIterations                DEFAULT_ITERATIONS                 210_000
+GO_DEFAULT_LANGUAGE                DEFAULT_LANGUAGE                   "en"
+GoDefaultPeerId                    DEFAULT_PEER_ID                    "local-peer"
+GoDefaultPollIntervalMs            DEFAULT_POLL_INTERVAL_MS           250L
+GoDefaultRegion                    DEFAULT_REGION                     "us"
+GO_DEFAULT_REGION                  DEFAULT_REGION                     "us"
+GO_DEFAULT_RESULT_WAIT_MS          DEFAULT_RESULT_WAIT_MS             250L
+GoDefaultServiceType               DEFAULT_SERVICE_TYPE               "_ecosys._tcp"
+GO_DEFAULT_VIDEO_CAPACITY          DEFAULT_VIDEO_CAPACITY             256
+GO_DISCOVERY_NAME                  DISCOVERY_NAME                     "phone-manager"
+GO_DRAIN_JOIN_MS                   DRAIN_JOIN_MS                      2_000
+GO_ERROR                           ERROR                              1
+GO_EVIDENCE_RELATIVE               EVIDENCE_RELATIVE                  ".omo/evidence/task-18-phone-manager-bootstrap.txt"
+GO_EXTRA_PORT                      EXTRA_PORT                         "com.glassstorm.phonemanager.extra.HUB_PORT"
+GO_FNV_OFFSET_BASIS                FNV_OFFSET_BASIS                   -0x340d631b7bdddcdbL // 0xcbf29ce484222325
+GO_FNV_PRIME                       FNV_PRIME                          0x100000001b3L
+GO_HOTSPOT_AUTO                    HOTSPOT_AUTO                       "auto"
+GO_HOTSPOT_MANUAL                  HOTSPOT_MANUAL                     "manual"
+GO_KEY_API_KEY                     KEY_API_KEY                        "api_key"
+GO_KEY_HOTSPOT_MODE                KEY_HOTSPOT_MODE                   "hotspot_mode"
+GO_KEY_REGION                      KEY_REGION                         "region"
+GO_KEY_STT_ADAPTER                 KEY_STT_ADAPTER                    "stt_adapter"
+GO_KNOWN_REGIONS                   KNOWN_REGIONS                      setOf("global", "eu", "us", "au")
+GO_LOOPBACK_ADDRESS                LOOPBACK_ADDRESS                   "127.0.0.1"
+GoMaxPinAttempts                   MAX_PIN_ATTEMPTS                   5
+GoMinIterations                    MIN_ITERATIONS                     100_000
+GoMulticastLockTag                 MULTICAST_LOCK_TAG                 "phone-manager:mdns"
+GO_NORMAL_CLOSURE                  NORMAL_CLOSURE                     1000
+GO_NOTIFICATION_ID                 NOTIFICATION_ID                    1
+GO_NOTIFICATION_TEXT               NOTIFICATION_TEXT                  "Waiting for paired devices"
+GO_NOTIFICATION_TITLE              NOTIFICATION_TITLE                 "Ecosystem Hub running"
+GO_PAIR_METHOD                     PAIR_METHOD                        PairingServiceGrpc.getPairMethod().fullMethodName
+GO_PIN_BOUND                       PIN_BOUND                          1_000_000
+GO_PLACEHOLDER_API_KEY             PLACEHOLDER_API_KEY                "YOUR_SPEECHMATICS_API_KEY"
+GO_PREFS_NAME                      PREFS_NAME                         "runtime_config"
+GO_PROTOCOL                        PROTOCOL                           "ecosys.v1"
+GO_REAP_SECONDS                    REAP_SECONDS                       5
+GoReasonNameMissing                REASON_NAME_MISSING                "name-missing"
+GoReasonNoWindow                   REASON_NO_WINDOW                   "no-window"
+GoReasonPinConsumed                REASON_PIN_CONSUMED                "pin-consumed"
+GoReasonPinExpired                 REASON_PIN_EXPIRED                 "pin-expired"
+GoReasonPinInvalid                 REASON_PIN_INVALID                 "pin-invalid"
+GoReasonPinLocked                  REASON_PIN_LOCKED                  "pin-locked"
+GoReasonPinMissing                 REASON_PIN_MISSING                 "pin-missing"
+GO_ROUTES                          ROUTES                             
+GoRouteDashboard                   ROUTE_DASHBOARD                    "dashboard"
+GoRouteDevices                     ROUTE_DEVICES                      "devices"
+GoRoutePairing                     ROUTE_PAIRING                      "pairing"
+GoRouteSettings                    ROUTE_SETTINGS                     "settings"
+GoRouteStream                      ROUTE_STREAM                       "stream"
+GoSaltBytes                        SALT_BYTES                         16
+GO_SAMPLE_RATE_HZ                  SAMPLE_RATE_HZ                     16_000
+GoSourceGateway                    SOURCE_GATEWAY                     "gateway"
+GoSourceMdns                       SOURCE_MDNS                        "mdns"
+GO_TIMED_OUT                       TIMED_OUT                          124
+GO_TIMEOUT_SECONDS                 TIMEOUT_SECONDS                    30L
+GoTiramisuExtensionAbsent          TIRAMISU_EXTENSION_ABSENT          0
+GoTokenBits                        TOKEN_BITS                         256
+GO_TOKEN_BYTES                     TOKEN_BYTES                        GoTokenBits / 8
+GO_TOKEN_TTL_SECONDS               TOKEN_TTL_SECONDS                  600
+GO_TOKEN_URL                       TOKEN_URL                          "https://mp.speechmatics.com/v1/api_keys?type=rt"
+GO_UNAUTHENTICATED                 UNAUTHENTICATED                    
+GoWindowTtlMs                      WINDOW_TTL_MS                      120_000L
+GO_WS_CONNECT_TIMEOUT_SECONDS      WS_CONNECT_TIMEOUT_SECONDS         15L
+GO_WS_READ_TIMEOUT_SECONDS         WS_READ_TIMEOUT_SECONDS            60L
+
+Verified by scripted before/after literal delta: 81/81 declarations checked.
+  - 80 declarations: literal VALUE byte-identical before vs after.
+  - 1 declaration: TOKEN_BYTES had expression `GoTokenBits / 8` -> `TOKEN_BITS / 8`;
+    the SYMBOL in the expression was updated, the expression/semantics are identical.
+(Rows with an empty VALUE column are declarations whose initializer continues on the
+ next line (AUTHORIZATION_KEY, ROUTES, UNAUTHENTICATED, PAIR_METHOD); the scripted
+ declaration-level check confirmed those too, and ConstantValuesTest asserts each.)
+
+======================================================================
+3. ConstantValuesTest (NEW) — value-preservation proof
+======================================================================
+path: app/src/test/java/com/glassstorm/phonemanager/ConstantValuesTest.kt
+result: tests=11 failures=0 errors=0 skipped=0
+suite com.glassstorm.phonemanager.ConstantValuesTest: tests=11 failures=0 errors=0
+  PASS: the five routes and their order are unchanged
+  PASS: persisted runtime config identifiers are unchanged
+  PASS: fnv constants used by the deterministic mock are unchanged
+  PASS: the unauthenticated gRPC method allowlist entry is unchanged
+  PASS: hub foreground notification identifiers are unchanged
+  PASS: the seven pairing reject reasons are unchanged
+  PASS: numeric protocol and policy constants are unchanged
+  PASS: discovery identifiers are unchanged
+  PASS: protocol display string and bind addresses are unchanged
+  PASS: speechmatics wire constants are unchanged
+  PASS: peer source tags are unchanged
+
+Each assertion compares a constant to the EXACT pre-rename LITERAL (never to its own
+definition), so a value change fails the test. Covers: notification channel id, Intent
+extra key, DNS-SD name/type, multicast tag, SharedPreferences file+4 keys, persisted
+config values, region, placeholder key, protocol string, bind addresses, hub port, five
+routes+order, seven reject reasons, peer source tags, gRPC allowlist method, pin attempt
+cap, window TTL, poll interval, default peer id, audio rates, KDF iterations/bits/salt,
+speechmatics wire discriminators/close code, and the FNV constants.
+
+======================================================================
+4. INVARIANT GATE (full suite, --rerun-tasks)
+======================================================================
+cmd: JAVA_HOME=/home/chaos/.jdk/jdk-21.0.12.1+1 ANDROID_HOME=/home/chaos/Android/Sdk \
+     ./gradlew :domain:test :service:test :adapter:testDebugUnitTest :app:testDebugUnitTest --rerun-tasks --console=plain
+BUILD SUCCESSFUL in 30s; 79 actionable tasks: 79 executed
+Parsed XML counts (per module):
+  domain : tests=45 failures=0 errors=0 skipped=0
+  service: tests=63 failures=0 errors=0 skipped=0
+  adapter: tests=96 failures=0 errors=0 skipped=0
+  app    : tests=107 failures=0 errors=0 skipped=0  (baseline 96 + 11 new ConstantValuesTest)
+  TOTAL  : 311 tests, 0 failures  [baseline 300 + 11 new value assertions]
+
+======================================================================
+5. RELEASE GATE (R8 minify+shrink)
+======================================================================
+cmd: JAVA_HOME=... ANDROID_HOME=... ./gradlew :app:assembleDebug :app:assembleRelease --console=plain
+BUILD SUCCESSFUL in 1m 2s; 154 actionable tasks: 31 executed, 123 up-to-date
+APK: app/build/outputs/apk/release/app-release-unsigned.apk (10,038,201 bytes)
+APK: app/build/outputs/apk/debug/app-debug.apk (36,043,289 bytes)
+R8 note (pre-existing, unchanged): unexpected reference to missing service class
+  META-INF/services/reactor.blockhound.integration.BlockHoundIntegration (netty optional).
+netty ServerProvider retained in release dex: 1 match for
+  io.grpc.netty.shaded.io.grpc.netty.NettyServerProvider  (release-path intact)
+
+======================================================================
+6. GUARDS
+======================================================================
+grep -rhoE 'GO_[A-Z_]+' domain/src service/src adapter/src testkit/src app/src --include='*.kt' | sort -u | wc -l
+  before: 53   after: 0   EXPECT 0
+grep -rnE 'Go[A-Z]' domain/src service/src adapter/src testkit/src app/src --include='*.kt' | grep -v '/ui/components/\|/ui/foundation/' | wc -l
+  before: 127   after: 0   EXPECT 0
+vendored Lumo files touched: none (git status clean under ui/components, ui/foundation)
+generated sources touched: none
+
+======================================================================
+7. TEST-MESSAGE TOKENS (4) — truthful text, no value surface
+======================================================================
+HubServerAdapterTest.kt:48  "boundPort must report the assigned port after start(0)"
+HubServerAdapterTest.kt:68  "[QA] hung_commands: stop() returned in ..."
+NsdDiscoveryAdapterTest.kt:269  "resolveFirst did not return within the test window"
+  (4th baseline token GoStart was inside :48's message, updated with it.)
+
+======================================================================
+8. SCOPE NOTES
+======================================================================
+- Visibility widened private -> public for ADD_TRANSCRIPT, NORMAL_CLOSURE, and the
+  MockSttAdapter companion (FNV_OFFSET_BASIS/FNV_PRIME) ONLY so the app-module
+  ConstantValuesTest can assert their literal values. Values unchanged.
+- Non-constant members / enums / @Suppress args / metadata keys / "Bearer" /
+  "PBKDF2WithHmacSHA256" / "authorization" / "ecosys-device-id" untouched.
+- README/docs Go-prefix references left for T5 (docs/naming todo).
+- ktlintCheck has 2 PRE-EXISTING violations in files byte-identical to HEAD
+  (HotspotLauncher.kt:64, LocalOnlyHotspotAdapter.kt:131); T4 owns ktlint.

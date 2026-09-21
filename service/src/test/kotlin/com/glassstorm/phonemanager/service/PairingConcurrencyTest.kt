@@ -70,7 +70,7 @@ class PairingConcurrencyTest {
             val okCount = outcomes.count { it is PairOutcome.Ok }
             val consumedCount =
                 outcomes.count {
-                    it is PairOutcome.Rejected && it.reason == PairOutcome.GoReasonPinConsumed
+                    it is PairOutcome.Rejected && it.reason == PairOutcome.REASON_PIN_CONSUMED
                 }
             assertThat(okCount).isEqualTo(1)
             assertThat(consumedCount).isEqualTo(workers - 1)
@@ -110,7 +110,7 @@ class PairingConcurrencyTest {
             val late = pairing.pair(window.pin, "late-peer", "phone")
             assertThat(late).isInstanceOf(PairOutcome.Rejected::class.java)
             assertThat((late as PairOutcome.Rejected).reason)
-                .isEqualTo(PairOutcome.GoReasonPinLocked)
+                .isEqualTo(PairOutcome.REASON_PIN_LOCKED)
 
             // And no wrong attempt ever persisted a device
             assertThat(repo.list()).isEmpty()

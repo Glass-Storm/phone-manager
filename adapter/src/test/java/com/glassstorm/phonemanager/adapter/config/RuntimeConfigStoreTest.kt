@@ -24,7 +24,7 @@ class RuntimeConfigStoreTest {
         context = ApplicationProvider.getApplicationContext()
         // Each test starts from empty prefs, independent of the others.
         context
-            .getSharedPreferences(RuntimeConfigStore.GO_PREFS_NAME, Context.MODE_PRIVATE)
+            .getSharedPreferences(RuntimeConfigStore.PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
             .clear()
             .commit()
@@ -48,9 +48,9 @@ class RuntimeConfigStoreTest {
     @Test
     fun `an unknown persisted adapter value falls back to mock`() {
         context
-            .getSharedPreferences(RuntimeConfigStore.GO_PREFS_NAME, Context.MODE_PRIVATE)
+            .getSharedPreferences(RuntimeConfigStore.PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
-            .putString(RuntimeConfigStore.GO_KEY_STT_ADAPTER, "not-an-engine")
+            .putString(RuntimeConfigStore.KEY_STT_ADAPTER, "not-an-engine")
             .commit()
 
         assertThat(RuntimeConfigStore(context).sttAdapterKind()).isEqualTo(SttAdapterKind.MOCK)
@@ -82,7 +82,7 @@ class RuntimeConfigStoreTest {
 
     @Test
     fun `the placeholder value does not count as an api key`() {
-        store.setApiKey(RuntimeConfigStore.GO_PLACEHOLDER_API_KEY)
+        store.setApiKey(RuntimeConfigStore.PLACEHOLDER_API_KEY)
 
         assertThat(store.hasApiKey()).isFalse()
     }
@@ -161,9 +161,9 @@ class RuntimeConfigStoreTest {
     @Test
     fun `an unknown persisted hotspot mode falls back to manual`() {
         context
-            .getSharedPreferences(RuntimeConfigStore.GO_PREFS_NAME, Context.MODE_PRIVATE)
+            .getSharedPreferences(RuntimeConfigStore.PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
-            .putString(RuntimeConfigStore.GO_KEY_HOTSPOT_MODE, "not-a-mode")
+            .putString(RuntimeConfigStore.KEY_HOTSPOT_MODE, "not-a-mode")
             .commit()
 
         assertThat(RuntimeConfigStore(context).hotspotMode())

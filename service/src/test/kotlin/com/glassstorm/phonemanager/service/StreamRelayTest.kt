@@ -70,7 +70,7 @@ class StreamRelayTest {
             val collector = launch { stream.results(session.sessionId).collect { seen += it.text } }
 
             // When they are pushed and the pumps run
-            repeat(20) { stream.pushAudio(session.sessionId, pcm(it), StreamService.GoAudioSampleRateHz) }
+            repeat(20) { stream.pushAudio(session.sessionId, pcm(it), StreamService.AUDIO_SAMPLE_RATE_HZ) }
             advanceUntilIdle()
 
             // Then nothing was dropped and every frame produced an utterance
@@ -129,7 +129,7 @@ class StreamRelayTest {
             val session = stream.openSession("device-pressure")
 
             // When 5 audio frames and 20 video NALs are pushed before any pump runs
-            repeat(5) { stream.pushAudio(session.sessionId, pcm(it), StreamService.GoAudioSampleRateHz) }
+            repeat(5) { stream.pushAudio(session.sessionId, pcm(it), StreamService.AUDIO_SAMPLE_RATE_HZ) }
             repeat(20) { stream.pushVideo(session.sessionId, nal(it)) }
 
             // Then videoFrames counts every NAL OFFERED to the live session — all 20,
@@ -162,7 +162,7 @@ class StreamRelayTest {
             val scope = testScope(testScheduler)
             val stream = StreamServiceImpl(ctx = wired.Ctx, scope = scope)
             val session = stream.openSession("device-drain")
-            repeat(8) { stream.pushAudio(session.sessionId, pcm(it), StreamService.GoAudioSampleRateHz) }
+            repeat(8) { stream.pushAudio(session.sessionId, pcm(it), StreamService.AUDIO_SAMPLE_RATE_HZ) }
             repeat(8) { stream.pushVideo(session.sessionId, nal(it)) }
 
             // Then nothing has been consumed yet (proves the frames really were queued)
@@ -210,7 +210,7 @@ class StreamRelayTest {
             val before = stream.stats()
 
             // When audio and video are pushed against an unknown id
-            stream.pushAudio("no-such-session", pcm(1), StreamService.GoAudioSampleRateHz)
+            stream.pushAudio("no-such-session", pcm(1), StreamService.AUDIO_SAMPLE_RATE_HZ)
             stream.pushVideo("no-such-session", nal(1))
             val results = stream.results("no-such-session").toList()
 

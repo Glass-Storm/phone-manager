@@ -45,7 +45,7 @@ class HubServerAdapterTest {
 
             // Then it is running and reports the ACTUAL assigned port, not 0
             assertThat(hub.isRunning()).isTrue()
-            assertWithMessage("GoBoundPort must report the assigned port after GoStart(0)")
+            assertWithMessage("boundPort must report the assigned port after start(0)")
                 .that(hub.boundPort())
                 .isGreaterThan(0)
         } finally {
@@ -65,7 +65,7 @@ class HubServerAdapterTest {
         val stopStartNs = System.nanoTime()
         hub.stop()
         val stopMs = (System.nanoTime() - stopStartNs) / 1_000_000
-        println("[QA] hung_commands: GoStop() returned in ${stopMs}ms (bounded drain, no hang)")
+        println("[QA] hung_commands: stop() returned in ${stopMs}ms (bounded drain, no hang)")
 
         // Then the listener is down, reports no port...
         assertThat(hub.isRunning()).isFalse()

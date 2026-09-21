@@ -28,7 +28,7 @@ class SttFactoryTest {
     fun setUp() {
         context = ApplicationProvider.getApplicationContext()
         context
-            .getSharedPreferences(RuntimeConfigStore.GO_PREFS_NAME, Context.MODE_PRIVATE)
+            .getSharedPreferences(RuntimeConfigStore.PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
             .clear()
             .commit()

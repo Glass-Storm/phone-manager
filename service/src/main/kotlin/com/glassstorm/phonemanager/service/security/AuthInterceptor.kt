@@ -54,7 +54,7 @@ class AuthInterceptor(
         next: ServerCallHandler<ReqT, RespT>,
     ): ServerCall.Listener<ReqT> {
         // The one bootstrap method: reachable without a token by design.
-        if (method.methodDescriptor.fullMethodName == GO_PAIR_METHOD) {
+        if (method.methodDescriptor.fullMethodName == PAIR_METHOD) {
             return next.startCall(method, headers)
         }
 
@@ -69,7 +69,7 @@ class AuthInterceptor(
 
     /** Extract and verify `Bearer <token>`, or `null` for any malformed/unknown input. */
     private fun resolveDevice(headers: Metadata): Device? {
-        val header = headers.get(GO_AUTHORIZATION_KEY) ?: return null
+        val header = headers.get(AUTHORIZATION_KEY) ?: return null
         val token = bearerToken(header) ?: return null
         if (token.isEmpty()) return null
         return tokenVerifier.verifyToken(token)
@@ -82,23 +82,23 @@ class AuthInterceptor(
      * single space).
      */
     private fun bearerToken(header: String): String? {
-        if (!header.startsWith("$GO_BEARER_PREFIX ")) return null
-        return header.removePrefix("$GO_BEARER_PREFIX ")
+        if (!header.startsWith("$BEARER_PREFIX ")) return null
+        return header.removePrefix("$BEARER_PREFIX ")
     }
 
     /** Close the call with UNAUTHENTICATED without invoking the service body. */
     private fun <ReqT : Any, RespT : Any> reject(call: ServerCall<ReqT, RespT>): ServerCall.Listener<ReqT> {
-        call.close(GO_UNAUTHENTICATED, Metadata())
+        call.close(UNAUTHENTICATED, Metadata())
         return object : ServerCall.Listener<ReqT>() {}
     }
 
     companion object {
         /** The sole unauthenticated method, taken from the generated descriptor. */
-        val GO_PAIR_METHOD: String = PairingServiceGrpc.getPairMethod().fullMethodName
+        val PAIR_METHOD: String = PairingServiceGrpc.getPairMethod().fullMethodName
 
-        private const val GO_BEARER_PREFIX = "Bearer"
+        private const val BEARER_PREFIX = "Bearer"
 
-        private val GO_AUTHORIZATION_KEY: Metadata.Key<String> =
+        private val AUTHORIZATION_KEY: Metadata.Key<String> =
             Metadata.Key.of("authorization", Metadata.ASCII_STRING_MARSHALLER)
 
         /**
@@ -108,7 +108,7 @@ class AuthInterceptor(
         val deviceIdKey: Context.Key<String> = Context.key("ecosys-device-id")
 
         /** Uniform rejection: never says WHY (no oracle), never echoes secrets. */
-        private val GO_UNAUTHENTICATED: Status =
+        private val UNAUTHENTICATED: Status =
             Status.UNAUTHENTICATED
                 .withDescription("missing or invalid bearer token")
     }

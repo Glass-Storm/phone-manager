@@ -162,7 +162,7 @@ class FullE2eTest {
             )
         println("[QA] app evidence transcript: $transcript")
         MockPeerTranscript.write(
-            File(repoRoot(), GO_EVIDENCE_RELATIVE).absolutePath,
+            File(repoRoot(), EVIDENCE_RELATIVE).absolutePath,
             "app-full-e2e (robolectric hub)",
             transcript,
         )
@@ -177,6 +177,6 @@ class FullE2eTest {
     }
 
     private companion object {
-        const val GO_EVIDENCE_RELATIVE: String = ".omo/evidence/task-18-phone-manager-bootstrap.txt"
+        const val EVIDENCE_RELATIVE: String = ".omo/evidence/task-18-phone-manager-bootstrap.txt"
     }
 }

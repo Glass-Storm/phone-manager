@@ -112,7 +112,7 @@ class MockPeerDriver(
         children.forEach { child ->
             runCatching {
                 if (child.isAlive) child.destroyForcibly()
-                child.waitFor(GO_REAP_SECONDS, java.util.concurrent.TimeUnit.SECONDS)
+                child.waitFor(REAP_SECONDS, java.util.concurrent.TimeUnit.SECONDS)
             }
         }
         children.clear()

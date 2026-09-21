@@ -1,6 +1,6 @@
 package com.glassstorm.phonemanager.adapter.speech.mock
 
-import com.glassstorm.phonemanager.adapter.speech.speechmatics.GO_SAMPLE_RATE_HZ
+import com.glassstorm.phonemanager.adapter.speech.speechmatics.SAMPLE_RATE_HZ
 import com.glassstorm.phonemanager.domain.adapter.speech.SttPort
 import java.util.concurrent.ConcurrentHashMap
 
@@ -63,7 +63,7 @@ class MockSttAdapter : SttPort {
     fun isSessionOpen(sessionId: String): Boolean = sessionId in openSessions
 
     /** Adapter-local observability: the engine's declared input rate. */
-    fun sampleRateHz(): Int = GO_SAMPLE_RATE_HZ
+    fun sampleRateHz(): Int = SAMPLE_RATE_HZ
 
     /**
      * The deterministic pseudo-transcript: length + content hash, both derived
@@ -73,17 +73,18 @@ class MockSttAdapter : SttPort {
     private fun pseudoTranscript(audioPcm16: ByteArray): String = "mock:${audioPcm16.size}:${fnv1a64Hex(audioPcm16)}"
 
     private fun fnv1a64Hex(bytes: ByteArray): String {
-        var hash = GO_FNV_OFFSET_BASIS
+        var hash = FNV_OFFSET_BASIS
         for (byte in bytes) {
             hash = hash xor (byte.toLong() and 0xFF)
-            hash *= GO_FNV_PRIME
+            hash *= FNV_PRIME
         }
         return hash.toULong().toString(16).padStart(16, '0')
     }
 
-    private companion object {
+    // Public so ConstantValuesTest can assert the FNV literals directly.
+    companion object {
         /** FNV-1a 64-bit constants (public domain). */
-        const val GO_FNV_OFFSET_BASIS: Long = -0x340d631b7bdddcdbL // 0xcbf29ce484222325
-        const val GO_FNV_PRIME: Long = 0x100000001b3L
+        const val FNV_OFFSET_BASIS: Long = -0x340d631b7bdddcdbL // 0xcbf29ce484222325
+        const val FNV_PRIME: Long = 0x100000001b3L
     }
 }

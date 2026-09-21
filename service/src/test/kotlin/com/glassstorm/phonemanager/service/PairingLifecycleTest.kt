@@ -79,7 +79,7 @@ class PairingLifecycleTest {
         val second = pairing.pair(window.pin, "phone-b", "phone")
 
         // Then it is rejected as consumed, with no second device and no second token
-        assertThat(reason(second)).isEqualTo(PairOutcome.GoReasonPinConsumed)
+        assertThat(reason(second)).isEqualTo(PairOutcome.REASON_PIN_CONSUMED)
         assertThat(repo.list()).hasSize(1)
         assertThat(repo.get(deviceId)!!.tokenHash)
             .isEqualTo(
@@ -100,7 +100,7 @@ class PairingLifecycleTest {
 
         // Then the correct PIN is refused as expired and nothing is persisted
         assertThat(reason(pairing.pair(window.pin, "phone-a", "phone")))
-            .isEqualTo(PairOutcome.GoReasonPinExpired)
+            .isEqualTo(PairOutcome.REASON_PIN_EXPIRED)
         assertThat(repo.list()).isEmpty()
     }
 
@@ -108,19 +108,19 @@ class PairingLifecycleTest {
 
     @Test
     fun `five failed attempts lock the pin even for the correct pin`() {
-        // Given an open window and exactly GoMaxPinAttempts wrong attempts
+        // Given an open window and exactly MAX_PIN_ATTEMPTS wrong attempts
         val window = openWindow()
-        assertThat(PairingService.GoMaxPinAttempts).isEqualTo(5)
-        repeat(PairingService.GoMaxPinAttempts) {
+        assertThat(PairingService.MAX_PIN_ATTEMPTS).isEqualTo(5)
+        repeat(PairingService.MAX_PIN_ATTEMPTS) {
             assertThat(reason(pairing.pair("000000".asPinOtherThan(window), "phone", "phone")))
-                .isEqualTo(PairOutcome.GoReasonPinInvalid)
+                .isEqualTo(PairOutcome.REASON_PIN_INVALID)
         }
 
         // When the CORRECT pin is finally presented
         val outcome = pairing.pair(window.pin, "phone", "phone")
 
         // Then it is LOCKED (not merely rejected as invalid) and no token is minted
-        assertThat(reason(outcome)).isEqualTo(PairOutcome.GoReasonPinLocked)
+        assertThat(reason(outcome)).isEqualTo(PairOutcome.REASON_PIN_LOCKED)
         assertThat(repo.list()).isEmpty()
     }
 
@@ -136,7 +136,7 @@ class PairingLifecycleTest {
 
         // Then it is rejected as invalid and the repository stays empty
         assertThat(reason(pairing.pair(wrong, "phone", "phone")))
-            .isEqualTo(PairOutcome.GoReasonPinInvalid)
+            .isEqualTo(PairOutcome.REASON_PIN_INVALID)
         assertThat(repo.list()).isEmpty()
     }
 
@@ -147,18 +147,18 @@ class PairingLifecycleTest {
         // Given NO window is open
         // Then a well-formed attempt reports no window
         assertThat(reason(pairing.pair("123456", "phone", "phone")))
-            .isEqualTo(PairOutcome.GoReasonNoWindow)
+            .isEqualTo(PairOutcome.REASON_NO_WINDOW)
 
         // Given a window IS open
         openWindow()
 
         // Then a blank pin and a blank name are refused before any window logic
         assertThat(reason(pairing.pair("", "phone", "phone")))
-            .isEqualTo(PairOutcome.GoReasonPinMissing)
+            .isEqualTo(PairOutcome.REASON_PIN_MISSING)
         assertThat(reason(pairing.pair("   ", "phone", "phone")))
-            .isEqualTo(PairOutcome.GoReasonPinMissing)
+            .isEqualTo(PairOutcome.REASON_PIN_MISSING)
         assertThat(reason(pairing.pair("123456", "", "phone")))
-            .isEqualTo(PairOutcome.GoReasonNameMissing)
+            .isEqualTo(PairOutcome.REASON_NAME_MISSING)
         assertThat(repo.list()).isEmpty()
     }
 
@@ -199,13 +199,13 @@ class PairingLifecycleTest {
         val third = openWindow()
         repeat(4) {
             assertThat(reason(pairing.pair("000000".asPinOtherThan(third), "phone", "phone")))
-                .isEqualTo(PairOutcome.GoReasonPinInvalid)
+                .isEqualTo(PairOutcome.REASON_PIN_INVALID)
         }
         pairing.stopWindow()
 
         // Then the stopped window reports no-window
         assertThat(reason(pairing.pair(third.pin, "phone", "phone")))
-            .isEqualTo(PairOutcome.GoReasonNoWindow)
+            .isEqualTo(PairOutcome.REASON_NO_WINDOW)
 
         // And a fresh window pairs cleanly with the CORRECT pin — the counter reset
         val fourth = openWindow()

@@ -14,8 +14,8 @@ import java.util.concurrent.TimeUnit
  *
  * Two hazards are handled here so no caller has to:
  *
- *  * a hung child can never hang the suite — [GO_DEADLINE_SECONDS] is enforced
- *    and an overrun is force-destroyed and reported as [GO_TIMED_OUT];
+ *  * a hung child can never hang the suite — [DEADLINE_SECONDS] is enforced
+ *    and an overrun is force-destroyed and reported as [TIMED_OUT];
  *  * a spawn failure (no Go toolchain) is a loud non-zero result, never a
  *    silent skip, because a skipped transport gate would report green over an
  *    unproven risk.
@@ -42,7 +42,7 @@ fun run(
             ProcessBuilder(command).directory(workingDir).redirectErrorStream(false).start()
         } catch (failure: Exception) {
             return ProcessRun(
-                exitCode = GO_ERROR,
+                exitCode = ERROR,
                 stdout = "",
                 stderr = failure.message ?: "spawn failed",
                 process = null,
@@ -54,16 +54,16 @@ fun run(
     val outThread = drain(process.inputStream.bufferedReader(), stdout)
     val errThread = drain(process.errorStream.bufferedReader(), stderr)
 
-    val finished = process.waitFor(GO_DEADLINE_SECONDS, TimeUnit.SECONDS)
+    val finished = process.waitFor(DEADLINE_SECONDS, TimeUnit.SECONDS)
     if (!finished) {
         process.destroyForcibly()
-        process.waitFor(GO_REAP_SECONDS, TimeUnit.SECONDS)
+        process.waitFor(REAP_SECONDS, TimeUnit.SECONDS)
     }
-    outThread.join(GO_DRAIN_JOIN_MS)
-    errThread.join(GO_DRAIN_JOIN_MS)
+    outThread.join(DRAIN_JOIN_MS)
+    errThread.join(DRAIN_JOIN_MS)
 
-    val exit = if (finished) process.exitValue() else GO_TIMED_OUT
-    val suffix = if (finished) "" else "\n[harness] child exceeded ${GO_DEADLINE_SECONDS}s and was force-destroyed"
+    val exit = if (finished) process.exitValue() else TIMED_OUT
+    val suffix = if (finished) "" else "\n[harness] child exceeded ${DEADLINE_SECONDS}s and was force-destroyed"
     return ProcessRun(exit, stdout.toString(), stderr.toString() + suffix, process)
 }
 
@@ -108,8 +108,8 @@ private fun drain(
     return thread
 }
 
-const val GO_DEADLINE_SECONDS: Long = 90
-const val GO_REAP_SECONDS: Long = 5
-const val GO_DRAIN_JOIN_MS: Long = 2_000
-const val GO_TIMED_OUT: Int = 124
-const val GO_ERROR: Int = 1
+const val DEADLINE_SECONDS: Long = 90
+const val REAP_SECONDS: Long = 5
+const val DRAIN_JOIN_MS: Long = 2_000
+const val TIMED_OUT: Int = 124
+const val ERROR: Int = 1

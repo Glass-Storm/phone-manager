@@ -13,15 +13,16 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 
 /** The reference client's wait before treating a chunk as "no utterance". */
-private const val GO_DEFAULT_RESULT_WAIT_MS: Long = 250L
+private const val DEFAULT_RESULT_WAIT_MS: Long = 250L
 
-private const val GO_NORMAL_CLOSURE: Int = 1000
+// Public so ConstantValuesTest can assert the WebSocket close code literal directly.
+const val NORMAL_CLOSURE: Int = 1000
 
 /** Everything the cloud engine needs to authenticate and address the service. */
 data class SpeechmaticsConfig(
     val apiKey: String,
     val region: String = "us",
-    val language: String = GO_DEFAULT_LANGUAGE,
+    val language: String = DEFAULT_LANGUAGE,
 )
 
 /**
@@ -34,7 +35,7 @@ data class SpeechmaticsConfig(
 class SpeechmaticsTransport(
     val tokenFetcher: TokenFetcher = HttpTokenFetcher(),
     val socketOpener: SocketOpener = OkHttpSocketOpener(),
-    val resultWaitMs: Long = GO_DEFAULT_RESULT_WAIT_MS,
+    val resultWaitMs: Long = DEFAULT_RESULT_WAIT_MS,
 )
 
 /**
@@ -90,7 +91,7 @@ class SpeechmaticsSttAdapter(
         withContext(Dispatchers.IO) {
             session.providerId.get()?.let { socket.send(stopRecognitionJson(it)) }
             // close() is idempotent in OkHttp: a second call is a no-op.
-            socket.close(GO_NORMAL_CLOSURE, null)
+            socket.close(NORMAL_CLOSURE, null)
         }
     }
 

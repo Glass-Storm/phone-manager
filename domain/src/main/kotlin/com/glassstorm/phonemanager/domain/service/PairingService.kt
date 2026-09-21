@@ -13,7 +13,7 @@ import com.glassstorm.phonemanager.domain.dto.Pairing
  * Security contract every implementation MUST honour:
  *  * a PIN is single-use and dies with its window (TTL) or its first success;
  *  * a rejected attempt never persists a device and never mints a token;
- *  * after `GoMaxPinAttempts` failures the current PIN is locked until a fresh window;
+ *  * after `MAX_PIN_ATTEMPTS` failures the current PIN is locked until a fresh window;
  *  * only the token HASH is ever persisted — the plaintext token is returned once.
  */
 interface PairingService {
@@ -57,6 +57,6 @@ interface PairingService {
 
     companion object {
         /** Failed attempts against one PIN before it locks out. */
-        const val GoMaxPinAttempts: Int = 5
+        const val MAX_PIN_ATTEMPTS: Int = 5
     }
 }

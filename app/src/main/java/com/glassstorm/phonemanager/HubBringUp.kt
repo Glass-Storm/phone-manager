@@ -127,7 +127,7 @@ class HubBringUp(
         val discovery = FromContextOrNull<Discovery>(ctx) ?: return false
         if (port <= 0) return false
         return runCatching {
-            discovery.advertise(GO_DISCOVERY_NAME, port)
+            discovery.advertise(DISCOVERY_NAME, port)
             true
         }.getOrDefault(false)
     }
@@ -148,7 +148,7 @@ class HubBringUp(
 
     companion object {
         /** The DNS-SD instance name this hub advertises. */
-        const val GO_DISCOVERY_NAME: String = "phone-manager"
+        const val DISCOVERY_NAME: String = "phone-manager"
     }
 }
 

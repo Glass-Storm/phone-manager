@@ -29,7 +29,7 @@ import java.security.SecureRandom
  * ## Attempt cap
  *
  * [DeviceRepository] has no attempt API, so the failed-attempt counter lives here
- * alongside the window it guards. Once [PairingService.GoMaxPinAttempts] failures
+ * alongside the window it guards. Once [PairingService.MAX_PIN_ATTEMPTS] failures
  * accumulate, the current PIN is locked; only a fresh window clears it. The
  * counter is PER-WINDOW and IN-MEMORY: a hub restart clears it. That is acceptable
  * because the window it guards is itself in-memory and short-lived — a restart
@@ -44,7 +44,7 @@ import java.security.SecureRandom
  * check-and-consume and the failed-attempt increment each atomic. Without it two
  * callers holding the correct PIN could both pass the "not consumed" check and
  * mint two tokens from one single-use PIN, and concurrent bad PINs could lose
- * increments and let a brute-force slip past [PairingService.GoMaxPinAttempts].
+ * increments and let a brute-force slip past [PairingService.MAX_PIN_ATTEMPTS].
  *
  * @param clock now-provider, injectable so TTL/expiry are deterministic in tests.
  */
@@ -83,20 +83,20 @@ class PairingServiceImpl(
         deviceName: String,
         role: String,
     ): PairOutcome {
-        if (pin.isBlank()) return reject(PairOutcome.GoReasonPinMissing)
-        if (deviceName.isBlank()) return reject(PairOutcome.GoReasonNameMissing)
+        if (pin.isBlank()) return reject(PairOutcome.REASON_PIN_MISSING)
+        if (deviceName.isBlank()) return reject(PairOutcome.REASON_NAME_MISSING)
 
-        val current = window ?: return reject(PairOutcome.GoReasonNoWindow)
-        if (clock() > current.expiresAtMs) return reject(PairOutcome.GoReasonPinExpired)
-        if (windowConsumed) return reject(PairOutcome.GoReasonPinConsumed)
-        if (failedAttempts >= PairingService.GoMaxPinAttempts) {
-            return reject(PairOutcome.GoReasonPinLocked)
+        val current = window ?: return reject(PairOutcome.REASON_NO_WINDOW)
+        if (clock() > current.expiresAtMs) return reject(PairOutcome.REASON_PIN_EXPIRED)
+        if (windowConsumed) return reject(PairOutcome.REASON_PIN_CONSUMED)
+        if (failedAttempts >= PairingService.MAX_PIN_ATTEMPTS) {
+            return reject(PairOutcome.REASON_PIN_LOCKED)
         }
 
         // Constant-time PIN check — never `String.equals` on a secret.
         if (!TokenCodec.constantTimeEquals(current.pin, pin)) {
             failedAttempts += 1
-            return reject(PairOutcome.GoReasonPinInvalid)
+            return reject(PairOutcome.REASON_PIN_INVALID)
         }
 
         // Success: single-use burn first, so a crash mid-issue cannot replay the PIN.
@@ -104,7 +104,7 @@ class PairingServiceImpl(
         failedAttempts = 0
 
         val salt = TokenCodec.newSalt()
-        val token = TokenCodec.deriveToken(pin, salt, TokenCodec.GoDefaultIterations)
+        val token = TokenCodec.deriveToken(pin, salt, TokenCodec.DEFAULT_ITERATIONS)
         val deviceId = newDeviceId()
         repo().upsert(
             Device(

@@ -13,8 +13,8 @@ import org.junit.Test
  * locked here alongside the timeout branch.
  */
 class DiscoveryStateMachineTest {
-    private val gateway = PeerAddress("192.168.43.1", 9000, PeerAddress.GoSourceGateway)
-    private val mdns = PeerAddress("192.168.43.7", 9000, PeerAddress.GoSourceMdns)
+    private val gateway = PeerAddress("192.168.43.1", 9000, PeerAddress.SOURCE_GATEWAY)
+    private val mdns = PeerAddress("192.168.43.7", 9000, PeerAddress.SOURCE_MDNS)
 
     @Test
     fun `start advertise from IDLE moves to ADVERTISING`() {

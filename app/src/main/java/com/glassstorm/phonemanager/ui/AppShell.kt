@@ -10,19 +10,19 @@ import androidx.navigation.compose.rememberNavController
 import com.glassstorm.phonemanager.domain.context.Context
 import com.glassstorm.phonemanager.ui.components.Scaffold
 
-const val GoRouteDashboard = "dashboard"
-const val GoRoutePairing = "pairing"
-const val GoRouteStream = "stream"
-const val GoRouteDevices = "devices"
-const val GoRouteSettings = "settings"
+const val ROUTE_DASHBOARD = "dashboard"
+const val ROUTE_PAIRING = "pairing"
+const val ROUTE_STREAM = "stream"
+const val ROUTE_DEVICES = "devices"
+const val ROUTE_SETTINGS = "settings"
 
-val GO_ROUTES: List<String> =
+val ROUTES: List<String> =
     listOf(
-        GoRouteDashboard,
-        GoRoutePairing,
-        GoRouteStream,
-        GoRouteDevices,
-        GoRouteSettings,
+        ROUTE_DASHBOARD,
+        ROUTE_PAIRING,
+        ROUTE_STREAM,
+        ROUTE_DEVICES,
+        ROUTE_SETTINGS,
     )
 
 /**
@@ -35,7 +35,7 @@ val GO_ROUTES: List<String> =
  */
 @Composable
 fun AppShell(
-    startRoute: String = GoRouteDashboard,
+    startRoute: String = ROUTE_DASHBOARD,
     context: Context = Context(),
 ) {
     val navController = rememberNavController()
@@ -46,11 +46,11 @@ fun AppShell(
             startDestination = startRoute,
             modifier = Modifier.fillMaxSize(),
         ) {
-            composable(GoRouteDashboard) { DashboardScreen(context, Modifier.padding(insets)) }
-            composable(GoRoutePairing) { PairingScreen(context, Modifier.padding(insets)) }
-            composable(GoRouteStream) { StreamScreen(context, Modifier.padding(insets)) }
-            composable(GoRouteDevices) { DevicesScreen(context, Modifier.padding(insets)) }
-            composable(GoRouteSettings) { SettingsScreen(context, Modifier.padding(insets)) }
+            composable(ROUTE_DASHBOARD) { DashboardScreen(context, Modifier.padding(insets)) }
+            composable(ROUTE_PAIRING) { PairingScreen(context, Modifier.padding(insets)) }
+            composable(ROUTE_STREAM) { StreamScreen(context, Modifier.padding(insets)) }
+            composable(ROUTE_DEVICES) { DevicesScreen(context, Modifier.padding(insets)) }
+            composable(ROUTE_SETTINGS) { SettingsScreen(context, Modifier.padding(insets)) }
         }
     }
 }

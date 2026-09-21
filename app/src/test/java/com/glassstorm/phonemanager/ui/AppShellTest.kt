@@ -59,7 +59,7 @@ class AppShellTest {
     @Test
     fun `shell declares exactly the five required routes`() {
         composeRule.setShellContent(startRoute = "dashboard")
-        assertThat(GO_ROUTES)
+        assertThat(ROUTES)
             .containsExactly("dashboard", "pairing", "stream", "devices", "settings")
             .inOrder()
     }

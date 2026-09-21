@@ -22,24 +22,24 @@ sealed interface PairOutcome {
 
     companion object {
         /** No pairing window is currently open. */
-        const val GoReasonNoWindow: String = "no-window"
+        const val REASON_NO_WINDOW: String = "no-window"
 
         /** The window is open but the supplied PIN is not the window PIN. */
-        const val GoReasonPinInvalid: String = "pin-invalid"
+        const val REASON_PIN_INVALID: String = "pin-invalid"
 
         /** The window's TTL has elapsed. */
-        const val GoReasonPinExpired: String = "pin-expired"
+        const val REASON_PIN_EXPIRED: String = "pin-expired"
 
         /** The PIN was already consumed; recovery requires a fresh window. */
-        const val GoReasonPinConsumed: String = "pin-consumed"
+        const val REASON_PIN_CONSUMED: String = "pin-consumed"
 
         /** Too many failed attempts against the current PIN. */
-        const val GoReasonPinLocked: String = "pin-locked"
+        const val REASON_PIN_LOCKED: String = "pin-locked"
 
         /** The request carried no usable PIN at all. */
-        const val GoReasonPinMissing: String = "pin-missing"
+        const val REASON_PIN_MISSING: String = "pin-missing"
 
         /** The request carried no device name. */
-        const val GoReasonNameMissing: String = "name-missing"
+        const val REASON_NAME_MISSING: String = "name-missing"
     }
 }

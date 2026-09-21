@@ -31,7 +31,7 @@ interface AppConfig {
     /** Store [apiKey] trimmed; a blank value removes it rather than storing `""`. */
     fun setApiKey(apiKey: String?)
 
-    /** The configured Speechmatics region, or [GoDefaultRegion] when unset. */
+    /** The configured Speechmatics region, or [DEFAULT_REGION] when unset. */
     fun region(): String
 
     /** Persist [region] when it is supported; an unsupported value is ignored. */
@@ -45,6 +45,6 @@ interface AppConfig {
 
     companion object {
         /** The region used when nothing else is configured. */
-        const val GoDefaultRegion: String = "us"
+        const val DEFAULT_REGION: String = "us"
     }
 }

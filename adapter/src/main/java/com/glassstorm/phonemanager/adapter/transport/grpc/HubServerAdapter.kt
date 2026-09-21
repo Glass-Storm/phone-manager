@@ -44,7 +44,7 @@ import java.net.InetSocketAddress
  */
 class HubServerAdapter(
     private val ctx: Context,
-    private val bindAddress: String = GO_LOOPBACK_ADDRESS,
+    private val bindAddress: String = LOOPBACK_ADDRESS,
 ) : HubServer {
     private val hub: GrpcHubServer = GrpcHubServer { newBuilder(it) }
 
@@ -81,15 +81,15 @@ class HubServerAdapter(
 
     companion object {
         /** IPv4 loopback — tests only. */
-        const val GO_LOOPBACK_ADDRESS: String = "127.0.0.1"
+        const val LOOPBACK_ADDRESS: String = "127.0.0.1"
 
         /**
          * The IPv4 wildcard. Production only: the phone is the hotspot, and its
          * LAN peers (glasses, Ubuntu daemon) must be able to dial in.
          */
-        const val GO_ALL_INTERFACES_ADDRESS: String = "0.0.0.0"
+        const val ALL_INTERFACES_ADDRESS: String = "0.0.0.0"
 
         /** The adapter the app uses: reachable by hotspot peers on the LAN. */
-        fun forLanPeers(ctx: Context): HubServerAdapter = HubServerAdapter(ctx, GO_ALL_INTERFACES_ADDRESS)
+        fun forLanPeers(ctx: Context): HubServerAdapter = HubServerAdapter(ctx, ALL_INTERFACES_ADDRESS)
     }
 }

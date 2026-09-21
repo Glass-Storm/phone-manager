@@ -8,7 +8,7 @@ package com.glassstorm.phonemanager.domain.dto
  * fallback — the fallback is a first-class, expected outcome in the manual-tether
  * development flow, not an error.
  *
- * `source` is one of [GoSourceMdns] or [GoSourceGateway].
+ * `source` is one of [SOURCE_MDNS] or [SOURCE_GATEWAY].
  */
 data class PeerAddress(
     val host: String,
@@ -17,9 +17,9 @@ data class PeerAddress(
 ) {
     companion object {
         /** The peer answered a real `_ecosys._tcp` mDNS resolution. */
-        const val GoSourceMdns: String = "mdns"
+        const val SOURCE_MDNS: String = "mdns"
 
         /** mDNS was unavailable or missed; the configured gateway IP was used instead. */
-        const val GoSourceGateway: String = "gateway"
+        const val SOURCE_GATEWAY: String = "gateway"
     }
 }
