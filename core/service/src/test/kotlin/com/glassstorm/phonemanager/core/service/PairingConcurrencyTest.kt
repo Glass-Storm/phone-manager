@@ -1,4 +1,4 @@
-package com.glassstorm.phonemanager.service
+package com.glassstorm.phonemanager.core.service
 
 import com.glassstorm.phonemanager.core.domain.adapter.repository.DeviceRepository
 import com.glassstorm.phonemanager.core.domain.context.Context

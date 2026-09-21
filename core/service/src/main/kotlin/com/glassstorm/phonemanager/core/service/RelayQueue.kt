@@ -1,4 +1,4 @@
-package com.glassstorm.phonemanager.service
+package com.glassstorm.phonemanager.core.service
 
 import kotlinx.coroutines.channels.Channel
 

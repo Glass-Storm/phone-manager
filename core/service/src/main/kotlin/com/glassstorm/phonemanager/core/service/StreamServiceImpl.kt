@@ -1,4 +1,4 @@
-package com.glassstorm.phonemanager.service
+package com.glassstorm.phonemanager.core.service
 
 import com.glassstorm.phonemanager.core.domain.adapter.relay.FrameSink
 import com.glassstorm.phonemanager.core.domain.adapter.speech.SttPort

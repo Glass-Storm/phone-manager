@@ -1,6 +1,6 @@
-package com.glassstorm.phonemanager.service
+package com.glassstorm.phonemanager.core.service
 
-import com.glassstorm.phonemanager.service.security.TokenCodec
+import com.glassstorm.phonemanager.core.service.security.TokenCodec
 import com.google.common.truth.Truth.assertThat
 import org.junit.Assert.assertThrows
 import org.junit.Test

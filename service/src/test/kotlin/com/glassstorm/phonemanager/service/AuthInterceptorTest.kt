@@ -1,8 +1,8 @@
 package com.glassstorm.phonemanager.service
 
+import com.glassstorm.phonemanager.core.domain.security.TokenVerifier
 import com.glassstorm.phonemanager.core.model.Device
 import com.glassstorm.phonemanager.service.security.AuthInterceptor
-import com.glassstorm.phonemanager.service.security.TokenVerifier
 import com.google.common.truth.Truth.assertThat
 import ecosys.v1.PairingServiceGrpc
 import io.grpc.Metadata

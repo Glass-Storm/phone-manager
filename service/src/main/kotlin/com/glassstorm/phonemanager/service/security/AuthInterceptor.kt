@@ -1,5 +1,6 @@
 package com.glassstorm.phonemanager.service.security
 
+import com.glassstorm.phonemanager.core.domain.security.TokenVerifier
 import com.glassstorm.phonemanager.core.model.Device
 import ecosys.v1.PairingServiceGrpc
 import io.grpc.Context
@@ -9,17 +10,6 @@ import io.grpc.ServerCall
 import io.grpc.ServerCallHandler
 import io.grpc.ServerInterceptor
 import io.grpc.Status
-
-/**
- * The one collaborator [AuthInterceptor] needs: resolve a bearer token to the
- * device that owns it, or `null` when the token is unknown, tampered, or revoked.
- *
- * A separate port (rather than depending on the whole `PairingService`) keeps the
- * interceptor testable in isolation and lets the implementation live anywhere.
- */
-fun interface TokenVerifier {
-    fun verifyToken(token: String): Device?
-}
 
 /**
  * Bearer-token authentication for every hub RPC.

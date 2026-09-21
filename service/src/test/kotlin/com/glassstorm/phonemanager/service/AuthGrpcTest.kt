@@ -8,6 +8,8 @@ import com.glassstorm.phonemanager.core.domain.context.register
 import com.glassstorm.phonemanager.core.domain.service.PairingService
 import com.glassstorm.phonemanager.core.domain.service.StreamService
 import com.glassstorm.phonemanager.core.model.PairOutcome
+import com.glassstorm.phonemanager.core.service.PairingServiceImpl
+import com.glassstorm.phonemanager.core.service.StreamServiceImpl
 import com.glassstorm.phonemanager.service.security.AuthInterceptor
 import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage

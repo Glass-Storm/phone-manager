@@ -3,11 +3,11 @@ package com.glassstorm.phonemanager.adapter.transport.grpc
 import com.glassstorm.phonemanager.core.domain.adapter.transport.HubServer
 import com.glassstorm.phonemanager.core.domain.context.Context
 import com.glassstorm.phonemanager.core.domain.context.fromContext
+import com.glassstorm.phonemanager.core.domain.security.TokenVerifier
 import com.glassstorm.phonemanager.service.GrpcHubServer
 import com.glassstorm.phonemanager.service.PairingGrpcService
 import com.glassstorm.phonemanager.service.StreamGrpcService
 import com.glassstorm.phonemanager.service.security.AuthInterceptor
-import com.glassstorm.phonemanager.service.security.TokenVerifier
 import io.grpc.ServerBuilder
 import io.grpc.netty.shaded.io.grpc.netty.NettyServerBuilder
 import java.net.InetSocketAddress

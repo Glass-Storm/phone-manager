@@ -4,11 +4,11 @@ import com.glassstorm.phonemanager.core.domain.adapter.repository.DeviceReposito
 import com.glassstorm.phonemanager.core.domain.adapter.transport.HubServer
 import com.glassstorm.phonemanager.core.domain.context.Context
 import com.glassstorm.phonemanager.core.domain.context.fromContext
+import com.glassstorm.phonemanager.core.domain.security.TokenVerifier
 import com.glassstorm.phonemanager.core.domain.service.DeviceService
 import com.glassstorm.phonemanager.core.domain.service.PairingService
 import com.glassstorm.phonemanager.core.domain.service.StreamService
 import com.glassstorm.phonemanager.core.model.Device
-import com.glassstorm.phonemanager.service.security.TokenVerifier
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 

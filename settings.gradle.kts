@@ -28,6 +28,12 @@ include(":core:model")
 // registry: the domain's language, pure Kotlin with zero implementation, zero
 // framework annotations, and no dependency on the wire contract.
 include(":core:domain")
+// The use-case implementations (device, pairing, relay). Contract-free and
+// gRPC-free by construction: it depends on `:core:domain` + `:core:model` +
+// coroutines + the JDK crypto APIs, and on nothing else. The gRPC surface and
+// the DTO<->proto mapping live in `:transport:grpc`, which is the only module
+// allowed to see `ecosys.v1`.
+include(":core:service")
 // The FROZEN `ecosys.v1` wire contract: its own module so the out-of-scope
 // glasses app and Ubuntu daemon can consume/version/publish it independently of
 // the hub implementation. It owns the .proto AND the protobuf/gRPC codegen.

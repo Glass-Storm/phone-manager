@@ -12,6 +12,13 @@ dependencies {
     implementation(project(":core:domain"))
     implementation(libs.kotlinx.coroutines.core)
 
+    // The use-case implementations. `api`, not `implementation`: the gRPC services
+    // in this module resolve them from the Context registry by their DOMAIN
+    // interface, but the composition root in `:app` constructs the concrete
+    // `PairingServiceImpl`/`StreamServiceImpl`/`DeviceServiceImpl`, so they must be
+    // visible on the compile classpath of this module's consumers.
+    api(project(":core:service"))
+
     // The FROZEN wire contract and the codegen that owns it. `api`, not
     // `implementation`: the gRPC services here and their consumers must see the
     // generated `ecosys.v1` types AND the grpc/protobuf-lite runtime they extend

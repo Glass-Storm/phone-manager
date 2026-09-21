@@ -14,8 +14,8 @@ import com.glassstorm.phonemanager.core.domain.service.PairingService
 import com.glassstorm.phonemanager.core.domain.service.StreamService
 import com.glassstorm.phonemanager.core.model.PairOutcome
 import com.glassstorm.phonemanager.core.model.PeerAddress
+import com.glassstorm.phonemanager.core.service.security.TokenCodec
 import com.glassstorm.phonemanager.service.security.AuthInterceptor
-import com.glassstorm.phonemanager.service.security.TokenCodec
 import com.glassstorm.phonemanager.ui.PairingViewModel
 import com.glassstorm.phonemanager.ui.ROUTES
 import com.glassstorm.phonemanager.ui.ROUTE_DASHBOARD

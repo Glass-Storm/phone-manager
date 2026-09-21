@@ -1,4 +1,4 @@
-package com.glassstorm.phonemanager.service
+package com.glassstorm.phonemanager.core.service
 
 import com.glassstorm.phonemanager.core.domain.adapter.repository.DeviceRepository
 import com.glassstorm.phonemanager.core.domain.context.Context
@@ -83,7 +83,7 @@ class PairingLifecycleTest {
         assertThat(repo.list()).hasSize(1)
         assertThat(repo.get(deviceId)!!.tokenHash)
             .isEqualTo(
-                com.glassstorm.phonemanager.service.security.TokenCodec
+                com.glassstorm.phonemanager.core.service.security.TokenCodec
                     .hashToken(token),
             )
     }
@@ -226,7 +226,7 @@ class PairingLifecycleTest {
         assertThat(stored.tokenHash).isNotEqualTo(token)
         assertThat(stored.tokenHash)
             .isEqualTo(
-                com.glassstorm.phonemanager.service.security.TokenCodec
+                com.glassstorm.phonemanager.core.service.security.TokenCodec
                     .hashToken(token),
             )
         assertThat(pairing.verifyToken(token)?.deviceId).isEqualTo(deviceId)

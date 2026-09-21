@@ -1,4 +1,4 @@
-package com.glassstorm.phonemanager.service.security
+package com.glassstorm.phonemanager.core.service.security
 
 import java.security.MessageDigest
 import java.security.SecureRandom

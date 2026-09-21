@@ -6,11 +6,11 @@ import com.glassstorm.phonemanager.core.domain.adapter.repository.DeviceReposito
 import com.glassstorm.phonemanager.core.domain.adapter.speech.SttPort
 import com.glassstorm.phonemanager.core.domain.context.Context
 import com.glassstorm.phonemanager.core.domain.context.register
+import com.glassstorm.phonemanager.core.domain.security.TokenVerifier
 import com.glassstorm.phonemanager.core.domain.service.PairingService
 import com.glassstorm.phonemanager.core.domain.service.StreamService
-import com.glassstorm.phonemanager.service.PairingServiceImpl
-import com.glassstorm.phonemanager.service.StreamServiceImpl
-import com.glassstorm.phonemanager.service.security.TokenVerifier
+import com.glassstorm.phonemanager.core.service.PairingServiceImpl
+import com.glassstorm.phonemanager.core.service.StreamServiceImpl
 
 /**
  * The smallest Context that can host a real hub: the two gRPC services resolve

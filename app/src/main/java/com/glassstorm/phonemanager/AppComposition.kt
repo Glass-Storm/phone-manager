@@ -21,13 +21,13 @@ import com.glassstorm.phonemanager.core.domain.adapter.transport.HubServer
 import com.glassstorm.phonemanager.core.domain.context.Context
 import com.glassstorm.phonemanager.core.domain.context.fromContextOrNull
 import com.glassstorm.phonemanager.core.domain.context.register
+import com.glassstorm.phonemanager.core.domain.security.TokenVerifier
 import com.glassstorm.phonemanager.core.domain.service.DeviceService
 import com.glassstorm.phonemanager.core.domain.service.PairingService
 import com.glassstorm.phonemanager.core.domain.service.StreamService
-import com.glassstorm.phonemanager.service.DeviceServiceImpl
-import com.glassstorm.phonemanager.service.PairingServiceImpl
-import com.glassstorm.phonemanager.service.StreamServiceImpl
-import com.glassstorm.phonemanager.service.security.TokenVerifier
+import com.glassstorm.phonemanager.core.service.DeviceServiceImpl
+import com.glassstorm.phonemanager.core.service.PairingServiceImpl
+import com.glassstorm.phonemanager.core.service.StreamServiceImpl
 import android.content.Context as AndroidContext
 
 /**
