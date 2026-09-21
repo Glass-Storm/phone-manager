@@ -196,11 +196,14 @@ degraded mode or a failure to investigate.
 
 ## On-device smoke checklist (NON-BLOCKING)
 
-**This checklist is NOT an acceptance gate.** This machine has no emulator (KVM
-is inaccessible) and no device automation, so on-device behaviour must be
-verified by hand on real hardware. The automated suite does NOT cover any of the
-items below; a green test run says nothing about them. Do not present a passed
-suite as evidence that on-device behaviour works.
+**This checklist is NOT an acceptance gate.** KVM is accessible to this user
+(group `kvm`), but the emulator package and an AVD are not installed by default,
+and the host root filesystem (~93 % full, ~7 GB free) cannot allocate the
+emulator's userdata partition (~7.3 GB needed); no device automation is present
+either. Consequently on-device behaviour must be verified by hand on real
+hardware. The automated suite does NOT cover any of the items below; a green
+test run says nothing about them. Do not present a passed suite as evidence that
+on-device behaviour works.
 
 - [ ] The app requests the runtime permissions it needs and the request flow is
       sane on a real device.
