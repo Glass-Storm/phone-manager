@@ -1,4 +1,4 @@
-package com.glassstorm.phonemanager.testkit
+package com.glassstorm.phonemanager.testing.testkit
 
 import java.nio.ByteBuffer
 import java.nio.ByteOrder

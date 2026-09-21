@@ -1,0 +1,99 @@
+T14 phone-manager-modularization — rehome :testkit -> :testing:testkit, finish :app wiring, README
+=====================================================================================================
+HEAD at start: 36abee5 (T13)
+
+1. MODULE MOVE (git mv, 4 files)
+   testkit/build.gradle.kts
+     -> testing/testkit/build.gradle.kts
+   testkit/src/main/kotlin/com/glassstorm/phonemanager/testkit/MockpeerDriver.kt
+     -> testing/testkit/src/main/kotlin/com/glassstorm/phonemanager/testing/testkit/MockpeerDriver.kt
+   testkit/src/main/kotlin/com/glassstorm/phonemanager/testkit/MockpeerRunner.kt
+     -> testing/testkit/src/main/kotlin/com/glassstorm/phonemanager/testing/testkit/MockpeerRunner.kt
+   testkit/src/main/kotlin/com/glassstorm/phonemanager/testkit/SyntheticVideoNal.kt
+     -> testing/testkit/src/main/kotlin/com/glassstorm/phonemanager/testing/testkit/SyntheticVideoNal.kt
+   Package: com.glassstorm.phonemanager.testkit -> com.glassstorm.phonemanager.testing.testkit
+   build.gradle.kts UNCHANGED in plugins/deps: phonemanager.kotlin.library + phonemanager.ktlint,
+   NO dependencies block (stays runtime-dependency-free).
+   `testkit/` directory removed (build/ + bin/ artifacts deleted).
+
+2. settings.gradle.kts
+   include(":testkit") -> include(":testing:testkit")
+   (:app, :adapter:jvm, :adapter:android, :core:model, :core:domain, :core:service,
+    :transport:grpc, :contract unchanged. :testing:architecture arrives in T19.)
+
+3. CONSUMERS
+   transport/grpc/build.gradle.kts:48  testImplementation(project(":testing:testkit"))
+   app/build.gradle.kts:89             testImplementation(project(":testing:testkit"))
+   Imports updated in:
+     transport/grpc/src/test/.../HubServerE2ETest.kt (6 imports)
+     transport/grpc/src/test/.../FullE2eTest.kt      (6 imports)
+     app/src/test/.../FullE2eTest.kt                 (6 imports)
+   build-logic KotlinLibraryConventionPlugin.kt KDoc updated (:service/:testkit -> :core:model,
+   :core:domain, :core:service, :transport:grpc, :testing:testkit).
+
+4. :app DEPENDENCIES (six modules, all implementation + testkit testImplementation)
+   implementation(project(":core:model"))     <- ADDED (was only transitive)
+   implementation(project(":core:domain"))
+   implementation(project(":core:service"))
+   implementation(project(":transport:grpc"))
+   implementation(project(":adapter:jvm"))
+   implementation(project(":adapter:android"))
+   testImplementation(project(":testing:testkit"))
+
+5. tools/mockpeer UNMOVED (root-relative Go module + root go.work untouched).
+   Root e2e task dependsOn NOT regressed: dependsOn(":transport:grpc:test", ":app:testDebugUnitTest").
+
+6. README.md module table rewritten to the real 9-Gradle-module layout:
+   :app / :core:model / :core:domain / :core:service / :transport:grpc / :contract /
+   :adapter:jvm / :adapter:android / :testing:testkit, plus a note that tools/mockpeer is not a
+   Gradle module and :build-logic is a composite build. Test/End-to-end/conventions prose updated.
+
+7. LOGIC-IDENTITY PROOF (package + package-qualified import strings normalised, then diff):
+   SyntheticVideoNal.kt: IDENTICAL
+   MockpeerRunner.kt / MockpeerDriver.kt: ONLY the KDoc module-name prose differs
+   (`:service` -> `:transport:grpc`, `:testkit` -> `:testing:testkit`); no executable line changed.
+   No functional body of run()/repoRoot()/goBinary()/syntheticVideoNal()/syntheticAudioFrame()
+   touched. repoRoot() walk-up UNCHANGED — proven by the live E2E below.
+
+8. STALE-REF GREP (exit=1, i.e. ZERO matches):
+   grep -rn 'project(":testkit")\|phonemanager\.testkit' --include='*.kts' --include='*.kt' . \
+     | grep -v '/build/' | grep -v '/bin/'
+   -> no output.
+
+9. TESTS (XML-parsed, --rerun-tasks)
+   JAVA_HOME=/home/chaos/.jdk/jdk-21.0.12.1+1 ANDROID_HOME=/home/chaos/Android/Sdk ./gradlew \
+     :contract:test :core:model:test :core:domain:test :core:service:test \
+     :transport:grpc:test :adapter:jvm:test :adapter:android:testDebugUnitTest \
+     :app:testDebugUnitTest --rerun-tasks --console=plain
+   adapter/android: tests=52 fail=0 err=0
+   adapter/jvm:     tests=38 fail=0 err=0
+   app:             tests=107 fail=0 err=0
+   contract:        tests=8  fail=0 err=0
+   core/domain:     tests=45 fail=0 err=0
+   core/service:    tests=26 fail=0 err=0
+   transport/grpc:  tests=42 fail=0 err=0
+   TOTAL tests=318 failures=0 errors=0 skipped=0   (matches baseline 318)
+
+10. E2E (--rerun-tasks) — GREEN, real mockpeer transcript from XML system-out:
+    JAVA_HOME=... ANDROID_HOME=... ./gradlew e2e --rerun-tasks --console=plain
+    BUILD SUCCESSFUL
+    app | [QA] app evidence transcript: [pair-ok, heartbeat-ok, session-ok frames=20,
+          video-bytes-match, revoked->UNAUTHENTICATED]
+    app | [QA] app-hub mockpeer revoked stdout: UNAUTHENTICATED (exit=1)
+    transport/grpc | [QA] service evidence transcript: [pair-ok, heartbeat-ok,
+          session-ok frames=20, video-bytes-match, revoked->UNAUTHENTICATED]
+    transport/grpc | [QA] mockpeer wrong-pin stdout: pair-rejected reason=pin-invalid (exit=1)
+    transport/grpc | [QA] mockpeer revoked stdout: UNAUTHENTICATED (exit=1)
+    All 7 E2E testcases PASS (HubServerE2ETest x4, FullE2eTest x3).
+    -> This PROVES MockpeerRunner.repoRoot()'s walk-up still finds tools/mockpeer/go.mod from the
+       relocated module: the peer ran for real, from :transport:grpc (user.dir=transport/grpc) and
+       from :app (user.dir=app). No hardcoding introduced.
+
+11. KTLINT
+    ./gradlew ktlintCheck --console=plain -> BUILD SUCCESSFUL (66 tasks).
+
+12. RELEASE APK
+    ./gradlew :app:assembleRelease --console=plain -> BUILD SUCCESSFUL (108 tasks).
+    app/build/outputs/apk/release/app-release-unsigned.apk = 10,038,201 bytes
+    Netty provider RETAINED in the DEX: io/grpc/netty/shaded/io/netty/channel/socket/nio/
+    NioSocketChannel, NioDatagramChannel, NioChannelOption present (strings scan of classes.dex).

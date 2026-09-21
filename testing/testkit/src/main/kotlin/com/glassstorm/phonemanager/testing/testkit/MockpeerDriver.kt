@@ -1,4 +1,4 @@
-package com.glassstorm.phonemanager.testkit
+package com.glassstorm.phonemanager.testing.testkit
 
 import java.io.File
 
@@ -6,9 +6,9 @@ import java.io.File
  * Drives the Go reference peer through the full T18 scenario and renders the
  * ordered, machine-checkable evidence transcript.
  *
- * Shared by the `:service` JVM harness and the `:app` Robolectric hub suite so the
- * two harnesses cannot drift: they differ ONLY in how the hub is hosted, never in
- * what the peer is asked to do or how the result is asserted.
+ * Shared by the `:transport:grpc` JVM harness and the `:app` Robolectric hub
+ * suite so the two harnesses cannot drift: they differ ONLY in how the hub is
+ * hosted, never in what the peer is asked to do or how the result is asserted.
  *
  * Dependency-free by design (no `:core:domain` edge), so an Android module can consume
  * it: the caller supplies closures for its own pairing surface.

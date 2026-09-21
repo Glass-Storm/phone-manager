@@ -43,6 +43,7 @@ dependencies {
     implementation(libs.core.ktx)
 
     // Composition root: :app owns the wiring, so it may see both the services and the adapters.
+    implementation(project(":core:model"))
     implementation(project(":core:domain"))
     implementation(project(":core:service"))
     implementation(project(":transport:grpc"))
@@ -86,6 +87,6 @@ dependencies {
     testImplementation(composeBom)
     // Shared E2E kit (mockpeer runner + deterministic media generators), used by
     // FullE2eTest to drive the real Go peer against the Robolectric-hosted hub.
-    testImplementation(project(":testkit"))
+    testImplementation(project(":testing:testkit"))
     testImplementation(libs.compose.ui.test.junit4)
 }

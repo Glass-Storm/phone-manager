@@ -1,4 +1,4 @@
-package com.glassstorm.phonemanager.testkit
+package com.glassstorm.phonemanager.testing.testkit
 
 import java.io.File
 import java.io.Reader
@@ -7,10 +7,10 @@ import java.util.concurrent.TimeUnit
 /**
  * Bounded child-process runner for the Go reference peer.
  *
- * Lives in `:testkit` (pure JVM, no dependencies) because `:app` cannot see
- * `:service`'s test sources: the T6 transport spike runs in `:service`, the T18
- * full E2E runs in BOTH `:service` (JVM harness) and `:app` (Robolectric hub),
- * and all of them must spawn the child the same way.
+ * Lives in `:testing:testkit` (pure JVM, no dependencies) because `:app` cannot
+ * see `:core:service`'s test sources: the T6 transport spike runs in
+ * `:transport:grpc`, the T18 full E2E runs in BOTH `:transport:grpc` (JVM harness)
+ * and `:app` (Robolectric hub), and all of them must spawn the child the same way.
  *
  * Two hazards are handled here so no caller has to:
  *

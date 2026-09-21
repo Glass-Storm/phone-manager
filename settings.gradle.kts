@@ -51,7 +51,8 @@ include(":transport:grpc")
 // glasses app and Ubuntu daemon can consume/version/publish it independently of
 // the hub implementation. It owns the .proto AND the protobuf/gRPC codegen.
 include(":contract")
-// Shared test-only JVM module: `:app` cannot see `:service`'s test sources, so the
-// mockpeer process runner + the deterministic media generators live here and are
-// consumed by both suites' `testImplementation`.
-include(":testkit")
+// Shared test-only JVM module: `:app` cannot see `:core:service`'s test sources, so
+// the mockpeer process runner + the deterministic media generators live here and
+// are consumed by both suites' `testImplementation`. It stays runtime-dependency-
+// free so an Android module can consume it without dragging anything onto the APK.
+include(":testing:testkit")

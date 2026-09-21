@@ -10,16 +10,17 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension
 
 /**
- * Convention for pure Kotlin/JVM library modules (`:core:domain`, `:service`, `:testkit`).
+ * Convention for pure Kotlin/JVM library modules (`:core:model`, `:core:domain`,
+ * `:core:service`, `:transport:grpc`, `:testing:testkit`).
  *
  * Replaces the five-copy boilerplate that used to live in every JVM module:
  * `kotlin("jvm")` + `java-library`, Java 17 source/target, the Kotlin JVM target
  * 17, and the shared JUnit/Truth/Turbine/coroutines-test test battery.
  *
  * Deliberately does NOT add `kotlinx-coroutines-core`: that is a MAIN dependency
- * and `:testkit` is intentionally dependency-free (it is consumed by the Android
- * app's test classpath, so a runtime edge there must not appear by accident).
- * `:core:domain` and `:service` declare it themselves — one line each.
+ * and `:testing:testkit` is intentionally dependency-free (it is consumed by the
+ * Android app's test classpath, so a runtime edge there must not appear by accident).
+ * `:core:domain` and `:core:service` declare it themselves — one line each.
  *
  * JVM 17 is configured WITHOUT toolchains, exactly as before: the launcher JVM is
  * already 21 and a toolchain would trigger a JDK download.

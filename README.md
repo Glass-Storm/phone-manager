@@ -15,14 +15,22 @@ repo ships the hub plus the contract they generate their clients from.
 
 ## Module layout
 
-| Module      | Kind                | Owns                                                                                                                                                             |
-| ----------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `:app`      | Android application | Compose UI (Lumo components), the five screens, and the composition root. The only module allowed to see both services and adapters.                             |
-| `:core:domain`   | pure Kotlin/JVM     | Ports (interfaces) + DTOs + the Context registry. Zero implementation.                                                                                           |
-| `:contract` | pure Kotlin/JVM     | The FROZEN `ecosys.v1` wire contract: the `.proto` source of truth and its protobuf/gRPC-lite codegen. The ONE artifact the out-of-scope peers consume.          |
-| `:service`  | pure Kotlin/JVM     | Use-case implementations, the gRPC services, and auth. Depends on `:core:domain` + `:contract`, never on `:adapter`.                                                  |
-| `:adapter`  | Android library     | Port implementations: SQLite, hotspot, NSD discovery, the gRPC transport, and the STT engines.                                                                   |
-| `:testkit`  | pure Kotlin/JVM     | Test support: the bounded child-process runner and the deterministic media generators, shared by the `:service` and `:app` test suites. No runtime dependencies. |
+| Module             | Kind                | Owns                                                                                                                                                                     |
+| ------------------ | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `:app`             | Android application | Compose UI (Lumo components), the five screens, and the composition root. The only module allowed to see the services AND the adapters.                                  |
+| `:core:model`      | pure Kotlin/JVM     | The hand-written domain DTOs: pure data types with zero dependencies, the shared language spoken across every layer.                                                     |
+| `:core:domain`     | pure Kotlin/JVM     | Ports (interfaces), the two deterministic state machines, and the Context registry. Zero implementation, zero framework annotations, no contract edge.                   |
+| `:core:service`    | pure Kotlin/JVM     | The use-case implementations (device, pairing, relay). Contract-free and gRPC-free by construction.                                                                      |
+| `:transport:grpc`  | pure Kotlin/JVM     | The gRPC service implementations, the bearer-token interceptor, the netty-backed hub server, and the DTO↔proto mapping. The ONE module allowed to depend on `:contract`. |
+| `:contract`        | pure Kotlin/JVM     | The FROZEN `ecosys.v1` wire contract: the `.proto` source of truth and its protobuf/gRPC-lite codegen. The ONE artifact the out-of-scope peers consume.                  |
+| `:adapter:jvm`     | pure Kotlin/JVM     | Android-free port implementations: the STT engines, the discarding frame sink, and the in-memory repository.                                                             |
+| `:adapter:android` | Android library     | Platform-backed adapters: SQLite, LocalOnlyHotspot, NSD discovery, the runtime config store, and the battery-exemption helper.                                           |
+| `:testing:testkit` | pure Kotlin/JVM     | Test support: the bounded child-process runner and the deterministic media generators, shared by the `:transport:grpc` and `:app` test suites. No runtime dependencies.  |
+
+`tools/mockpeer` (the Go reference peer) is NOT a Gradle module; it stays at the
+repo root because the root `go.work` and the Go module are root-relative.
+`:build-logic` is a Gradle composite build providing the `phonemanager.*`
+convention plugins, not a published module.
 
 ## The mandatory Gradle preamble
 
@@ -71,7 +79,7 @@ exists to prove the hub's runtime-discovered gRPC transport survives shrinking.
 ### Test
 
 ```bash
-JAVA_HOME=/home/chaos/.jdk/jdk-21.0.12.1+1 ANDROID_HOME=/home/chaos/Android/Sdk ./gradlew :core:domain:test :service:test :adapter:testDebugUnitTest :app:testDebugUnitTest
+JAVA_HOME=/home/chaos/.jdk/jdk-21.0.12.1+1 ANDROID_HOME=/home/chaos/Android/Sdk ./gradlew :contract:test :core:model:test :core:domain:test :core:service:test :transport:grpc:test :adapter:jvm:test :adapter:android:testDebugUnitTest :app:testDebugUnitTest
 ```
 
 ### End-to-end
@@ -81,9 +89,9 @@ JAVA_HOME=/home/chaos/.jdk/jdk-21.0.12.1+1 ANDROID_HOME=/home/chaos/Android/Sdk 
 ```
 
 `e2e` is a thin alias for the two real-socket integration suites: the plain-JVM
-harness in `:service` and the Robolectric-hosted app hub in `:app`, both driving
-the Go mockpeer as a child process. It depends on the same test tasks, so it
-cannot diverge from them. On a warm build `e2e` reports `UP-TO-DATE`; add
+harness in `:transport:grpc` and the Robolectric-hosted app hub in `:app`, both
+driving the Go mockpeer as a child process. It depends on the same test tasks, so
+it cannot diverge from them. On a warm build `e2e` reports `UP-TO-DATE`; add
 `--rerun-tasks` to force it to actually execute.
 
 ### Lint
@@ -191,10 +199,12 @@ suite as evidence that on-device behaviour works.
 
 ## Repo conventions
 
-- **Hexagonal boundaries.** `:core:domain` holds ports and DTOs only, no
-  implementation. `:service` holds use-cases and has NO dependency edge to
-  `:adapter`, so importing an adapter class from `:service` fails to compile.
-  Only the `:app` composition root wires implementations to ports.
+- **Hexagonal boundaries.** `:core:domain` holds ports only, no implementation.
+  `:core:service` holds use-cases and has NO dependency edge to any adapter, so
+  importing an adapter class from `:core:service` fails to compile. `:contract`
+  is consumed by exactly one module, `:transport:grpc`, which maps the wire
+  format to the domain's own DTOs; `ecosys.v1.*` never appears elsewhere. Only the
+  `:app` composition root wires implementations to ports.
 - **The Context registry is the only DI.** Collaborators are registered as types
   and resolved with `fromContext<T>(ctx)` against the domain INTERFACE, never by
   a concrete class. There is no Hilt, Koin, or Room anywhere in this repo.

@@ -45,7 +45,7 @@ dependencies {
     // Shared E2E kit (mockpeer runner + deterministic media generators). `:app`
     // cannot see these test sources, so the plain-JVM harness in this module and
     // the Robolectric app harness both consume it as a `testImplementation`.
-    testImplementation(project(":testkit"))
+    testImplementation(project(":testing:testkit"))
     // In-process transport for the auth/relay suites, and the gRPC testing
     // utilities. The netty-shaded NIO transport is already an `implementation`
     // dependency, so the real-socket E2E suites resolve it on the test classpath.
