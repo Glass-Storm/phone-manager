@@ -6,7 +6,7 @@ smart-glasses app and the Ubuntu daemon. Read it before you write a client. The
 source of truth is the proto file itself; this document explains the semantics
 around it.
 
-Source of truth: [`service/src/main/proto/ecosys/v1/ecosys.proto`](../service/src/main/proto/ecosys/v1/ecosys.proto).
+Source of truth: [`contract/src/main/proto/ecosys/v1/ecosys.proto`](../contract/src/main/proto/ecosys/v1/ecosys.proto).
 
 ---
 

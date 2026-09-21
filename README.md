@@ -9,19 +9,20 @@ engine, and returns transcripts on the same stream.
 
 The peer wire contract is frozen in [`docs/protocol.md`](docs/protocol.md). The
 source of truth for it is
-[`service/src/main/proto/ecosys/v1/ecosys.proto`](service/src/main/proto/ecosys/v1/ecosys.proto).
+[`contract/src/main/proto/ecosys/v1/ecosys.proto`](contract/src/main/proto/ecosys/v1/ecosys.proto).
 The glasses app and the Ubuntu daemon are OUT OF SCOPE for this repository; this
 repo ships the hub plus the contract they generate their clients from.
 
 ## Module layout
 
-| Module     | Kind                | Owns                                                                                                                                                             |
-| ---------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `:app`     | Android application | Compose UI (Lumo components), the five screens, and the composition root. The only module allowed to see both services and adapters.                             |
-| `:domain`  | pure Kotlin/JVM     | Ports (interfaces) + DTOs + the Context registry. Zero implementation.                                                                                           |
-| `:service` | pure Kotlin/JVM     | Use-case implementations, the gRPC services, and auth. Depends on `:domain`, never on `:adapter`.                                                                |
-| `:adapter` | Android library     | Port implementations: SQLite, hotspot, NSD discovery, the gRPC transport, and the STT engines.                                                                   |
-| `:testkit` | pure Kotlin/JVM     | Test support: the bounded child-process runner and the deterministic media generators, shared by the `:service` and `:app` test suites. No runtime dependencies. |
+| Module      | Kind                | Owns                                                                                                                                                             |
+| ----------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `:app`      | Android application | Compose UI (Lumo components), the five screens, and the composition root. The only module allowed to see both services and adapters.                             |
+| `:domain`   | pure Kotlin/JVM     | Ports (interfaces) + DTOs + the Context registry. Zero implementation.                                                                                           |
+| `:contract` | pure Kotlin/JVM     | The FROZEN `ecosys.v1` wire contract: the `.proto` source of truth and its protobuf/gRPC-lite codegen. The ONE artifact the out-of-scope peers consume.          |
+| `:service`  | pure Kotlin/JVM     | Use-case implementations, the gRPC services, and auth. Depends on `:domain` + `:contract`, never on `:adapter`.                                                  |
+| `:adapter`  | Android library     | Port implementations: SQLite, hotspot, NSD discovery, the gRPC transport, and the STT engines.                                                                   |
+| `:testkit`  | pure Kotlin/JVM     | Test support: the bounded child-process runner and the deterministic media generators, shared by the `:service` and `:app` test suites. No runtime dependencies. |
 
 ## The mandatory Gradle preamble
 

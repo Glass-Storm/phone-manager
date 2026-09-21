@@ -1,4 +1,4 @@
-package com.glassstorm.phonemanager.service
+package com.glassstorm.phonemanager.contract
 
 import com.google.common.truth.Truth.assertThat
 import com.google.protobuf.GeneratedMessageLite
