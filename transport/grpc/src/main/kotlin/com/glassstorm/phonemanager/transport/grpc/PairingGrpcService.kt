@@ -20,11 +20,16 @@ import io.grpc.StatusException
  * and owns no security logic of its own. Token enforcement already happened in
  * [AuthInterceptor] before any of these bodies ran; `Pair` is the single method
  * the interceptor deliberately leaves open.
+ *
+ * [PairingService] is a CONSTRUCTOR dependency supplied by `TransportModule` at
+ * the composition root. The registry-compat constructor exists only until T16
+ * deletes the `Context` registry.
  */
 class PairingGrpcService(
-    ctx: Context,
+    private val pairing: PairingService,
 ) : PairingServiceGrpcKt.PairingServiceCoroutineImplBase() {
-    private val pairing: PairingService = fromContext<PairingService>(ctx)
+    /** Registry-compat constructor; T16 removes it with the registry. */
+    constructor(ctx: Context) : this(fromContext<PairingService>(ctx))
 
     /** The one unauthenticated RPC: redeem the open-window PIN for a token. */
     override suspend fun pair(request: PairRequest): PairResponse {

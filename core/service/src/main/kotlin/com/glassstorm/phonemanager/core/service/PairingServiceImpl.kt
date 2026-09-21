@@ -10,13 +10,23 @@ import com.glassstorm.phonemanager.core.model.PairOutcome
 import com.glassstorm.phonemanager.core.model.Pairing
 import com.glassstorm.phonemanager.core.service.security.TokenCodec
 import java.security.SecureRandom
+import javax.inject.Inject
+import javax.inject.Singleton
 
 /**
  * Pairing + token authority.
  *
- * Resolves its [DeviceRepository] collaborator from the Context registry by the
- * domain INTERFACE type — never by a concrete adapter class, which `:service`
- * cannot even see (no build edge to `:adapter`).
+ * The [DeviceRepository] collaborator is a CONSTRUCTOR dependency. `:service` has
+ * no build edge to `:adapter`, so the concrete adapter is unknowable here by
+ * construction.
+ *
+ * ## Single object for two ports
+ *
+ * This class implements BOTH [PairingService] and [TokenVerifier]. The gRPC
+ * Pairing service and the [AuthInterceptor] must observe the SAME pairing state,
+ * or the interceptor could verify against a different authority than the one
+ * `Pair` mints tokens into. Dagger binds both ports to one `@Singleton` instance
+ * (see `ServiceModule`), exactly as the registry registered this object twice.
  *
  * ## Window state is in-memory (documented)
  *
@@ -46,20 +56,35 @@ import java.security.SecureRandom
  * mint two tokens from one single-use PIN, and concurrent bad PINs could lose
  * increments and let a brute-force slip past [PairingService.MAX_PIN_ATTEMPTS].
  *
- * @param clock now-provider, injectable so TTL/expiry are deterministic in tests.
+ * ## Constructor shape (transitional, T15)
+ *
+ * The repository is held as a provider so both construction paths stay
+ * behaviourally identical while the `Context` registry still exists: the [Inject]
+ * constructor captures the bound instance, and the `Context` constructor performs
+ * the same per-call lookup as before. T16 removes the registry constructor.
  */
-class PairingServiceImpl(
-    private val ctx: Context,
-    private val clock: () -> Long = { System.currentTimeMillis() },
+@Singleton
+class PairingServiceImpl private constructor(
+    private val repositoryProvider: () -> DeviceRepository,
+    private val clock: () -> Long,
 ) : PairingService,
     TokenVerifier {
+    @Inject
+    constructor(repository: DeviceRepository) : this({ repository }, { System.currentTimeMillis() })
+
+    /** Registry-compat constructor; T16 removes it with the registry. */
+    constructor(
+        ctx: Context,
+        clock: () -> Long = { System.currentTimeMillis() },
+    ) : this({ fromContext(ctx) }, clock)
+
     private val random = SecureRandom()
 
     private var window: Pairing? = null
     private var windowConsumed: Boolean = false
     private var failedAttempts: Int = 0
 
-    private fun repo(): DeviceRepository = fromContext<DeviceRepository>(ctx)
+    private fun repo(): DeviceRepository = repositoryProvider()
 
     @Synchronized
     override fun openWindow(ttlMs: Long): Pairing {

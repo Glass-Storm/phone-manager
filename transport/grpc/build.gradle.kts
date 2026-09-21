@@ -1,6 +1,8 @@
 plugins {
     alias(libs.plugins.phonemanager.kotlin.library)
     alias(libs.plugins.phonemanager.ktlint)
+    // Dagger annotation processing for TransportModule + the `@Inject` members.
+    alias(libs.plugins.phonemanager.ksp)
 }
 
 // `:transport:grpc` is the ONE module allowed to depend on the FROZEN `:contract`.

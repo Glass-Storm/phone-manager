@@ -1,6 +1,8 @@
 plugins {
     alias(libs.plugins.phonemanager.kotlin.library)
     alias(libs.plugins.phonemanager.ktlint)
+    // Dagger annotation processing for ServiceModule's `@Binds` declarations.
+    alias(libs.plugins.phonemanager.ksp)
 }
 
 dependencies {

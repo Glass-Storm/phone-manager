@@ -1,6 +1,8 @@
 plugins {
     alias(libs.plugins.phonemanager.kotlin.library)
     alias(libs.plugins.phonemanager.ktlint)
+    // Dagger annotation processing for JvmAdapterModule's providers.
+    alias(libs.plugins.phonemanager.ksp)
 }
 
 // Plain-JVM adapters: the STT engines (deterministic mock + Speechmatics), the

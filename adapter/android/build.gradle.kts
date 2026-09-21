@@ -1,6 +1,8 @@
 plugins {
     alias(libs.plugins.phonemanager.android.library)
     alias(libs.plugins.phonemanager.ktlint)
+    // Dagger annotation processing for AndroidAdapterModule + the qualifier.
+    alias(libs.plugins.phonemanager.ksp)
 }
 
 android {

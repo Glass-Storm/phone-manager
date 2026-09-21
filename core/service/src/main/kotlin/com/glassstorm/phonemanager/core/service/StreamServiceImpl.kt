@@ -21,13 +21,14 @@ import kotlinx.coroutines.launch
 import java.security.SecureRandom
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
+import javax.inject.Inject
 
 /**
  * Audio/video relay use-cases with bounded queues and deterministic teardown.
  *
- * Resolves its [SttPort] and [FrameSink] collaborators from the Context registry
- * by their domain INTERFACE types, so any engine (offline mock, cloud provider,
- * recorder) can be composed in without `:service` knowing about it.
+ * [SttPort] and [FrameSink] are CONSTRUCTOR dependencies, so any engine (offline
+ * mock, cloud provider, recorder) can be composed in without `:service` knowing
+ * about it.
  *
  * ## Architecture
  *
@@ -45,13 +46,50 @@ import java.util.concurrent.atomic.AtomicLong
  *
  * Counters are [AtomicLong] because the pumps run on [scope], not the caller's
  * thread.
+ *
+ * ## Constructor shape (transitional, T15)
+ *
+ * The tuning parameters (`audioCapacity`, `videoCapacity`, `scope`) exist ONLY so
+ * tests can drive the queue policies deterministically; production always wants
+ * the defaults. Kotlin default arguments are invisible to Dagger, so they are
+ * dropped from the [Inject] constructor and owned as the private constants
+ * [DEFAULT_AUDIO_CAPACITY] / [DEFAULT_VIDEO_CAPACITY]; the registry-compat
+ * constructor keeps them for the tests that pass an explicit scope or capacity.
+ * T16 keeps the test secondary constructor when it migrates the suites.
  */
-class StreamServiceImpl(
-    private val ctx: Context,
-    private val audioCapacity: Int = DEFAULT_AUDIO_CAPACITY,
-    private val videoCapacity: Int = DEFAULT_VIDEO_CAPACITY,
-    private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
+class StreamServiceImpl private constructor(
+    private val sttProvider: () -> SttPort,
+    private val frameSinkProvider: () -> FrameSink,
+    private val audioCapacity: Int,
+    private val videoCapacity: Int,
+    private val scope: CoroutineScope,
 ) : StreamService {
+    @Inject
+    constructor(
+        sttPort: SttPort,
+        frameSink: FrameSink,
+    ) : this(
+        { sttPort },
+        { frameSink },
+        DEFAULT_AUDIO_CAPACITY,
+        DEFAULT_VIDEO_CAPACITY,
+        CoroutineScope(SupervisorJob() + Dispatchers.Default),
+    )
+
+    /** Registry-compat constructor; T16 rewrites it as a test-only seam. */
+    constructor(
+        ctx: Context,
+        audioCapacity: Int = DEFAULT_AUDIO_CAPACITY,
+        videoCapacity: Int = DEFAULT_VIDEO_CAPACITY,
+        scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
+    ) : this(
+        { fromContext(ctx) },
+        { fromContext(ctx) },
+        audioCapacity,
+        videoCapacity,
+        scope,
+    )
+
     private val random = SecureRandom()
     private val sessions: ConcurrentHashMap<String, SessionState> = ConcurrentHashMap()
 
@@ -110,7 +148,7 @@ class StreamServiceImpl(
         state.queue.close()
         state.pump.join()
         state.results.close()
-        fromContext<SttPort>(ctx).close(sessionId)
+        sttProvider().close(sessionId)
     }
 
     override fun stats(): RelayStats =
@@ -129,7 +167,7 @@ class StreamServiceImpl(
     ) {
         for (pcm in queue.audio) {
             val text =
-                fromContext<SttPort>(ctx)
+                sttProvider()
                     .transcribe(sessionId, pcm, StreamService.AUDIO_SAMPLE_RATE_HZ)
             if (text != null) {
                 transcripts.incrementAndGet()
@@ -144,7 +182,7 @@ class StreamServiceImpl(
     ) {
         for (nal in queue.video) {
             // Opaque by contract: the exact bytes are handed on, never decoded.
-            fromContext<FrameSink>(ctx).acceptVideo(sessionId, nal)
+            frameSinkProvider().acceptVideo(sessionId, nal)
         }
     }
 
@@ -160,7 +198,7 @@ class StreamServiceImpl(
         val pump: Job,
     )
 
-    private companion object {
+    companion object {
         /** Audio buffer depth in frames. Generous: audio must never be dropped. */
         const val DEFAULT_AUDIO_CAPACITY: Int = 64
 

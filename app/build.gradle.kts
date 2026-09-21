@@ -2,6 +2,9 @@ plugins {
     alias(libs.plugins.phonemanager.android.application)
     alias(libs.plugins.phonemanager.ktlint)
     alias(libs.plugins.lumo)
+    // Dagger annotation processing: this module declares the @Component, so the
+    // processor must run here to generate DaggerAppComponent.
+    alias(libs.plugins.phonemanager.ksp)
 }
 
 android {

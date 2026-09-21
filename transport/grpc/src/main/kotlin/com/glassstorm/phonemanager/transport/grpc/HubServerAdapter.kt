@@ -12,11 +12,19 @@ import java.net.InetSocketAddress
 /**
  * Android [HubServer] adapter: the real gRPC listener, hosted inside the app.
  *
- * It composes — it does not reimplement — the lifecycle: [GrpcHubServer] from
- * `:service` owns start/stop, the bounded drain, and the actual bound-port
- * reporting, and only the TRANSPORT is supplied here, as a netty-shaded NIO
- * builder. That is exactly the builder the T6 spike proved GO with
- * (issues.md R1: `io.grpc:grpc-netty-shaded:1.84.0`, plaintext, IPv4 explicit).
+ * It composes — it does not reimplement — the lifecycle: [GrpcHubServer] owns
+ * start/stop, the bounded drain, and the actual bound-port reporting, and only the
+ * TRANSPORT is supplied here, as a netty-shaded NIO builder. That is exactly the
+ * builder the T6 spike proved GO with (issues.md R1: `io.grpc:grpc-netty-shaded`,
+ * plaintext, IPv4 explicit).
+ *
+ * ## Collaborators are CONSTRUCTOR dependencies
+ *
+ * The two gRPC services and the [AuthInterceptor] arrive ready-built, so this
+ * adapter NEVER reads the registry. Dagger supplies them through `TransportModule`,
+ * which builds the production bind with [ALL_INTERFACES_ADDRESS]; the
+ * registry-compat constructor keeps the [LOOPBACK_ADDRESS] default the tests rely
+ * on and exists only until T16 deletes the `Context` registry.
  *
  * ## Bind-address decision (documented, deliberate)
  *
@@ -26,23 +34,32 @@ import java.net.InetSocketAddress
  *    An IPv4 literal is passed EXPLICITLY because `InetSocketAddress(port)` and
  *    `ServerBuilder.forPort()` resolve to the IPv6 wildcard on some runtimes, and
  *    an IPv6-only listener is unreachable to the peers this project targets.
- *  * **All interfaces (`0.0.0.0`)** — used ONLY by [forLanPeers], the
- *    production start. It is required because the phone IS the hotspot: the
- *    glasses and the Ubuntu daemon connect to the phone across the LAN, so the
- *    hub must accept off-device connections. It is never selected in tests.
+ *  * **All interfaces (`0.0.0.0`)** — the production bind. It is required because
+ *    the phone IS the hotspot: the glasses and the Ubuntu daemon connect to the
+ *    phone across the LAN, so the hub must accept off-device connections. It is
+ *    never selected in tests.
  *
  * No TLS: the hub is plaintext on a local-only LAN by design (the glasses never
  * reach the internet), and grpc-java's TLS path is broken on Android anyway. See
  * the frozen protocol contract for the documented upgrade path.
- *
- * @param ctx the composition root's registry, holding every domain port the two
- *        gRPC services and the [AuthInterceptor] resolve at [start] time.
- * @param bindAddress the IPv4 bind address; see the bind-address decision above.
  */
 class HubServerAdapter(
-    private val ctx: Context,
-    private val bindAddress: String = LOOPBACK_ADDRESS,
+    private val pairingService: PairingGrpcService,
+    private val streamService: StreamGrpcService,
+    private val authInterceptor: AuthInterceptor,
+    private val bindAddress: String,
 ) : HubServer {
+    /** Registry-compat constructor; T16 removes it with the registry. */
+    constructor(
+        ctx: Context,
+        bindAddress: String = LOOPBACK_ADDRESS,
+    ) : this(
+        PairingGrpcService(ctx),
+        StreamGrpcService(ctx),
+        AuthInterceptor(fromContext<TokenVerifier>(ctx)),
+        bindAddress,
+    )
+
     private val hub: GrpcHubServer = GrpcHubServer { newBuilder(it) }
 
     override fun start(port: Int) = hub.start(port)
@@ -56,25 +73,13 @@ class HubServerAdapter(
     /** The interface this instance binds; exposed so the UI/logs can report it. */
     fun bindAddress(): String = bindAddress
 
-    /**
-     * Build a fresh, unstarted server for [port]. Invoked on every [start], so
-     * all collaborators are resolved lazily — a Context that is still being
-     * populated when the adapter object is constructed is fine.
-     */
+    /** Build a fresh, unstarted server for [port]. Invoked on every [start]. */
     private fun newBuilder(port: Int): ServerBuilder<*> =
         NettyServerBuilder
             .forAddress(InetSocketAddress(bindAddress, port))
-            .addService(PairingGrpcService(ctx))
-            .addService(StreamGrpcService(ctx))
-            .intercept(AuthInterceptor(tokenVerifier()))
-
-    /**
-     * The [AuthInterceptor] collaborator. Resolved by its own type so no
-     * downcast is needed: the composition root registers the pairing
-     * implementation under BOTH [com.glassstorm.phonemanager.core.domain.service.PairingService]
-     * and [TokenVerifier].
-     */
-    private fun tokenVerifier(): TokenVerifier = fromContext<TokenVerifier>(ctx)
+            .addService(pairingService)
+            .addService(streamService)
+            .intercept(authInterceptor)
 
     companion object {
         /** IPv4 loopback — tests only. */
@@ -86,7 +91,7 @@ class HubServerAdapter(
          */
         const val ALL_INTERFACES_ADDRESS: String = "0.0.0.0"
 
-        /** The adapter the app uses: reachable by hotspot peers on the LAN. */
+        /** Registry-compat factory the app composition uses; T16 removes it. */
         fun forLanPeers(ctx: Context): HubServerAdapter = HubServerAdapter(ctx, ALL_INTERFACES_ADDRESS)
     }
 }

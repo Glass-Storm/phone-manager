@@ -25,6 +25,10 @@ import kotlinx.coroutines.withContext
  * The session is bound to the device the TOKEN proved, never to an unvalidated
  * id inside a frame.
  *
+ * [StreamService] is a CONSTRUCTOR dependency supplied by `TransportModule` at
+ * the composition root. The registry-compat constructor exists only until T16
+ * deletes the `Context` registry.
+ *
  * ## Teardown
  *
  * The session is closed on EVERY exit — normal completion of the inbound flow, a
@@ -33,9 +37,10 @@ import kotlinx.coroutines.withContext
  * which completes the results collector, so no coroutine is left behind.
  */
 class StreamGrpcService(
-    ctx: Context,
+    private val stream: StreamService,
 ) : StreamServiceGrpcKt.StreamServiceCoroutineImplBase() {
-    private val stream: StreamService = fromContext<StreamService>(ctx)
+    /** Registry-compat constructor; T16 removes it with the registry. */
+    constructor(ctx: Context) : this(fromContext<StreamService>(ctx))
 
     override fun openStream(requests: Flow<StreamFrame>): Flow<StreamFrame> =
         channelFlow {
