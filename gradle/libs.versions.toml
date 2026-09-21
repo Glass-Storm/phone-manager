@@ -26,6 +26,7 @@ okhttp = "4.12.0"
 
 [libraries]
 core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+kotlin-test = { group = "org.jetbrains.kotlin", name = "kotlin-test", version.ref = "kotlin" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-test-core = { group = "androidx.test", name = "core", version.ref = "androidxTestCore" }
 robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
@@ -71,6 +72,13 @@ okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhtt
 protoc-gen-grpc-java = { group = "io.grpc", name = "protoc-gen-grpc-java", version.ref = "grpc" }
 protoc-gen-grpc-kotlin = { group = "io.grpc", name = "protoc-gen-grpc-kotlin", version.ref = "grpcKotlin" }
 
+# Plugin-build-only compile dependencies for `build-logic/convention`. These are
+# the Gradle plugin APIs the convention plugins are compiled against; they are
+# `compileOnly` there because the main build already supplies them at runtime.
+android-gradlePlugin = { group = "com.android.tools.build", name = "gradle-api", version.ref = "agp" }
+kotlin-gradlePlugin = { group = "org.jetbrains.kotlin", name = "kotlin-gradle-plugin", version.ref = "kotlin" }
+ktlint-gradlePlugin = { group = "org.jlleitschuh.gradle", name = "ktlint-gradle", version.ref = "ktlint" }
+
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 android-library = { id = "com.android.library", version.ref = "agp" }
@@ -80,3 +88,11 @@ kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "ko
 protobuf = { id = "com.google.protobuf", version.ref = "protobufPlugin" }
 ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlint" }
 lumo = { id = "com.nomanr.plugin.lumo", version.ref = "lumo" }
+
+# This repository's own convention plugins, provided by the `build-logic`
+# composite build (see `pluginManagement { includeBuild("build-logic") }` in
+# settings.gradle.kts). No version: the included build is always the source.
+phonemanager-kotlin-library = { id = "phonemanager.kotlin.library" }
+phonemanager-android-library = { id = "phonemanager.android.library" }
+phonemanager-android-application = { id = "phonemanager.android.application" }
+phonemanager-ktlint = { id = "phonemanager.ktlint" }

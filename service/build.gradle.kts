@@ -1,18 +1,7 @@
 plugins {
-    alias(libs.plugins.kotlin.jvm)
-    alias(libs.plugins.ktlint)
+    alias(libs.plugins.phonemanager.kotlin.library)
+    alias(libs.plugins.phonemanager.ktlint)
     alias(libs.plugins.protobuf)
-}
-
-java {
-    sourceCompatibility = JavaVersion.VERSION_17
-    targetCompatibility = JavaVersion.VERSION_17
-}
-
-kotlin {
-    compilerOptions {
-        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
-    }
 }
 
 // NOTE on catalog accessors: the catalog declares `protoc` AND
@@ -82,14 +71,9 @@ dependencies {
     // Annotations used by the generated gRPC Java stubs.
     compileOnly(libs.annotations.api)
 
-    testImplementation(kotlin("test"))
     // Shared E2E kit (mockpeer runner + deterministic media generators). `:app`
     // cannot see these test sources, so they live in a plain JVM module.
     testImplementation(project(":testkit"))
-    testImplementation(libs.junit)
-    testImplementation(libs.truth)
-    testImplementation(libs.turbine)
-    testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.grpc.inprocess)
     testImplementation(libs.grpc.testing)
     // T6 transport spike: the REAL netty-shaded NIO transport. This is the

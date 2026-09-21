@@ -1,38 +1,23 @@
 plugins {
-    alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
-    alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.phonemanager.android.application)
+    alias(libs.plugins.phonemanager.ktlint)
     alias(libs.plugins.lumo)
-    alias(libs.plugins.ktlint)
 }
 
 android {
     namespace = "com.glassstorm.phonemanager"
-    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.glassstorm.phonemanager"
-        minSdk = 29
-        targetSdk = 29
         versionCode = 1
         versionName = "1.0-dev"
     }
 
-    buildFeatures {
-        compose = true
-    }
-
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
         // Required by the gRPC/netty transport: it uses java.util.concurrent.Flow,
         // java.time and friends that only exist from API 33 up, while the app's
         // minSdk is 29.
         isCoreLibraryDesugaringEnabled = true
-    }
-
-    kotlinOptions {
-        jvmTarget = "17"
     }
 
     buildTypes {
@@ -47,16 +32,6 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-        }
-    }
-
-    lint {
-        disable += "ExpiredTargetSdkVersion"
-    }
-
-    testOptions {
-        unitTests {
-            isIncludeAndroidResources = true
         }
     }
 }
@@ -104,11 +79,5 @@ dependencies {
     // Shared E2E kit (mockpeer runner + deterministic media generators), used by
     // FullE2eTest to drive the real Go peer against the Robolectric-hosted hub.
     testImplementation(project(":testkit"))
-    testImplementation(libs.junit)
-    testImplementation(libs.truth)
-    testImplementation(libs.turbine)
-    testImplementation(libs.robolectric)
-    testImplementation(libs.androidx.test.core)
-    testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.compose.ui.test.junit4)
 }

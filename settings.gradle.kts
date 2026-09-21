@@ -4,6 +4,8 @@ pluginManagement {
         mavenCentral()
         gradlePluginPortal()
     }
+    // The `phonemanager.*` convention plugins are provided by this composite build.
+    includeBuild("build-logic")
 }
 
 dependencyResolutionManagement {

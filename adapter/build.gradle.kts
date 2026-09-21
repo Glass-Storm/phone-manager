@@ -1,37 +1,17 @@
 plugins {
-    alias(libs.plugins.android.library)
-    alias(libs.plugins.kotlin.android)
-    alias(libs.plugins.ktlint)
+    alias(libs.plugins.phonemanager.android.library)
+    alias(libs.plugins.phonemanager.ktlint)
 }
 
 android {
+    // Path-derived namespace is `com.glassstorm.phonemanager.adapter`; declared
+    // explicitly so the module keeps ownership of its own package identity.
     namespace = "com.glassstorm.phonemanager.adapter"
-    compileSdk = 36
 
     defaultConfig {
-        minSdk = 29
         // R8 rules that MUST travel with this library into every consumer (the app).
         // Path is module-root relative: adapter/transport/grpc/r8-rules.pro.
         consumerProguardFiles("transport/grpc/r8-rules.pro")
-    }
-
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
-    }
-
-    kotlinOptions {
-        jvmTarget = "17"
-    }
-
-    testOptions {
-        unitTests {
-            isIncludeAndroidResources = true
-        }
-    }
-
-    lint {
-        disable += "ExpiredTargetSdkVersion"
     }
 }
 
@@ -61,11 +41,4 @@ dependencies {
     // The Speechmatics realtime adapter speaks WebSocket (JWT exchange over HTTPS,
     // then binary/text frames). OkHttp is the transport the reference client proved.
     implementation(libs.okhttp)
-
-    testImplementation(libs.junit)
-    testImplementation(libs.truth)
-    testImplementation(libs.turbine)
-    testImplementation(libs.robolectric)
-    testImplementation(libs.androidx.test.core)
-    testImplementation(libs.kotlinx.coroutines.test)
 }
