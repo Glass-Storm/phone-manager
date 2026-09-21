@@ -13,8 +13,66 @@ concurrency:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Android: the full JVM gate — unit tests for all four modules, debug + release
-  # APK assembly (release is minified/shrunk and UNSIGNED by design), and AGP lint.
+  # Core: the plain-JVM gate. This job deliberately installs NO Android SDK — the
+  # JVM modules (`:contract`, `:core:*`, `:transport:grpc`, `:adapter:jvm`,
+  # `:testing:*`) are Android-free by construction, so they must build and test on
+  # a bare JDK. If a stray `android.*` import ever leaks into one of them, this
+  # job is what fails. It runs every JVM module's tests, the Konsist boundary laws
+  # (`:testing:architecture:test`), and ktlint over the WHOLE tree (ktlint reads
+  # sources only and needs no SDK, so it is the cheapest complete style gate).
+  # ---------------------------------------------------------------------------
+  core:
+    name: Core JVM tests, architecture & ktlint (no Android SDK)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # This project builds on JDK 21 (Gradle 8.13 toolchain); the reference repo
+      # pins 17 because that is ITS toolchain, not ours. No Android SDK is set up
+      # in this job, by design.
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Gradle (with caching)
+        uses: gradle/actions/setup-gradle@v4
+
+      # Task list mirrors the nine-module JVM graph exactly:
+      #   :contract                    the frozen wire artifact
+      #   :core:model/domain/service   the shared language, ports, use cases
+      #   :transport:grpc              the gRPC boundary (only :contract consumer)
+      #   :adapter:jvm                 Android-free port implementations
+      #   :testing:testkit             shared test support
+      #   :testing:architecture        the Konsist module-boundary laws
+      # `ktlintCheck` is the F2-recorded gap: the bootstrap CI ran `lint` (AGP) but
+      # never the Kotlin style gate.
+      - name: Run JVM tests, architecture laws & ktlint
+        run: ./gradlew :contract:test :core:model:test :core:domain:test :core:service:test :transport:grpc:test :adapter:jvm:test :testing:testkit:test :testing:architecture:test ktlintCheck --stacktrace
+
+      - name: Upload JUnit test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-results-core-${{ github.sha }}
+          path: |
+            contract/build/test-results/**
+            core/model/build/test-results/**
+            core/domain/build/test-results/**
+            core/service/build/test-results/**
+            transport/grpc/build/test-results/**
+            adapter/jvm/build/test-results/**
+            testing/testkit/build/test-results/**
+            testing/architecture/build/test-results/**
+          if-no-files-found: error
+          retention-days: 14
+
+  # ---------------------------------------------------------------------------
+  # Android: the platform lane. Needs the Android SDK (AGP cannot configure
+  # without it), and runs the two Android modules' unit tests, both APKs (release
+  # is minified/shrunk and UNSIGNED by design), and AGP lint.
   # ---------------------------------------------------------------------------
   android:
     name: Android build, test & lint
@@ -23,8 +81,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # This project builds on JDK 21 (Gradle 8.13 toolchain); the reference repo
-      # pins 17 because that is ITS toolchain, not ours.
       - name: Set up JDK 21
         uses: actions/setup-java@v5
         with:
@@ -49,18 +105,20 @@ jobs:
           yes | sdkmanager --licenses
           sdkmanager "platform-tools" "platforms;android-36" "platforms;android-29" "build-tools;36.0.0"
 
-      - name: Run tests, assemble APKs & lint
-        run: ./gradlew :core:domain:test :transport:grpc:test :adapter:testDebugUnitTest :app:testDebugUnitTest assembleDebug assembleRelease lint --stacktrace
+      # JVM -> `:task`; Android -> `:taskDebugUnitTest`. `:adapter:android` and
+      # `:app` are the only Android modules. `lint` is scoped to `:app` (the only
+      # module with an Android application surface); it consumes the library's lint
+      # model transitively.
+      - name: Run Android tests, assemble APKs & lint
+        run: ./gradlew :adapter:android:testDebugUnitTest :app:testDebugUnitTest :app:assembleDebug :app:assembleRelease :app:lint --stacktrace
 
       - name: Upload JUnit test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: junit-results-${{ github.sha }}
+          name: junit-results-android-${{ github.sha }}
           path: |
-            domain/build/test-results/**
-            transport/grpc/build/test-results/**
-            adapter/build/test-results/**
+            adapter/android/build/test-results/**
             app/build/test-results/**
           if-no-files-found: error
           retention-days: 14
@@ -112,12 +170,14 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # E2E: the mockpeer is spawned as a REAL child process against both the plain
-  # JVM hub (:service) and the Robolectric-hosted app hub (:app), so this job
-  # needs the Go toolchain (the `go` job) as well as the Android test setup.
+  # JVM hub (:transport:grpc) and the Robolectric-hosted app hub (:app), so this
+  # job needs the Go toolchain (the `go` job) as well as the Android test setup.
+  # It waits on `core`, `android`, and `go`: a green core lane proves the JVM half
+  # independently, and `e2e` is the thin alias over both real-socket suites.
   # ---------------------------------------------------------------------------
   e2e:
     name: End-to-end mockpeer integration
-    needs: [android, go]
+    needs: [core, android, go]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -150,7 +210,12 @@ jobs:
       - name: Run E2E suites
         run: ./gradlew e2e --stacktrace
 
-      # The machine-checkable transcript emitted by both harnesses.
+      # The machine-checkable transcript BOTH harnesses append to. This path MUST
+      # stay equal to `FullE2eTest.EVIDENCE_RELATIVE` (the identical constant in
+      # transport/grpc/.../FullE2eTest.kt and app/.../FullE2eTest.kt); the tests own
+      # the filename and are out of scope for this change. Verified present: a fresh
+      # `./gradlew e2e` recreates `.omo/evidence/` and appends the transcript, so
+      # `if-no-files-found: error` is a real gate, not a formality.
       - name: Upload E2E evidence
         if: always()
         uses: actions/upload-artifact@v4

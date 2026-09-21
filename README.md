@@ -15,16 +15,16 @@ repo ships the hub plus the contract they generate their clients from.
 
 ## Module layout
 
-| Module             | Kind                | Owns                                                                                                                                                                           |
-| ------------------ | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `:app`             | Android application | Compose UI (Lumo components), the five screens, and the composition root. The only module allowed to see the services AND the adapters.                                        |
-| `:core:model`      | pure Kotlin/JVM     | The hand-written domain DTOs: pure data types with zero dependencies, the shared language spoken across every layer.                                                           |
-| `:core:domain`     | pure Kotlin/JVM     | Ports (interfaces) and the two deterministic state machines. Zero implementation, zero framework annotations, no contract edge.                                               |
-| `:core:service`    | pure Kotlin/JVM     | The use-case implementations (device, pairing, relay). Contract-free and gRPC-free by construction.                                                                            |
-| `:transport:grpc`  | pure Kotlin/JVM     | The gRPC service implementations, the bearer-token interceptor, the netty-backed hub server, and the DTO↔proto mapping. The ONE module allowed to depend on `:contract`.       |
-| `:contract`        | pure Kotlin/JVM     | The FROZEN `ecosys.v1` wire contract: the `.proto` source of truth and its protobuf/gRPC-lite codegen. The ONE artifact the out-of-scope peers consume.                        |
-| `:adapter:jvm`     | pure Kotlin/JVM     | Android-free port implementations: the STT engines and the discarding frame sink.                                                                                              |
-| `:adapter:android` | Android library     | Platform-backed adapters: SQLite, LocalOnlyHotspot, NSD discovery, and the runtime config store. The battery-exemption helper lives in `:app` (it is app-owned platform glue). |
+| Module             | Kind                | Owns                                                                                                                                                                                                                    |
+| ------------------ | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `:app`             | Android application | Compose UI (Lumo components), the five screens, and the composition root. The only module allowed to see the services AND the adapters.                                                                                 |
+| `:core:model`      | pure Kotlin/JVM     | The hand-written domain DTOs: pure data types with zero dependencies, the shared language spoken across every layer.                                                                                                    |
+| `:core:domain`     | pure Kotlin/JVM     | Ports (interfaces) and the two deterministic state machines. Zero implementation, zero framework annotations, no contract edge.                                                                                         |
+| `:core:service`    | pure Kotlin/JVM     | The use-case implementations (device, pairing, relay). Contract-free and gRPC-free by construction.                                                                                                                     |
+| `:transport:grpc`  | pure Kotlin/JVM     | The gRPC service implementations, the bearer-token interceptor, the netty-backed hub server, and the DTO↔proto mapping. The ONE module allowed to depend on `:contract`.                                                |
+| `:contract`        | pure Kotlin/JVM     | The FROZEN `ecosys.v1` wire contract: the `.proto` source of truth and its protobuf/gRPC-lite codegen. The ONE artifact the out-of-scope peers consume.                                                                 |
+| `:adapter:jvm`     | pure Kotlin/JVM     | Android-free port implementations: the STT engines and the discarding frame sink.                                                                                                                                       |
+| `:adapter:android` | Android library     | Platform-backed adapters: SQLite, LocalOnlyHotspot, NSD discovery, and the runtime config store. The battery-exemption helper lives in `:app` (it is app-owned platform glue).                                          |
 | `:testing:testkit` | pure Kotlin/JVM     | Test support: the bounded child-process runner, the deterministic media generators, and the in-memory repository double, shared by the `:transport:grpc` and `:app` test suites. Its only dependency is `:core:domain`. |
 
 `tools/mockpeer` (the Go reference peer) is NOT a Gradle module; it stays at the
@@ -73,8 +73,25 @@ JAVA_HOME=/home/chaos/.jdk/jdk-21.0.12.1+1 ANDROID_HOME=/home/chaos/Android/Sdk 
 ```
 
 The release build runs R8 (minify + resource shrink) and is UNSIGNED. There is no
-signing configuration in this repo and no publishing setup: the release build
-exists to prove the hub's runtime-discovered gRPC transport survives shrinking.
+signing configuration in this repo, and the only publishing in it is `:contract`
+to Maven local (see below): the release build exists to prove the hub's
+runtime-discovered gRPC transport survives shrinking.
+
+### Publish the contract
+
+`:contract` is the one artifact the out-of-scope glasses app and Ubuntu daemon
+consume, so it publishes itself instead of forcing a clone:
+
+```bash
+JAVA_HOME=/home/chaos/.jdk/jdk-21.0.12.1+1 ANDROID_HOME=/home/chaos/Android/Sdk ./gradlew :contract:publishToMavenLocal
+```
+
+Coordinates `com.glassstorm.phonemanager:contract:1.0.0`; both the compiled
+bindings and a `proto`-classifier JAR carrying `ecosys/v1/ecosys.proto` land under
+`~/.m2/repository/com/glassstorm/phonemanager/contract/1.0.0/`. This is
+Maven-local only — no remote repository, no signing, no credentials. The
+consumption and regeneration commands are in
+[`docs/protocol.md`](docs/protocol.md) section 11.
 
 ### Test
 

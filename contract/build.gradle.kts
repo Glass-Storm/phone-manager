@@ -2,6 +2,9 @@ plugins {
     alias(libs.plugins.phonemanager.kotlin.library)
     alias(libs.plugins.phonemanager.ktlint)
     alias(libs.plugins.protobuf)
+    // Publishing only — the contract is the ONE artifact the out-of-scope glasses
+    // app and Ubuntu daemon consume, so it must be independently versioned.
+    `maven-publish`
 }
 
 // :contract owns the FROZEN `ecosys.v1` wire contract: the .proto source of truth
@@ -61,6 +64,69 @@ protobuf {
                 (findByName("grpc") ?: create("grpc")).option("lite")
                 (findByName("grpckt") ?: create("grpckt")).option("lite")
             }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Publishing (T20).
+//
+// `:contract` is the ONLY artifact a peer consumes: the out-of-scope glasses app
+// and the Ubuntu daemon generate their clients from this module's `.proto` and
+// link against its compiled bindings. Cloning this monorepo is not a sane
+// consumption story for them, so the module publishes a versioned artifact to
+// Maven local:
+//
+//     com.glassstorm.phonemanager:contract:<version>
+//
+// TWO artifacts are published on purpose:
+//   1. the default JAR (the compiled protobuf/gRPC-lite bindings), and
+//   2. a `proto`-classifier JAR carrying the `.proto` SOURCE of truth, because a
+//      peer generating Go/Swift/Kotlin clients needs the `.proto` ITSELF, not
+//      the hub's compiled classes.
+//
+// Publishing targets `mavenLocal` ONLY - there is no remote repository, no
+// signing, and no credentials anywhere in this build. The command is:
+//
+//     ./gradlew :contract:publishToMavenLocal
+//
+// The coordinates and the regeneration command are documented for consumers in
+// `docs/protocol.md` section 11 ("Rules for changing this contract").
+// ---------------------------------------------------------------------------
+
+group = "com.glassstorm.phonemanager"
+version = "1.0.0"
+
+// Packages the `src/main/proto` tree into a JAR whose entries keep the original
+// relative path (`ecosys/v1/ecosys.proto`), so a consumer can hand the extracted
+// directory straight to `protoc` with `-I`. Declared BEFORE the `publishing`
+// block below because that block wires it into the publication at configuration
+// time.
+val protoSourceJar by tasks.registering(Jar::class) {
+    archiveClassifier.set("proto")
+    from("src/main/proto")
+}
+
+publishing {
+    publications {
+        create<MavenPublication>("maven") {
+            // Coordinates: com.glassstorm.phonemanager:contract:1.0.0
+            // `artifactId` follows the Gradle project name (`:contract` -> `contract`,
+            // `:adapter:jvm` -> `adapter-jvm`); pinned explicitly so a future rename
+            // of the directory cannot silently rename the published artifact.
+            groupId = "com.glassstorm.phonemanager"
+            artifactId = "contract"
+            version = "1.0.0"
+
+            // The compiled bindings. `from(components["java"])` also emits the
+            // correct runtime dependency set in the POM (the `api(...)` deps), so a
+            // consumer resolves grpc/protobuf-lite transitively.
+            from(components["java"])
+
+            // The `.proto` source of truth, shipped alongside the classes with the
+            // `proto` classifier. Without this a Go/Swift peer has nothing to
+            // generate from.
+            artifact(protoSourceJar)
         }
     }
 }
