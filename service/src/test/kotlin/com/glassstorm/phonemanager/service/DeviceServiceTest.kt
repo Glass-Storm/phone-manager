@@ -1,12 +1,12 @@
 package com.glassstorm.phonemanager.service
 
+import com.glassstorm.phonemanager.core.domain.adapter.repository.DeviceRepository
+import com.glassstorm.phonemanager.core.domain.context.Context
+import com.glassstorm.phonemanager.core.domain.context.MissingFromContextException
+import com.glassstorm.phonemanager.core.domain.context.fromContext
+import com.glassstorm.phonemanager.core.domain.context.register
+import com.glassstorm.phonemanager.core.domain.service.DeviceService
 import com.glassstorm.phonemanager.core.model.Device
-import com.glassstorm.phonemanager.domain.adapter.repository.DeviceRepository
-import com.glassstorm.phonemanager.domain.context.Context
-import com.glassstorm.phonemanager.domain.context.MissingFromContextException
-import com.glassstorm.phonemanager.domain.context.fromContext
-import com.glassstorm.phonemanager.domain.context.register
-import com.glassstorm.phonemanager.domain.service.DeviceService
 import com.google.common.truth.Truth.assertThat
 import org.junit.Assert.assertThrows
 import org.junit.Test

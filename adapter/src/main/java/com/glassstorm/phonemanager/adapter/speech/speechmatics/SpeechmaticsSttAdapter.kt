@@ -1,6 +1,6 @@
 package com.glassstorm.phonemanager.adapter.speech.speechmatics
 
-import com.glassstorm.phonemanager.domain.adapter.speech.SttPort
+import com.glassstorm.phonemanager.core.domain.adapter.speech.SttPort
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.Response

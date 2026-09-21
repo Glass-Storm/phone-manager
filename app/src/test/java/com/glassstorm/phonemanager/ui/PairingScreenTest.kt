@@ -8,9 +8,9 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import com.glassstorm.phonemanager.domain.context.Context
-import com.glassstorm.phonemanager.domain.context.register
-import com.glassstorm.phonemanager.domain.service.PairingService
+import com.glassstorm.phonemanager.core.domain.context.Context
+import com.glassstorm.phonemanager.core.domain.context.register
+import com.glassstorm.phonemanager.core.domain.service.PairingService
 import com.google.common.truth.Truth.assertThat
 import org.junit.Rule
 import org.junit.Test

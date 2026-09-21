@@ -7,4 +7,4 @@ plugins {
 // types (data classes, enums, sealed interfaces) with no coroutines, Android,
 // gRPC, or protobuf. Keeping this module dependency-free is the point — every
 // layer can speak the shared model without inheriting a transitive runtime, and
-// `:domain` re-exports it via `api` so port/DTO signatures resolve for consumers.
+// `:core:domain` re-exports it via `api` so port/DTO signatures resolve for consumers.

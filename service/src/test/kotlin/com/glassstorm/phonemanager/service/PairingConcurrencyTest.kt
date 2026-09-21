@@ -1,10 +1,10 @@
 package com.glassstorm.phonemanager.service
 
+import com.glassstorm.phonemanager.core.domain.adapter.repository.DeviceRepository
+import com.glassstorm.phonemanager.core.domain.context.Context
+import com.glassstorm.phonemanager.core.domain.context.register
 import com.glassstorm.phonemanager.core.model.PairOutcome
 import com.glassstorm.phonemanager.core.model.Pairing
-import com.glassstorm.phonemanager.domain.adapter.repository.DeviceRepository
-import com.glassstorm.phonemanager.domain.context.Context
-import com.glassstorm.phonemanager.domain.context.register
 import com.google.common.truth.Truth.assertThat
 import org.junit.Before
 import org.junit.Rule

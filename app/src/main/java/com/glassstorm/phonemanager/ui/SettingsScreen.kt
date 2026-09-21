@@ -15,9 +15,9 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.glassstorm.phonemanager.core.domain.context.Context
 import com.glassstorm.phonemanager.core.model.HotspotMode
 import com.glassstorm.phonemanager.core.model.SttEngine
-import com.glassstorm.phonemanager.domain.context.Context
 import com.glassstorm.phonemanager.ui.components.Button
 import com.glassstorm.phonemanager.ui.components.ButtonVariant
 import com.glassstorm.phonemanager.ui.components.Text

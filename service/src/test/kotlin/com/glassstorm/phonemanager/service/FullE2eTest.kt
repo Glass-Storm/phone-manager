@@ -1,12 +1,12 @@
 package com.glassstorm.phonemanager.service
 
-import com.glassstorm.phonemanager.domain.adapter.relay.FrameSink
-import com.glassstorm.phonemanager.domain.adapter.repository.DeviceRepository
-import com.glassstorm.phonemanager.domain.adapter.speech.SttPort
-import com.glassstorm.phonemanager.domain.context.Context
-import com.glassstorm.phonemanager.domain.context.register
-import com.glassstorm.phonemanager.domain.service.PairingService
-import com.glassstorm.phonemanager.domain.service.StreamService
+import com.glassstorm.phonemanager.core.domain.adapter.relay.FrameSink
+import com.glassstorm.phonemanager.core.domain.adapter.repository.DeviceRepository
+import com.glassstorm.phonemanager.core.domain.adapter.speech.SttPort
+import com.glassstorm.phonemanager.core.domain.context.Context
+import com.glassstorm.phonemanager.core.domain.context.register
+import com.glassstorm.phonemanager.core.domain.service.PairingService
+import com.glassstorm.phonemanager.core.domain.service.StreamService
 import com.glassstorm.phonemanager.service.security.AuthInterceptor
 import com.glassstorm.phonemanager.testkit.MockPeerDriver
 import com.glassstorm.phonemanager.testkit.MockPeerTranscript

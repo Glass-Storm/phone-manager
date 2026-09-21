@@ -89,8 +89,8 @@ class HubForegroundServiceTest {
                 .create()
                 .startCommand(0, 0)
         val hub =
-            com.glassstorm.phonemanager.domain.context.fromContext<
-                com.glassstorm.phonemanager.domain.adapter.transport.HubServer,
+            com.glassstorm.phonemanager.core.domain.context.fromContext<
+                com.glassstorm.phonemanager.core.domain.adapter.transport.HubServer,
             >(AppComposition.appContext())
         assertThat(hub.isRunning()).isTrue()
         val port = hub.boundPort()
@@ -116,8 +116,8 @@ class HubForegroundServiceTest {
                 .create()
                 .startCommand(0, 0)
         val hub =
-            com.glassstorm.phonemanager.domain.context.fromContext<
-                com.glassstorm.phonemanager.domain.adapter.transport.HubServer,
+            com.glassstorm.phonemanager.core.domain.context.fromContext<
+                com.glassstorm.phonemanager.core.domain.adapter.transport.HubServer,
             >(AppComposition.appContext())
         val port = hub.boundPort()
 
@@ -147,8 +147,8 @@ class HubForegroundServiceTest {
                 ).create()
                 .startCommand(0, 0)
         val hotspot =
-            com.glassstorm.phonemanager.domain.context.fromContext<
-                com.glassstorm.phonemanager.domain.adapter.network.HotspotController,
+            com.glassstorm.phonemanager.core.domain.context.fromContext<
+                com.glassstorm.phonemanager.core.domain.adapter.network.HotspotController,
             >(AppComposition.appContext())
 
         // When the access point state is inspected
@@ -156,8 +156,8 @@ class HubForegroundServiceTest {
         // peers stay reachable
         assertThat(hotspot.isActive()).isFalse()
         val hub =
-            com.glassstorm.phonemanager.domain.context.fromContext<
-                com.glassstorm.phonemanager.domain.adapter.transport.HubServer,
+            com.glassstorm.phonemanager.core.domain.context.fromContext<
+                com.glassstorm.phonemanager.core.domain.adapter.transport.HubServer,
             >(AppComposition.appContext())
         assertThat(hub.isRunning()).isTrue()
 
@@ -173,12 +173,12 @@ class HubForegroundServiceTest {
 
         // When the network ports are resolved by their domain types
         val hotspot =
-            com.glassstorm.phonemanager.domain.context.fromContextOrNull<
-                com.glassstorm.phonemanager.domain.adapter.network.HotspotController,
+            com.glassstorm.phonemanager.core.domain.context.fromContextOrNull<
+                com.glassstorm.phonemanager.core.domain.adapter.network.HotspotController,
             >(ctx)
         val discovery =
-            com.glassstorm.phonemanager.domain.context.fromContextOrNull<
-                com.glassstorm.phonemanager.domain.adapter.network.Discovery,
+            com.glassstorm.phonemanager.core.domain.context.fromContextOrNull<
+                com.glassstorm.phonemanager.core.domain.adapter.network.Discovery,
             >(ctx)
 
         // Then the platform-backed adapters are registered, so bring-up is possible

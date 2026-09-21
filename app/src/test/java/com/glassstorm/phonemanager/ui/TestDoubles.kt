@@ -1,6 +1,14 @@
 package com.glassstorm.phonemanager.ui
 
 import com.glassstorm.phonemanager.battery.BatteryExemption
+import com.glassstorm.phonemanager.core.domain.adapter.config.AppConfig
+import com.glassstorm.phonemanager.core.domain.adapter.network.HotspotController
+import com.glassstorm.phonemanager.core.domain.adapter.repository.DeviceRepository
+import com.glassstorm.phonemanager.core.domain.adapter.transport.HubServer
+import com.glassstorm.phonemanager.core.domain.network.HotspotFailure
+import com.glassstorm.phonemanager.core.domain.network.HotspotUnavailableException
+import com.glassstorm.phonemanager.core.domain.service.PairingService
+import com.glassstorm.phonemanager.core.domain.service.StreamService
 import com.glassstorm.phonemanager.core.model.Device
 import com.glassstorm.phonemanager.core.model.HotspotInfo
 import com.glassstorm.phonemanager.core.model.HotspotMode
@@ -10,14 +18,6 @@ import com.glassstorm.phonemanager.core.model.RelayResult
 import com.glassstorm.phonemanager.core.model.RelaySession
 import com.glassstorm.phonemanager.core.model.RelayStats
 import com.glassstorm.phonemanager.core.model.SttEngine
-import com.glassstorm.phonemanager.domain.adapter.config.AppConfig
-import com.glassstorm.phonemanager.domain.adapter.network.HotspotController
-import com.glassstorm.phonemanager.domain.adapter.repository.DeviceRepository
-import com.glassstorm.phonemanager.domain.adapter.transport.HubServer
-import com.glassstorm.phonemanager.domain.network.HotspotFailure
-import com.glassstorm.phonemanager.domain.network.HotspotUnavailableException
-import com.glassstorm.phonemanager.domain.service.PairingService
-import com.glassstorm.phonemanager.domain.service.StreamService
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.emptyFlow

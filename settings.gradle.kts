@@ -19,11 +19,15 @@ dependencyResolutionManagement {
 rootProject.name = "phone-manager"
 
 include(":app")
-include(":domain", ":service", ":adapter")
+include(":service", ":adapter")
 // The hand-written domain DTOs (pure Kotlin data types, zero dependencies): the
 // shared language spoken across every layer, extracted so consumers depend on
-// the data alone rather than the whole `:domain` port module.
+// the data alone rather than the whole `:core:domain` port module.
 include(":core:model")
+// The ports (interfaces), the two deterministic state machines, and the Context
+// registry: the domain's language, pure Kotlin with zero implementation, zero
+// framework annotations, and no dependency on the wire contract.
+include(":core:domain")
 // The FROZEN `ecosys.v1` wire contract: its own module so the out-of-scope
 // glasses app and Ubuntu daemon can consume/version/publish it independently of
 // the hub implementation. It owns the .proto AND the protobuf/gRPC codegen.

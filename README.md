@@ -18,9 +18,9 @@ repo ships the hub plus the contract they generate their clients from.
 | Module      | Kind                | Owns                                                                                                                                                             |
 | ----------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `:app`      | Android application | Compose UI (Lumo components), the five screens, and the composition root. The only module allowed to see both services and adapters.                             |
-| `:domain`   | pure Kotlin/JVM     | Ports (interfaces) + DTOs + the Context registry. Zero implementation.                                                                                           |
+| `:core:domain`   | pure Kotlin/JVM     | Ports (interfaces) + DTOs + the Context registry. Zero implementation.                                                                                           |
 | `:contract` | pure Kotlin/JVM     | The FROZEN `ecosys.v1` wire contract: the `.proto` source of truth and its protobuf/gRPC-lite codegen. The ONE artifact the out-of-scope peers consume.          |
-| `:service`  | pure Kotlin/JVM     | Use-case implementations, the gRPC services, and auth. Depends on `:domain` + `:contract`, never on `:adapter`.                                                  |
+| `:service`  | pure Kotlin/JVM     | Use-case implementations, the gRPC services, and auth. Depends on `:core:domain` + `:contract`, never on `:adapter`.                                                  |
 | `:adapter`  | Android library     | Port implementations: SQLite, hotspot, NSD discovery, the gRPC transport, and the STT engines.                                                                   |
 | `:testkit`  | pure Kotlin/JVM     | Test support: the bounded child-process runner and the deterministic media generators, shared by the `:service` and `:app` test suites. No runtime dependencies. |
 
@@ -71,7 +71,7 @@ exists to prove the hub's runtime-discovered gRPC transport survives shrinking.
 ### Test
 
 ```bash
-JAVA_HOME=/home/chaos/.jdk/jdk-21.0.12.1+1 ANDROID_HOME=/home/chaos/Android/Sdk ./gradlew :domain:test :service:test :adapter:testDebugUnitTest :app:testDebugUnitTest
+JAVA_HOME=/home/chaos/.jdk/jdk-21.0.12.1+1 ANDROID_HOME=/home/chaos/Android/Sdk ./gradlew :core:domain:test :service:test :adapter:testDebugUnitTest :app:testDebugUnitTest
 ```
 
 ### End-to-end
@@ -191,7 +191,7 @@ suite as evidence that on-device behaviour works.
 
 ## Repo conventions
 
-- **Hexagonal boundaries.** `:domain` holds ports and DTOs only, no
+- **Hexagonal boundaries.** `:core:domain` holds ports and DTOs only, no
   implementation. `:service` holds use-cases and has NO dependency edge to
   `:adapter`, so importing an adapter class from `:service` fails to compile.
   Only the `:app` composition root wires implementations to ports.

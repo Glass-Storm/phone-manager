@@ -8,9 +8,9 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.lifecycle.ViewModelStore
-import com.glassstorm.phonemanager.domain.context.Context
-import com.glassstorm.phonemanager.domain.context.register
-import com.glassstorm.phonemanager.domain.service.StreamService
+import com.glassstorm.phonemanager.core.domain.context.Context
+import com.glassstorm.phonemanager.core.domain.context.register
+import com.glassstorm.phonemanager.core.domain.service.StreamService
 import com.google.common.truth.Truth.assertThat
 import org.junit.Rule
 import org.junit.Test

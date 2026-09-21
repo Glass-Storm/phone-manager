@@ -50,7 +50,7 @@ jobs:
           sdkmanager "platform-tools" "platforms;android-36" "platforms;android-29" "build-tools;36.0.0"
 
       - name: Run tests, assemble APKs & lint
-        run: ./gradlew :domain:test :service:test :adapter:testDebugUnitTest :app:testDebugUnitTest assembleDebug assembleRelease lint --stacktrace
+        run: ./gradlew :core:domain:test :service:test :adapter:testDebugUnitTest :app:testDebugUnitTest assembleDebug assembleRelease lint --stacktrace
 
       - name: Upload JUnit test results
         if: always()

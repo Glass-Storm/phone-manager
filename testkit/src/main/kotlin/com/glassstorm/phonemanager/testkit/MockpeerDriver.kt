@@ -10,7 +10,7 @@ import java.io.File
  * two harnesses cannot drift: they differ ONLY in how the hub is hosted, never in
  * what the peer is asked to do or how the result is asserted.
  *
- * Dependency-free by design (no `:domain` edge), so an Android module can consume
+ * Dependency-free by design (no `:core:domain` edge), so an Android module can consume
  * it: the caller supplies closures for its own pairing surface.
  *
  * ## Token handling

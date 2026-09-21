@@ -40,7 +40,7 @@ dependencies {
     implementation(libs.core.ktx)
 
     // Composition root: :app owns the wiring, so it may see both the services and the adapters.
-    implementation(project(":domain"))
+    implementation(project(":core:domain"))
     implementation(project(":service"))
     implementation(project(":adapter"))
 

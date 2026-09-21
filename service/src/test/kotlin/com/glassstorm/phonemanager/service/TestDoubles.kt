@@ -1,9 +1,9 @@
 package com.glassstorm.phonemanager.service
 
+import com.glassstorm.phonemanager.core.domain.adapter.relay.FrameSink
+import com.glassstorm.phonemanager.core.domain.adapter.repository.DeviceRepository
+import com.glassstorm.phonemanager.core.domain.adapter.speech.SttPort
 import com.glassstorm.phonemanager.core.model.Device
-import com.glassstorm.phonemanager.domain.adapter.relay.FrameSink
-import com.glassstorm.phonemanager.domain.adapter.repository.DeviceRepository
-import com.glassstorm.phonemanager.domain.adapter.speech.SttPort
 import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger

@@ -4,12 +4,12 @@ import androidx.test.core.app.ApplicationProvider
 import com.glassstorm.phonemanager.adapter.config.RuntimeConfigStore
 import com.glassstorm.phonemanager.adapter.repository.memory.MemoryDeviceRepository
 import com.glassstorm.phonemanager.adapter.repository.sqlite.SqliteDeviceRepository
+import com.glassstorm.phonemanager.core.domain.adapter.config.AppConfig
+import com.glassstorm.phonemanager.core.domain.adapter.repository.DeviceRepository
+import com.glassstorm.phonemanager.core.domain.context.Context
+import com.glassstorm.phonemanager.core.domain.context.fromContext
 import com.glassstorm.phonemanager.core.model.HotspotMode
 import com.glassstorm.phonemanager.core.model.SttEngine
-import com.glassstorm.phonemanager.domain.adapter.config.AppConfig
-import com.glassstorm.phonemanager.domain.adapter.repository.DeviceRepository
-import com.glassstorm.phonemanager.domain.context.Context
-import com.glassstorm.phonemanager.domain.context.fromContext
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -79,7 +79,7 @@ class AppCompositionWiringTest {
 
         // Then the config port degrades to absent rather than crashing construction
         assertThat(
-            com.glassstorm.phonemanager.domain.context
+            com.glassstorm.phonemanager.core.domain.context
                 .fromContextOrNull<AppConfig>(ctx),
         ).isNull()
     }

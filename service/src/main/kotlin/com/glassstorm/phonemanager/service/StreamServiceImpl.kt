@@ -1,13 +1,13 @@
 package com.glassstorm.phonemanager.service
 
+import com.glassstorm.phonemanager.core.domain.adapter.relay.FrameSink
+import com.glassstorm.phonemanager.core.domain.adapter.speech.SttPort
+import com.glassstorm.phonemanager.core.domain.context.Context
+import com.glassstorm.phonemanager.core.domain.context.fromContext
+import com.glassstorm.phonemanager.core.domain.service.StreamService
 import com.glassstorm.phonemanager.core.model.RelayResult
 import com.glassstorm.phonemanager.core.model.RelaySession
 import com.glassstorm.phonemanager.core.model.RelayStats
-import com.glassstorm.phonemanager.domain.adapter.relay.FrameSink
-import com.glassstorm.phonemanager.domain.adapter.speech.SttPort
-import com.glassstorm.phonemanager.domain.context.Context
-import com.glassstorm.phonemanager.domain.context.fromContext
-import com.glassstorm.phonemanager.domain.service.StreamService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job

@@ -9,7 +9,7 @@ plugins {
 dependencies {
     // Hexagonal boundary: :service may see the domain ports/DTOs ONLY.
     // It MUST NEVER gain a dependency edge to :adapter (enforced by the build graph).
-    implementation(project(":domain"))
+    implementation(project(":core:domain"))
     implementation(libs.kotlinx.coroutines.core)
 
     // The FROZEN wire contract and the codegen that owns it. `api`, not

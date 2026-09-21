@@ -28,7 +28,7 @@ okhttp = "4.12.0"
 # task; `ksp.useKSP2=true` selects the KSP2 implementation instead.
 ksp = "2.1.0-1.0.29"
 # Dagger 2.57.1 supports KSP2 + Kotlin 2.1 without requiring Kotlin 2.2, and needs
-# no Hilt (whose Gradle plugin hard-fails on the pure-JVM `:domain`/`:service`).
+# no Hilt (whose Gradle plugin hard-fails on the pure-JVM `:core:domain`/`:service`).
 dagger = "2.57.1"
 
 [libraries]

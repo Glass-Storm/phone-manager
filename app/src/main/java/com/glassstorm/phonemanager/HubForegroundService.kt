@@ -20,7 +20,7 @@ import com.glassstorm.phonemanager.permission.HubPermissions
  *
  * Thin on purpose: the Android lifecycle lives here, the ordered bring-up lives
  * in [HubBringUp], and the listener itself is resolved from the composition root
- * through the [com.glassstorm.phonemanager.domain.adapter.transport.HubServer]
+ * through the [com.glassstorm.phonemanager.core.domain.adapter.transport.HubServer]
  * port. This class names no concrete adapter.
  */
 class HubForegroundService : Service() {

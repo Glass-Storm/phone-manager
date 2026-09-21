@@ -1,12 +1,12 @@
 package com.glassstorm.phonemanager
 
+import com.glassstorm.phonemanager.core.domain.adapter.network.Discovery
+import com.glassstorm.phonemanager.core.domain.adapter.network.HotspotController
+import com.glassstorm.phonemanager.core.domain.adapter.transport.HubServer
+import com.glassstorm.phonemanager.core.domain.context.Context
+import com.glassstorm.phonemanager.core.domain.context.fromContextOrNull
+import com.glassstorm.phonemanager.core.domain.network.HotspotUnavailableException
 import com.glassstorm.phonemanager.core.model.HotspotInfo
-import com.glassstorm.phonemanager.domain.adapter.network.Discovery
-import com.glassstorm.phonemanager.domain.adapter.network.HotspotController
-import com.glassstorm.phonemanager.domain.adapter.transport.HubServer
-import com.glassstorm.phonemanager.domain.context.Context
-import com.glassstorm.phonemanager.domain.context.fromContextOrNull
-import com.glassstorm.phonemanager.domain.network.HotspotUnavailableException
 
 /**
  * How the access point came up (or why it did not).

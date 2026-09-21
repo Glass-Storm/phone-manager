@@ -2,8 +2,8 @@ package com.glassstorm.phonemanager.adapter.repository.sqlite
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import com.glassstorm.phonemanager.core.domain.adapter.repository.DeviceRepository
 import com.glassstorm.phonemanager.core.model.Device
-import com.glassstorm.phonemanager.domain.adapter.repository.DeviceRepository
 import com.google.common.truth.Truth.assertThat
 import org.junit.After
 import org.junit.Before

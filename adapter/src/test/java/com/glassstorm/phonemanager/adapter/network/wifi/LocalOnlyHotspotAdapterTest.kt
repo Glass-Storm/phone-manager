@@ -7,9 +7,9 @@ import android.location.LocationManager
 import android.net.wifi.WifiConfiguration
 import android.net.wifi.WifiManager
 import androidx.test.core.app.ApplicationProvider
+import com.glassstorm.phonemanager.core.domain.network.HotspotState
+import com.glassstorm.phonemanager.core.domain.network.HotspotUnavailableException
 import com.glassstorm.phonemanager.core.model.HotspotInfo
-import com.glassstorm.phonemanager.domain.network.HotspotState
-import com.glassstorm.phonemanager.domain.network.HotspotUnavailableException
 import com.google.common.truth.Truth.assertThat
 import org.junit.Assert.assertThrows
 import org.junit.Test
@@ -83,7 +83,7 @@ class LocalOnlyHotspotAdapterTest {
 
         // Then the typed cause is PermissionDenied, the state is exactly ERROR, and it is not active
         assertThat(thrown.failure)
-            .isEqualTo(com.glassstorm.phonemanager.domain.network.HotspotFailure.PermissionDenied)
+            .isEqualTo(com.glassstorm.phonemanager.core.domain.network.HotspotFailure.PermissionDenied)
         assertThat(hotspot.state).isEqualTo(HotspotState.ERROR)
         assertThat(hotspot.state).isNotEqualTo(HotspotState.ACTIVE)
         assertThat(hotspot.isActive()).isFalse()
@@ -104,7 +104,7 @@ class LocalOnlyHotspotAdapterTest {
 
         // Then it fails with LocationServicesDisabled and lands in ERROR
         assertThat(thrown.failure).isEqualTo(
-            com.glassstorm.phonemanager.domain.network.HotspotFailure.LocationServicesDisabled,
+            com.glassstorm.phonemanager.core.domain.network.HotspotFailure.LocationServicesDisabled,
         )
         assertThat(hotspot.state).isEqualTo(HotspotState.ERROR)
         assertThat(hotspot.isActive()).isFalse()
@@ -160,7 +160,7 @@ class LocalOnlyHotspotAdapterTest {
         assertThat(hotspot.state).isEqualTo(HotspotState.ERROR)
         assertThat(hotspot.isActive()).isFalse()
         assertThat(
-            (thrown.failure as com.glassstorm.phonemanager.domain.network.HotspotFailure.StartFailed)
+            (thrown.failure as com.glassstorm.phonemanager.core.domain.network.HotspotFailure.StartFailed)
                 .reason,
         ).contains("42")
     }

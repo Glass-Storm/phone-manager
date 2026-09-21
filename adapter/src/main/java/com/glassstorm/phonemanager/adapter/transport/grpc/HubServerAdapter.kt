@@ -1,8 +1,8 @@
 package com.glassstorm.phonemanager.adapter.transport.grpc
 
-import com.glassstorm.phonemanager.domain.adapter.transport.HubServer
-import com.glassstorm.phonemanager.domain.context.Context
-import com.glassstorm.phonemanager.domain.context.fromContext
+import com.glassstorm.phonemanager.core.domain.adapter.transport.HubServer
+import com.glassstorm.phonemanager.core.domain.context.Context
+import com.glassstorm.phonemanager.core.domain.context.fromContext
 import com.glassstorm.phonemanager.service.GrpcHubServer
 import com.glassstorm.phonemanager.service.PairingGrpcService
 import com.glassstorm.phonemanager.service.StreamGrpcService
@@ -74,7 +74,7 @@ class HubServerAdapter(
     /**
      * The [AuthInterceptor] collaborator. Resolved by its own type so no
      * downcast is needed: the composition root registers the pairing
-     * implementation under BOTH [com.glassstorm.phonemanager.domain.service.PairingService]
+     * implementation under BOTH [com.glassstorm.phonemanager.core.domain.service.PairingService]
      * and [TokenVerifier].
      */
     private fun tokenVerifier(): TokenVerifier = fromContext<TokenVerifier>(ctx)

@@ -1,6 +1,6 @@
 package com.glassstorm.phonemanager.adapter.relay
 
-import com.glassstorm.phonemanager.domain.adapter.relay.FrameSink
+import com.glassstorm.phonemanager.core.domain.adapter.relay.FrameSink
 
 /**
  * The v1 [FrameSink]: accept the opaque H.264 NAL and DROP it.

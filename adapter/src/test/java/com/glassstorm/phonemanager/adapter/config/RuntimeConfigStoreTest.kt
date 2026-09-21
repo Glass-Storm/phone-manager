@@ -128,7 +128,7 @@ class RuntimeConfigStoreTest {
         store.setSttAdapterKind(SttAdapterKind.SPEECHMATICS)
 
         // When the domain port is read
-        val port: com.glassstorm.phonemanager.domain.adapter.config.AppConfig = store
+        val port: com.glassstorm.phonemanager.core.domain.adapter.config.AppConfig = store
 
         // Then the domain vocabulary is returned, not the adapter enum
         assertThat(port.sttEngine())
@@ -137,7 +137,7 @@ class RuntimeConfigStoreTest {
 
     @Test
     fun `a fresh install defaults the domain port to mock and manual hotspot`() {
-        val port: com.glassstorm.phonemanager.domain.adapter.config.AppConfig = store
+        val port: com.glassstorm.phonemanager.core.domain.adapter.config.AppConfig = store
 
         assertThat(port.sttEngine())
             .isEqualTo(com.glassstorm.phonemanager.core.model.SttEngine.MOCK)
@@ -147,7 +147,7 @@ class RuntimeConfigStoreTest {
 
     @Test
     fun `the hotspot mode round-trips through the domain port`() {
-        val port: com.glassstorm.phonemanager.domain.adapter.config.AppConfig = store
+        val port: com.glassstorm.phonemanager.core.domain.adapter.config.AppConfig = store
 
         port.setHotspotMode(com.glassstorm.phonemanager.core.model.HotspotMode.AUTO)
         assertThat(port.hotspotMode())

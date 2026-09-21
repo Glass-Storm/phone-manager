@@ -6,7 +6,7 @@ import com.glassstorm.phonemanager.adapter.speech.mock.MockSttAdapter
 import com.glassstorm.phonemanager.adapter.speech.speechmatics.SpeechmaticsConfig
 import com.glassstorm.phonemanager.adapter.speech.speechmatics.SpeechmaticsSttAdapter
 import com.glassstorm.phonemanager.adapter.speech.speechmatics.SpeechmaticsTransport
-import com.glassstorm.phonemanager.domain.adapter.speech.SttPort
+import com.glassstorm.phonemanager.core.domain.adapter.speech.SttPort
 
 /**
  * Selects the speech engine from app configuration.

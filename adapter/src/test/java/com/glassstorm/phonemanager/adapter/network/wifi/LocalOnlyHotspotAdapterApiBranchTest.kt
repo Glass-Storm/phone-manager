@@ -7,8 +7,8 @@ import android.location.LocationManager
 import android.net.wifi.SoftApConfiguration
 import android.net.wifi.WifiManager
 import androidx.test.core.app.ApplicationProvider
-import com.glassstorm.phonemanager.domain.network.HotspotState
-import com.glassstorm.phonemanager.domain.network.HotspotUnavailableException
+import com.glassstorm.phonemanager.core.domain.network.HotspotState
+import com.glassstorm.phonemanager.core.domain.network.HotspotUnavailableException
 import com.google.common.truth.Truth.assertThat
 import org.junit.Assert.assertThrows
 import org.junit.Test

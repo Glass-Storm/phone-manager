@@ -9,11 +9,11 @@ import com.glassstorm.phonemanager.adapter.speech.speechmatics.DEFAULT_LANGUAGE
 import com.glassstorm.phonemanager.adapter.speech.speechmatics.NORMAL_CLOSURE
 import com.glassstorm.phonemanager.adapter.speech.speechmatics.SAMPLE_RATE_HZ
 import com.glassstorm.phonemanager.adapter.transport.grpc.HubServerAdapter
+import com.glassstorm.phonemanager.core.domain.adapter.config.AppConfig
+import com.glassstorm.phonemanager.core.domain.service.PairingService
+import com.glassstorm.phonemanager.core.domain.service.StreamService
 import com.glassstorm.phonemanager.core.model.PairOutcome
 import com.glassstorm.phonemanager.core.model.PeerAddress
-import com.glassstorm.phonemanager.domain.adapter.config.AppConfig
-import com.glassstorm.phonemanager.domain.service.PairingService
-import com.glassstorm.phonemanager.domain.service.StreamService
 import com.glassstorm.phonemanager.service.security.AuthInterceptor
 import com.glassstorm.phonemanager.service.security.TokenCodec
 import com.glassstorm.phonemanager.ui.PairingViewModel

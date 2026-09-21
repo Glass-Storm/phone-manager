@@ -16,8 +16,8 @@ android {
 }
 
 dependencies {
-    // Adapters implement the domain ports; they depend on :domain and nothing else here.
-    implementation(project(":domain"))
+    // Adapters implement the domain ports; they depend on :core:domain and nothing else here.
+    implementation(project(":core:domain"))
     implementation(libs.kotlinx.coroutines.core)
 
     // The hub transport adapter composes the `:service` hub implementation

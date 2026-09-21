@@ -1,13 +1,13 @@
 package com.glassstorm.phonemanager.ui
 
 import androidx.lifecycle.ViewModel
-import com.glassstorm.phonemanager.domain.adapter.network.HotspotController
-import com.glassstorm.phonemanager.domain.adapter.transport.HubServer
-import com.glassstorm.phonemanager.domain.context.Context
-import com.glassstorm.phonemanager.domain.context.fromContextOrNull
-import com.glassstorm.phonemanager.domain.network.HotspotFailure
-import com.glassstorm.phonemanager.domain.network.HotspotUnavailableException
-import com.glassstorm.phonemanager.domain.service.PairingService
+import com.glassstorm.phonemanager.core.domain.adapter.network.HotspotController
+import com.glassstorm.phonemanager.core.domain.adapter.transport.HubServer
+import com.glassstorm.phonemanager.core.domain.context.Context
+import com.glassstorm.phonemanager.core.domain.context.fromContextOrNull
+import com.glassstorm.phonemanager.core.domain.network.HotspotFailure
+import com.glassstorm.phonemanager.core.domain.network.HotspotUnavailableException
+import com.glassstorm.phonemanager.core.domain.service.PairingService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow

@@ -17,7 +17,7 @@ import org.gradle.kotlin.dsl.dependencies
  * this by applying `phonemanager.ksp` last.
  *
  * Hilt is intentionally absent: its Gradle plugin hard-fails on `kotlin("jvm")`
- * modules, and `:domain`/`:service` are pure JVM. Dagger's annotations are enough.
+ * modules, and `:core:domain`/`:service` are pure JVM. Dagger's annotations are enough.
  */
 class KspConventionPlugin : Plugin<Project> {
     override fun apply(target: Project) {

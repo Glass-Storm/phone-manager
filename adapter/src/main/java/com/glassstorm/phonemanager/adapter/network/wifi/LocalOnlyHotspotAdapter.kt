@@ -6,14 +6,14 @@ import android.content.pm.PackageManager
 import android.location.LocationManager
 import android.net.wifi.WifiManager
 import android.os.Build
+import com.glassstorm.phonemanager.core.domain.adapter.network.HotspotController
+import com.glassstorm.phonemanager.core.domain.network.HotspotEvent
+import com.glassstorm.phonemanager.core.domain.network.HotspotFailure
+import com.glassstorm.phonemanager.core.domain.network.HotspotState
+import com.glassstorm.phonemanager.core.domain.network.HotspotStateMachine
+import com.glassstorm.phonemanager.core.domain.network.HotspotTransition
+import com.glassstorm.phonemanager.core.domain.network.HotspotUnavailableException
 import com.glassstorm.phonemanager.core.model.HotspotInfo
-import com.glassstorm.phonemanager.domain.adapter.network.HotspotController
-import com.glassstorm.phonemanager.domain.network.HotspotEvent
-import com.glassstorm.phonemanager.domain.network.HotspotFailure
-import com.glassstorm.phonemanager.domain.network.HotspotState
-import com.glassstorm.phonemanager.domain.network.HotspotStateMachine
-import com.glassstorm.phonemanager.domain.network.HotspotTransition
-import com.glassstorm.phonemanager.domain.network.HotspotUnavailableException
 
 /**
  * Android [HotspotController] backed by `LocalOnlyHotspot` with a manual-tether fallback.

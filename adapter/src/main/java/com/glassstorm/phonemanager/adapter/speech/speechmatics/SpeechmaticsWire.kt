@@ -24,7 +24,7 @@ const val TOKEN_URL: String = "https://mp.speechmatics.com/v1/api_keys?type=rt"
 /** Recognition language when the caller does not override it. */
 const val DEFAULT_LANGUAGE: String = "en"
 
-/** Sample rate the hub relays audio at ([com.glassstorm.phonemanager.domain.service.StreamService]). */
+/** Sample rate the hub relays audio at ([com.glassstorm.phonemanager.core.domain.service.StreamService]). */
 const val SAMPLE_RATE_HZ: Int = 16_000
 
 /** Requested JWT lifetime in seconds (the reference client's value). */

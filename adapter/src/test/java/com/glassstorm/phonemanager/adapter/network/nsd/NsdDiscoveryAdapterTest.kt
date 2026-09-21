@@ -4,8 +4,8 @@ import android.content.Context
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.net.wifi.WifiManager
+import com.glassstorm.phonemanager.core.domain.network.DiscoveryState
 import com.glassstorm.phonemanager.core.model.PeerAddress
-import com.glassstorm.phonemanager.domain.network.DiscoveryState
 import com.google.common.truth.Truth.assertThat
 import org.junit.After
 import org.junit.Assert.fail
@@ -24,7 +24,7 @@ import org.robolectric.shadows.ShadowWifiManager
  * Pinned to API 29 (the app's targetSdk) so every branch under test is the
  * deprecated NSD path — the same path Robolectric's [ShadowNsdManager] drives.
  * The API-34+ `registerServiceInfoCallback` branch is gated by
- * `usesServiceInfoCallback` and locked in the `:domain` predicate tests.
+ * `usesServiceInfoCallback` and locked in the `:core:domain` predicate tests.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [29])

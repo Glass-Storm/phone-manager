@@ -7,7 +7,7 @@ import java.nio.ByteOrder
  * The Kotlin mirror of `tools/mockpeer/frames.go`.
  *
  * The E2E gate is byte-EXACT video passthrough: the hub must hand the recording
- * [com.glassstorm.phonemanager.domain.adapter.relay.FrameSink] the same bytes the
+ * [com.glassstorm.phonemanager.core.domain.adapter.relay.FrameSink] the same bytes the
  * Go peer generated. Re-deriving those bytes in the test (rather than only
  * checking a length) is what makes "the relay did not decode/re-encode" an actual
  * assertion. This function MUST stay byte-identical to `SyntheticVideoNAL`:

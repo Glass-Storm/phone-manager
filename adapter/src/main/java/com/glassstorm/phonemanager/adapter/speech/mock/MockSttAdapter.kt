@@ -1,7 +1,7 @@
 package com.glassstorm.phonemanager.adapter.speech.mock
 
 import com.glassstorm.phonemanager.adapter.speech.speechmatics.SAMPLE_RATE_HZ
-import com.glassstorm.phonemanager.domain.adapter.speech.SttPort
+import com.glassstorm.phonemanager.core.domain.adapter.speech.SttPort
 import java.util.concurrent.ConcurrentHashMap
 
 /**

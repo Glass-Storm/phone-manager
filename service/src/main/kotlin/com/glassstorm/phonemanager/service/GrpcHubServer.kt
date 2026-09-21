@@ -1,6 +1,6 @@
 package com.glassstorm.phonemanager.service
 
-import com.glassstorm.phonemanager.domain.adapter.transport.HubServer
+import com.glassstorm.phonemanager.core.domain.adapter.transport.HubServer
 import io.grpc.Server
 import io.grpc.ServerBuilder
 import java.util.concurrent.TimeUnit
