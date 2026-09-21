@@ -1,13 +1,13 @@
 package com.glassstorm.phonemanager
 
-import com.glassstorm.phonemanager.adapter.config.RuntimeConfigStore
-import com.glassstorm.phonemanager.adapter.network.nsd.NsdDiscoveryAdapter
-import com.glassstorm.phonemanager.adapter.network.wifi.LocalOnlyHotspotAdapter
-import com.glassstorm.phonemanager.adapter.speech.mock.MockSttAdapter
-import com.glassstorm.phonemanager.adapter.speech.speechmatics.ADD_TRANSCRIPT
-import com.glassstorm.phonemanager.adapter.speech.speechmatics.DEFAULT_LANGUAGE
-import com.glassstorm.phonemanager.adapter.speech.speechmatics.NORMAL_CLOSURE
-import com.glassstorm.phonemanager.adapter.speech.speechmatics.SAMPLE_RATE_HZ
+import com.glassstorm.phonemanager.adapter.android.config.RuntimeConfigStore
+import com.glassstorm.phonemanager.adapter.android.network.nsd.NsdDiscoveryAdapter
+import com.glassstorm.phonemanager.adapter.android.network.wifi.LocalOnlyHotspotAdapter
+import com.glassstorm.phonemanager.adapter.jvm.speech.mock.MockSttAdapter
+import com.glassstorm.phonemanager.adapter.jvm.speech.speechmatics.ADD_TRANSCRIPT
+import com.glassstorm.phonemanager.adapter.jvm.speech.speechmatics.DEFAULT_LANGUAGE
+import com.glassstorm.phonemanager.adapter.jvm.speech.speechmatics.NORMAL_CLOSURE
+import com.glassstorm.phonemanager.adapter.jvm.speech.speechmatics.SAMPLE_RATE_HZ
 import com.glassstorm.phonemanager.core.domain.adapter.config.AppConfig
 import com.glassstorm.phonemanager.core.domain.service.PairingService
 import com.glassstorm.phonemanager.core.domain.service.StreamService

@@ -19,7 +19,15 @@ dependencyResolutionManagement {
 rootProject.name = "phone-manager"
 
 include(":app")
-include(":adapter")
+// The adapters are split by ANDROID DEPENDENCE. `:adapter:jvm` is a plain Kotlin
+// library (the STT engines, the discarding frame sink, the in-memory repository)
+// with ZERO Android imports; it never depends on `:adapter:android`. `:adapter:android`
+// holds the platform-backed adapters (SQLite, hotspot, NSD, the config store) and
+// may depend on the domain ports only. `SttFactory` lives in `:adapter:jvm` and
+// selects its engine through the `AppConfig` PORT, which is what makes the split
+// possible without a backward edge.
+include(":adapter:jvm")
+include(":adapter:android")
 // The hand-written domain DTOs (pure Kotlin data types, zero dependencies): the
 // shared language spoken across every layer, extracted so consumers depend on
 // the data alone rather than the whole `:core:domain` port module.

@@ -23,6 +23,9 @@ annotationsApi = "6.0.53"
 desugarJdkLibs = "2.1.5"
 lumo = "1.2.5"
 okhttp = "4.12.0"
+# The real `org.json` implementation. Android ships this class in the platform,
+# but the pure-JVM `:adapter:jvm` Speechmatics wire code needs the artifact.
+orgJson = "20240303"
 # The `2.1.0-` prefix IS the Kotlin version KSP is built against: it must move in
 # lockstep with Kotlin. The `1.0.x` patch is the last line still shipping the KSP1
 # task; `ksp.useKSP2=true` selects the KSP2 implementation instead.
@@ -81,6 +84,7 @@ dagger-compiler = { group = "com.google.dagger", name = "dagger-compiler", versi
 annotations-api = { group = "org.apache.tomcat", name = "annotations-api", version.ref = "annotationsApi" }
 desugar_jdk_libs = { group = "com.android.tools", name = "desugar_jdk_libs", version.ref = "desugarJdkLibs" }
 okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
+org-json = { group = "org.json", name = "json", version.ref = "orgJson" }
 protoc-gen-grpc-java = { group = "io.grpc", name = "protoc-gen-grpc-java", version.ref = "grpc" }
 protoc-gen-grpc-kotlin = { group = "io.grpc", name = "protoc-gen-grpc-kotlin", version.ref = "grpcKotlin" }
 

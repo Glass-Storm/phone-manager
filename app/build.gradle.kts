@@ -46,7 +46,11 @@ dependencies {
     implementation(project(":core:domain"))
     implementation(project(":core:service"))
     implementation(project(":transport:grpc"))
-    implementation(project(":adapter"))
+    // The adapters are split by Android dependence: `:adapter:jvm` (STT engines,
+    // memory repo, frame sink) and `:adapter:android` (SQLite, hotspot, NSD,
+    // config store). The composition root wires both.
+    implementation(project(":adapter:jvm"))
+    implementation(project(":adapter:android"))
 
     // The GO gRPC transport (T6 spike verdict: netty-shaded, IPv4 explicit, plaintext).
     // Declared here as well because every dependency above is `implementation`, so

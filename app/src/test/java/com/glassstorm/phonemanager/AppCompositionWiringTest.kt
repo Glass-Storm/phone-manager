@@ -1,9 +1,9 @@
 package com.glassstorm.phonemanager
 
 import androidx.test.core.app.ApplicationProvider
-import com.glassstorm.phonemanager.adapter.config.RuntimeConfigStore
-import com.glassstorm.phonemanager.adapter.repository.memory.MemoryDeviceRepository
-import com.glassstorm.phonemanager.adapter.repository.sqlite.SqliteDeviceRepository
+import com.glassstorm.phonemanager.adapter.android.config.RuntimeConfigStore
+import com.glassstorm.phonemanager.adapter.android.repository.sqlite.SqliteDeviceRepository
+import com.glassstorm.phonemanager.adapter.jvm.repository.memory.MemoryDeviceRepository
 import com.glassstorm.phonemanager.core.domain.adapter.config.AppConfig
 import com.glassstorm.phonemanager.core.domain.adapter.repository.DeviceRepository
 import com.glassstorm.phonemanager.core.domain.context.Context

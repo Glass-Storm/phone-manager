@@ -1,13 +1,13 @@
 package com.glassstorm.phonemanager
 
-import com.glassstorm.phonemanager.adapter.config.RuntimeConfigStore
-import com.glassstorm.phonemanager.adapter.network.nsd.NsdDiscoveryAdapter
-import com.glassstorm.phonemanager.adapter.network.wifi.LocalOnlyHotspotAdapter
-import com.glassstorm.phonemanager.adapter.relay.DiscardingFrameSink
-import com.glassstorm.phonemanager.adapter.repository.memory.MemoryDeviceRepository
-import com.glassstorm.phonemanager.adapter.repository.sqlite.SqliteDeviceRepository
-import com.glassstorm.phonemanager.adapter.speech.SttFactory
-import com.glassstorm.phonemanager.adapter.speech.mock.MockSttAdapter
+import com.glassstorm.phonemanager.adapter.android.config.RuntimeConfigStore
+import com.glassstorm.phonemanager.adapter.android.network.nsd.NsdDiscoveryAdapter
+import com.glassstorm.phonemanager.adapter.android.network.wifi.LocalOnlyHotspotAdapter
+import com.glassstorm.phonemanager.adapter.android.repository.sqlite.SqliteDeviceRepository
+import com.glassstorm.phonemanager.adapter.jvm.relay.DiscardingFrameSink
+import com.glassstorm.phonemanager.adapter.jvm.repository.memory.MemoryDeviceRepository
+import com.glassstorm.phonemanager.adapter.jvm.speech.SttFactory
+import com.glassstorm.phonemanager.adapter.jvm.speech.mock.MockSttAdapter
 import com.glassstorm.phonemanager.battery.AndroidBatteryExemption
 import com.glassstorm.phonemanager.battery.BatteryExemption
 import com.glassstorm.phonemanager.core.domain.adapter.config.AppConfig

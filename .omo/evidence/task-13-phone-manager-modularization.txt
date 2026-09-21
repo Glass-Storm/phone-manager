@@ -1,0 +1,209 @@
+================================================================================
+T13 - Split :adapter into :adapter:jvm + :adapter:android with Stt port injection
+================================================================================
+Repo: /home/chaos/workplace/fyp/phone-manager
+Base HEAD: 27077b4 (T12)
+Preamble (every Gradle call):
+  JAVA_HOME=/home/chaos/.jdk/jdk-21.0.12.1+1 ANDROID_HOME=/home/chaos/Android/Sdk ./gradlew <task>
+
+--------------------------------------------------------------------------------
+1. MODULE SPLIT (real, not cosmetic)
+--------------------------------------------------------------------------------
+Old: single `:adapter` (com.android.library), 12 main + 12 test Kt files.
+New: `:adapter:jvm` (phonemanager.kotlin.library, pure JVM) +
+     `:adapter:android` (phonemanager.android.library).
+
+`./gradlew projects`:
+  +--- Project ':adapter'
+  |    +--- Project ':adapter:android'
+  |    \--- Project ':adapter:jvm'
+  ... (+ :app, :contract, :core:{domain,model,service}, :testkit, :transport:grpc)
+
+adapter:jvm  (7 main, 5 test)  -> package com.glassstorm.phonemanager.adapter.jvm.*
+  main: speech/SttFactory.kt, speech/mock/MockSttAdapter.kt,
+        speech/speechmatics/{SpeechmaticsWire,SpeechmaticsClient,SpeechmaticsSttAdapter}.kt,
+        relay/DiscardingFrameSink.kt,
+        repository/memory/MemoryDeviceRepository.kt       [§4: stayed here, NOT testkit]
+  test: speech/SttFactoryTest.kt, speech/mock/MockSttAdapterTest.kt,
+        speech/speechmatics/{SpeechmaticsWireTest,SpeechmaticsSessionTest}.kt,
+        repository/memory/MemoryDeviceRepositoryTest.kt
+
+adapter:android (5 main, 7 test) -> package com.glassstorm.phonemanager.adapter.android.*
+  main: config/RuntimeConfigStore.kt, network/nsd/NsdDiscoveryAdapter.kt,
+        network/wifi/{HotspotLauncher,LocalOnlyHotspotAdapter}.kt,
+        repository/sqlite/SqliteDeviceRepository.kt
+  test: AdapterHarnessSmokeTest.kt, config/RuntimeConfigStoreTest.kt,
+        network/nsd/NsdDiscoveryAdapterTest.kt,
+        network/wifi/{LocalOnlyHotspotAdapterApiBranchTest,LocalOnlyHotspotAdapterTest,
+                      LocalOnlyHotspotPermissionRevokedTest}.kt,
+        repository/sqlite/SqliteDeviceRepositoryTest.kt
+
+Test placement decisions (per T13 §2):
+  - SttFactoryTest: REWORKED to a pure-JVM in-memory fake AppConfig -> :adapter:jvm.
+  - SpeechmaticsWireTest / SpeechmaticsSessionTest: had Robolectric annotations but
+    ZERO android imports; only needed it for the REAL org.json. Now the real
+    `org.json:json` artifact is an `implementation` dep of :adapter:jvm, so both
+    dropped Robolectric and moved to :adapter:jvm. All 10+7 tests still pass.
+  - AdapterHarnessSmokeTest: genuinely exercises the Robolectric harness -> :adapter:android.
+
+All moves via `git mv`; `git diff --cached --stat -M` shows R (renames), only
+SttFactoryTest is A+D (deliberately rewritten, 91 -> 111 lines).
+
+--------------------------------------------------------------------------------
+2. PURITY PROOFS  (T13 §7 required greps)
+--------------------------------------------------------------------------------
+$ grep -rn 'import android' adapter/jvm/src --include='*.kt' | wc -l
+0
+$ ./gradlew :adapter:jvm:dependencies --configuration compileClasspath | grep 'project :'
++--- project :core:domain
+|    +--- project :core:model
+     (ONLY :core:domain, transitively re-exporting :core:model; NOT :adapter:android)
+$ grep -rn 'adapter\.android' adapter/jvm/src --include='*.kt' | wc -l
+0
+$ grep -rn 'RuntimeConfigStore\|SttAdapterKind' adapter/jvm/src --include='*.kt' | wc -l
+0
+$ grep -rn 'Robolectric' adapter/jvm/src --include='*.kt' (count of @RunWith/import = )
+0   (3 prose mentions in KDoc stating Robolectric is NOT needed - no annotation/import)
+$ ./gradlew :adapter:jvm:dependencies --configuration testRuntimeClasspath | grep -ic robolectric
+0   (Robolectric is NOT on :adapter:jvm's test classpath at all)
+
+$ ./gradlew :adapter:android:dependencies --configuration debugCompileClasspath | grep -E 'project :|io.grpc|protobuf|contract'
++--- project :core:domain
+|    +--- project :core:model
+     (no :contract, no grpc, no protobuf, no :adapter:jvm)
+
+$ grep -rn 'ecosys\.v1' adapter/ --include='*.kt' | grep -v build | wc -l
+0   (ecosys.v1 stays out of BOTH adapter modules)
+
+$ grep -rln 'SttAdapterKind' --include='*.kt' . | grep -v build
+./adapter/android/src/main/kotlin/.../adapter/android/config/RuntimeConfigStore.kt
+./adapter/android/src/test/kotlin/.../adapter/android/config/RuntimeConfigStoreTest.kt
+     (enum now PRIVATE to :adapter:android, as required)
+
+--------------------------------------------------------------------------------
+3. SttFactory -> AppConfig PORT  (design decision D8, behaviour-preservation)
+--------------------------------------------------------------------------------
+Old signature: class SttFactory(private val config: RuntimeConfigStore, transport)
+  ... when (config.sttAdapterKind()) { SttAdapterKind.MOCK -> MockSttAdapter()
+        SttAdapterKind.SPEECHMATICS -> SpeechmaticsSttAdapter(SpeechmaticsConfig(config.apiKey(), config.region()), transport) }
+
+New signature: class SttFactory(private val config: AppConfig, transport)
+  ... when (config.sttEngine()) { SttEngine.MOCK -> MockSttAdapter()
+        SttEngine.SPEECHMATICS -> SpeechmaticsSttAdapter(SpeechmaticsConfig(config.apiKey(), config.region()), transport) }
+
+`diff` of old-vs-new (package/import/KDoc lines stripped) shows ONLY:
+  < private val config: RuntimeConfigStore          > private val config: AppConfig
+  < when (config.sttAdapterKind())                  > when (config.sttEngine())
+  < SttAdapterKind.MOCK / .SPEECHMATICS             > SttEngine.MOCK / .SPEECHMATICS
+  + 5 new KDoc lines explaining the port choice
+=> MOCK default unchanged; SPEECHMATICS branch unchanged; apiKey()/region() reads
+   unchanged; eager-construct/lazy-connect unchanged. Behaviour IDENTICAL.
+   (RuntimeConfigStore.sttEngine() maps MOCK->MOCK / SPEECHMATICS->SPEECHMATICS,
+    so the persisted value resolves to the same engine as before.)
+
+SttFactoryTest now proves BOTH branches with an in-memory FakeAppConfig:
+  default -> MockSttAdapter; SPEECHMATICS -> SpeechmaticsSttAdapter;
+  MOCK transcribes offline; no-key SPEECHMATICS -> null (no socket); close no-op.
+
+--------------------------------------------------------------------------------
+4. LOGIC-IDENTITY of moved files (same discipline as T9-T12)
+--------------------------------------------------------------------------------
+For each of the 11 moved .kt files, `git show HEAD:<old> | grep -vE '^package |^import '`
+vs `grep -vE '^package |^import ' <new>` is byte-identical:
+  IDENTICAL: MockSttAdapter.kt
+  IDENTICAL: SpeechmaticsWire.kt
+  IDENTICAL: SpeechmaticsClient.kt
+  IDENTICAL: SpeechmaticsSttAdapter.kt
+  IDENTICAL: DiscardingFrameSink.kt
+  IDENTICAL: MemoryDeviceRepository.kt
+  IDENTICAL: RuntimeConfigStore.kt
+  IDENTICAL: NsdDiscoveryAdapter.kt
+  IDENTICAL: HotspotLauncher.kt
+  IDENTICAL: LocalOnlyHotspotAdapter.kt
+  IDENTICAL: SqliteDeviceRepository.kt
+(Only SttFactory.kt intentionally changed per D8; SttFactoryTest intentionally rewritten.)
+
+--------------------------------------------------------------------------------
+5. FULL GATE (--rerun-tasks) - XML-parsed from build/test-results
+--------------------------------------------------------------------------------
+Command:
+  ./gradlew :contract:test :core:model:test :core:domain:test :core:service:test \
+            :transport:grpc:test :adapter:jvm:test :adapter:android:testDebugUnitTest \
+            :app:testDebugUnitTest --rerun-tasks --console=plain
+BUILD SUCCESSFUL in 53s
+
+Parsed per-module (tests / failures / errors):
+  :contract         8 / 0 / 0
+  :core:model       0 / 0 / 0   (no test sources yet - unchanged)
+  :core:domain     45 / 0 / 0
+  :core:service    26 / 0 / 0
+  :transport:grpc  42 / 0 / 0
+  :adapter:jvm     38 / 0 / 0   (MemoryRepoTest 6, MockSttAdapterTest 10, Session 7, Wire 10, SttFactory 5)
+  :adapter:android 52 / 0 / 0   (Harness 1, RuntimeConfigStore 16, Nsd 9, LocalOnlyHotspot 13+3+3, Sqlite 7)
+  :app            107 / 0 / 0
+  TOTAL           318 / 0 / 0   ==  BASELINE 318 preserved (38+52 = old adapter 90).
+
+--------------------------------------------------------------------------------
+6. STYLE + RELEASE GATE
+--------------------------------------------------------------------------------
+$ ./gradlew ktlintCheck --console=plain
+BUILD SUCCESSFUL   (import-order fixed in AppCompositionWiringTest after the
+                    package rewrite; :adapter:jvm and :adapter:android both checked)
+
+$ ./gradlew :app:assembleRelease --console=plain
+BUILD SUCCESSFUL in 1m 36s
+APK: app/build/outputs/apk/release/app-release-unsigned.apk  10,038,201 bytes (9.6 MB)
+netty retention (strings on classes.dex):
+  NettyServerProvider  = 1
+  NioServerSocketChannel = 4
+=> the runtime-discovered netty transport survived R8 minify+shrink.
+
+--------------------------------------------------------------------------------
+7. DEPENDENCY WIRING
+--------------------------------------------------------------------------------
+settings.gradle.kts: `include(":adapter")` REPLACED by
+  include(":adapter:jvm")
+  include(":adapter:android")
+app/build.gradle.kts: `implementation(project(":adapter"))` REPLACED by
+  implementation(project(":adapter:jvm"))
+  implementation(project(":adapter:android"))
+AppComposition.kt + AppCompositionWiringTest.kt + ConstantValuesTest.kt imports
+repointed to adapter.jvm.* / adapter.android.*.
+libs.versions.toml: added orgJson = "20240303" + org-json library.
+
+--------------------------------------------------------------------------------
+8. DEVIATION / DECISION RECORD
+--------------------------------------------------------------------------------
+(a) org.json dependency added to :adapter:jvm. The Speechmatics wire code uses
+    `org.json.JSONObject`/`JSONException`. On Android those ship in the platform,
+    but a pure-JVM module has no such class; without the artifact the module
+    cannot compile. Added `implementation(libs.org.json)` (real org.json 20240303)
+    and dropped the Robolectric workaround from the two Speechmatics tests. This
+    is a necessary consequence of the mandated split, not a behaviour change.
+(b) MemoryDeviceRepository NOT moved to testing/testkit (T13 §4 ordering
+    correction). app/.../AppComposition.kt:102 still registers it in PRODUCTION
+    for the androidContext == null fallback, which is only deleted in T16.
+    It lives in :adapter:jvm here; T16 relocates it.
+(c) AdapterHarnessSmokeTest placed in :adapter:android (it exercises the
+    Robolectric harness that the Android adapters' tests need).
+
+--------------------------------------------------------------------------------
+9. CLEANUP
+--------------------------------------------------------------------------------
+- Removed the old adapter/build.gradle.kts and the empty adapter/src tree
+  (git rm; directories deleted).
+- `grep -rn 'project(":adapter")'` and old `adapter/src/main/java` path refs: 0.
+- No build artifacts committed.
+
+--------------------------------------------------------------------------------
+10. RISKS / FOLLOW-UPS
+--------------------------------------------------------------------------------
+- org.json is now declared twice on :app's runtime classpath conceptually (platform
+  android.jar supplies it on-device, artifact supplies unit-test/JVM). Android's
+  platform class wins at runtime; the API surface is identical, so no conflict.
+  No duplicate-class error observed in assembleRelease.
+- T14 must update the README module table and rehome testkit; T16 must relocate
+  MemoryDeviceRepository to testing/testkit when it deletes the null-context fallback.
+- No emulator (KVM denied): on-device QA remains impossible and non-blocking
+  (issues.md R2).
+================================================================================
