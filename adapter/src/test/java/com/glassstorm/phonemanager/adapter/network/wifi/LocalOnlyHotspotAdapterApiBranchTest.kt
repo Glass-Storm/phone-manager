@@ -24,17 +24,17 @@ import org.robolectric.annotation.Config
  * SDK stub (only `setChannels`/`build` are exposed), so the test drives them
  * reflectively — exactly what the Robolectric android-all jar supports.
  */
-private fun GoBuildSoftApConfig(
+private fun buildSoftApConfig(
     ssid: String,
     passphrase: String,
 ): SoftApConfiguration {
-    val GoBuilder = SoftApConfiguration.Builder()
-    val GoBuilderClass = SoftApConfiguration.Builder::class.java
-    GoBuilderClass.getMethod("setSsid", String::class.java).invoke(GoBuilder, ssid)
-    GoBuilderClass
+    val builder = SoftApConfiguration.Builder()
+    val builderClass = SoftApConfiguration.Builder::class.java
+    builderClass.getMethod("setSsid", String::class.java).invoke(builder, ssid)
+    builderClass
         .getMethod("setPassphrase", String::class.java, Int::class.javaPrimitiveType)
-        .invoke(GoBuilder, passphrase, SoftApConfiguration.SECURITY_TYPE_WPA2_PSK)
-    return GoBuilder.build()
+        .invoke(builder, passphrase, SoftApConfiguration.SECURITY_TYPE_WPA2_PSK)
+    return builder.build()
 }
 
 /**
@@ -50,99 +50,99 @@ class LocalOnlyHotspotAdapterApiBranchTest {
     @RunWith(RobolectricTestRunner::class)
     @Config(sdk = [30])
     class OnApi30 {
-        private val GoApp: Application = ApplicationProvider.getApplicationContext()
-        private val GoWifi: WifiManager =
-            GoApp.getSystemService(Context.WIFI_SERVICE) as WifiManager
+        private val app: Application = ApplicationProvider.getApplicationContext()
+        private val wifi: WifiManager =
+            app.getSystemService(Context.WIFI_SERVICE) as WifiManager
 
-        private fun GoBuildSoftApReservation(
+        private fun buildSoftApReservation(
             ssid: String,
             passphrase: String,
         ): WifiManager.LocalOnlyHotspotReservation {
-            val GoConfig = GoBuildSoftApConfig(ssid, passphrase)
-            val GoCtor =
+            val config = buildSoftApConfig(ssid, passphrase)
+            val ctor =
                 WifiManager.LocalOnlyHotspotReservation::class.java
                     .getDeclaredConstructor(WifiManager::class.java, SoftApConfiguration::class.java)
-            GoCtor.isAccessible = true
-            return GoCtor.newInstance(GoWifi, GoConfig)
+            ctor.isAccessible = true
+            return ctor.newInstance(wifi, config)
         }
 
         @Test
         fun `reads the ssid and passphrase from the soft ap configuration`() {
             // Given API 30 with permission and location on
-            Shadows.shadowOf(GoApp).grantPermissions(Manifest.permission.ACCESS_FINE_LOCATION)
-            val GoLoc = GoApp.getSystemService(Context.LOCATION_SERVICE) as LocationManager
-            Shadows.shadowOf(GoLoc).setLocationEnabled(true)
-            val GoHotspot =
+            Shadows.shadowOf(app).grantPermissions(Manifest.permission.ACCESS_FINE_LOCATION)
+            val loc = app.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+            Shadows.shadowOf(loc).setLocationEnabled(true)
+            val hotspot =
                 LocalOnlyHotspotAdapter(
-                    GoContext = GoApp,
-                    GoLauncher =
+                    context = app,
+                    launcher =
                         HotspotLauncher {
-                            HotspotLaunch.Granted(GoBuildSoftApReservation("Api30-AP", "api30-pass"))
+                            HotspotLaunch.Granted(buildSoftApReservation("Api30-AP", "api30-pass"))
                         },
-                    GoTetherProbe = TetherProbe { emptyList() },
+                    tetherProbe = TetherProbe { emptyList() },
                 )
 
             // When started
-            val GoInfo = GoHotspot.GoStartHotspot()
+            val info = hotspot.startHotspot()
 
             // Then the SoftApConfiguration branch supplied the credentials
-            assertThat(GoInfo.GoSsid).isEqualTo("Api30-AP")
-            assertThat(GoInfo.GoPassphrase).isEqualTo("api30-pass")
-            assertThat(GoHotspot.GoState).isEqualTo(HotspotState.ACTIVE)
+            assertThat(info.ssid).isEqualTo("Api30-AP")
+            assertThat(info.passphrase).isEqualTo("api30-pass")
+            assertThat(hotspot.state).isEqualTo(HotspotState.ACTIVE)
         }
     }
 
     @RunWith(RobolectricTestRunner::class)
     @Config(sdk = [33])
     class OnApi33 {
-        private val GoApp: Application = ApplicationProvider.getApplicationContext()
+        private val app: Application = ApplicationProvider.getApplicationContext()
 
         @Test
         fun `requires NEARBY_WIFI_DEVICES and fails into ERROR without it`() {
             // Given API 33 with neither permission granted
-            val GoLoc = GoApp.getSystemService(Context.LOCATION_SERVICE) as LocationManager
-            Shadows.shadowOf(GoLoc).setLocationEnabled(true)
-            val GoHotspot =
+            val loc = app.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+            Shadows.shadowOf(loc).setLocationEnabled(true)
+            val hotspot =
                 LocalOnlyHotspotAdapter(
-                    GoContext = GoApp,
-                    GoLauncher = HotspotLauncher { HotspotLaunch.TimedOut },
-                    GoTetherProbe = TetherProbe { emptyList() },
+                    context = app,
+                    launcher = HotspotLauncher { HotspotLaunch.TimedOut },
+                    tetherProbe = TetherProbe { emptyList() },
                 )
 
             // When started
-            assertThrows(HotspotUnavailableException::class.java) { GoHotspot.GoStartHotspot() }
+            assertThrows(HotspotUnavailableException::class.java) { hotspot.startHotspot() }
 
             // Then the exact ERROR state is reached even though FINE_LOCATION was never the gate
-            assertThat(GoHotspot.GoState).isEqualTo(HotspotState.ERROR)
-            assertThat(GoHotspot.GoIsActive()).isFalse()
+            assertThat(hotspot.state).isEqualTo(HotspotState.ERROR)
+            assertThat(hotspot.isActive()).isFalse()
         }
 
         @Test
         fun `starts once NEARBY_WIFI_DEVICES is granted`() {
             // Given API 33 with the modern permission granted and location on
-            Shadows.shadowOf(GoApp).grantPermissions(Manifest.permission.NEARBY_WIFI_DEVICES)
-            val GoLoc = GoApp.getSystemService(Context.LOCATION_SERVICE) as LocationManager
-            Shadows.shadowOf(GoLoc).setLocationEnabled(true)
-            val GoWifi = GoApp.getSystemService(Context.WIFI_SERVICE) as WifiManager
-            val GoConfig = GoBuildSoftApConfig("Api33-AP", "api33-pass")
-            val GoCtor =
+            Shadows.shadowOf(app).grantPermissions(Manifest.permission.NEARBY_WIFI_DEVICES)
+            val loc = app.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+            Shadows.shadowOf(loc).setLocationEnabled(true)
+            val wifi = app.getSystemService(Context.WIFI_SERVICE) as WifiManager
+            val config = buildSoftApConfig("Api33-AP", "api33-pass")
+            val ctor =
                 WifiManager.LocalOnlyHotspotReservation::class.java
                     .getDeclaredConstructor(WifiManager::class.java, SoftApConfiguration::class.java)
-            GoCtor.isAccessible = true
-            val GoReservation = GoCtor.newInstance(GoWifi, GoConfig)
-            val GoHotspot =
+            ctor.isAccessible = true
+            val reservation = ctor.newInstance(wifi, config)
+            val hotspot =
                 LocalOnlyHotspotAdapter(
-                    GoContext = GoApp,
-                    GoLauncher = HotspotLauncher { HotspotLaunch.Granted(GoReservation) },
-                    GoTetherProbe = TetherProbe { emptyList() },
+                    context = app,
+                    launcher = HotspotLauncher { HotspotLaunch.Granted(reservation) },
+                    tetherProbe = TetherProbe { emptyList() },
                 )
 
             // When started
-            val GoInfo = GoHotspot.GoStartHotspot()
+            val info = hotspot.startHotspot()
 
             // Then the NEARBY_WIFI_DEVICES branch is the one that granted access
-            assertThat(GoInfo.GoSsid).isEqualTo("Api33-AP")
-            assertThat(GoHotspot.GoState).isEqualTo(HotspotState.ACTIVE)
+            assertThat(info.ssid).isEqualTo("Api33-AP")
+            assertThat(hotspot.state).isEqualTo(HotspotState.ACTIVE)
         }
     }
 }

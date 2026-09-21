@@ -24,14 +24,14 @@ import org.robolectric.shadows.ShadowService
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [29])
 class HubForegroundServiceTest {
-    private val GoContext: Context = ApplicationProvider.getApplicationContext()
+    private val context: Context = ApplicationProvider.getApplicationContext()
 
-    private fun GoStartService(): HubForegroundService {
-        val GoIntent =
-            Intent(GoContext, HubForegroundService::class.java)
+    private fun startService(): HubForegroundService {
+        val intent =
+            Intent(context, HubForegroundService::class.java)
                 .putExtra(HubForegroundService.GO_EXTRA_PORT, 0)
         return Robolectric
-            .buildService(HubForegroundService::class.java, GoIntent)
+            .buildService(HubForegroundService::class.java, intent)
             .create()
             .startCommand(0, 0)
             .get()
@@ -40,128 +40,128 @@ class HubForegroundServiceTest {
     @Test
     fun `the notification channel exists before the service goes foreground`() {
         // Given a service that has been created and started
-        GoStartService()
+        startService()
 
         // When the notification manager is inspected
-        val GoManager = GoContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
         // Then the channel the notification was posted on really exists
-        assertThat(GoManager.getNotificationChannel("hub-foreground")).isNotNull()
+        assertThat(manager.getNotificationChannel("hub-foreground")).isNotNull()
     }
 
     @Test
     fun `starting the service posts an ongoing foreground notification`() {
         // Given a started service
-        val GoService = GoStartService()
+        val service = startService()
 
         // Then it is foreground with the hub's notification id and a live notification
-        val GoShadow = shadowOf(GoService) as ShadowService
-        assertThat(GoShadow.lastForegroundNotificationId).isEqualTo(1)
-        assertThat(GoShadow.lastForegroundNotification).isNotNull()
-        assertThat(GoShadow.isForegroundStopped).isFalse()
+        val shadow = shadowOf(service) as ShadowService
+        assertThat(shadow.lastForegroundNotificationId).isEqualTo(1)
+        assertThat(shadow.lastForegroundNotification).isNotNull()
+        assertThat(shadow.isForegroundStopped).isFalse()
     }
 
     @Test
     fun `the service returns START_STICKY so the hub is restarted after a kill`() {
         // Given a service asked to start
-        val GoIntent =
-            Intent(GoContext, HubForegroundService::class.java)
+        val intent =
+            Intent(context, HubForegroundService::class.java)
                 .putExtra(HubForegroundService.GO_EXTRA_PORT, 0)
 
         // When onStartCommand runs
-        val GoController = Robolectric.buildService(HubForegroundService::class.java, GoIntent).create()
-        val GoResult = GoController.get().onStartCommand(GoIntent, 0, 0)
+        val controller = Robolectric.buildService(HubForegroundService::class.java, intent).create()
+        val result = controller.get().onStartCommand(intent, 0, 0)
 
         // Then the result is START_STICKY
-        assertThat(GoResult).isEqualTo(android.app.Service.START_STICKY)
-        GoController.destroy()
+        assertThat(result).isEqualTo(android.app.Service.START_STICKY)
+        controller.destroy()
     }
 
     @Test
     fun `destroying the service stops the hub and releases the port`() {
         // Given a running service that bound an ephemeral hub port
-        val GoIntent =
-            Intent(GoContext, HubForegroundService::class.java)
+        val intent =
+            Intent(context, HubForegroundService::class.java)
                 .putExtra(HubForegroundService.GO_EXTRA_PORT, 0)
-        val GoController =
+        val controller =
             Robolectric
-                .buildService(HubForegroundService::class.java, GoIntent)
+                .buildService(HubForegroundService::class.java, intent)
                 .create()
                 .startCommand(0, 0)
-        val GoHub =
+        val hub =
             com.glassstorm.phonemanager.domain.context.FromContext<
                 com.glassstorm.phonemanager.domain.adapter.transport.HubServer,
-            >(AppComposition.GoAppContext())
-        assertThat(GoHub.GoIsRunning()).isTrue()
-        val GoPort = GoHub.GoBoundPort()
+            >(AppComposition.appContext())
+        assertThat(hub.isRunning()).isTrue()
+        val port = hub.boundPort()
 
         // When the service is destroyed
-        GoController.destroy()
+        controller.destroy()
 
         // Then the listener is stopped and the port is gone
-        assertThat(GoHub.GoIsRunning()).isFalse()
-        assertThat(GoHub.GoBoundPort()).isEqualTo(0)
-        assertThat(GoPort).isGreaterThan(0)
+        assertThat(hub.isRunning()).isFalse()
+        assertThat(hub.boundPort()).isEqualTo(0)
+        assertThat(port).isGreaterThan(0)
     }
 
     @Test
     fun `repeated onStartCommand never double-starts the listener`() {
         // Given a started service
-        val GoIntent =
-            Intent(GoContext, HubForegroundService::class.java)
+        val intent =
+            Intent(context, HubForegroundService::class.java)
                 .putExtra(HubForegroundService.GO_EXTRA_PORT, 0)
-        val GoController =
+        val controller =
             Robolectric
-                .buildService(HubForegroundService::class.java, GoIntent)
+                .buildService(HubForegroundService::class.java, intent)
                 .create()
                 .startCommand(0, 0)
-        val GoHub =
+        val hub =
             com.glassstorm.phonemanager.domain.context.FromContext<
                 com.glassstorm.phonemanager.domain.adapter.transport.HubServer,
-            >(AppComposition.GoAppContext())
-        val GoPort = GoHub.GoBoundPort()
+            >(AppComposition.appContext())
+        val port = hub.boundPort()
 
         // When the OS re-delivers the start command
-        GoController.get().onStartCommand(GoIntent, 0, 1)
+        controller.get().onStartCommand(intent, 0, 1)
 
         // Then the same listener instance is still bound to the same port (no
         // double-start, no rebind)
-        assertThat(GoHub.GoIsRunning()).isTrue()
-        assertThat(GoHub.GoBoundPort()).isEqualTo(GoPort)
+        assertThat(hub.isRunning()).isTrue()
+        assertThat(hub.boundPort()).isEqualTo(port)
 
-        GoController.destroy()
+        controller.destroy()
     }
 
     @Test
     fun `a missing hotspot permission never leaves the hotspot ACTIVE`() {
         // Given the location permission is denied (Robolectric's default) and a
         // started service that therefore cannot bring the access point up
-        shadowOf(GoContext as android.app.Application).denyPermissions(
+        shadowOf(context as android.app.Application).denyPermissions(
             android.Manifest.permission.ACCESS_FINE_LOCATION,
         )
-        val GoController =
+        val controller =
             Robolectric
                 .buildService(
                     HubForegroundService::class.java,
-                    Intent(GoContext, HubForegroundService::class.java).putExtra(HubForegroundService.GO_EXTRA_PORT, 0),
+                    Intent(context, HubForegroundService::class.java).putExtra(HubForegroundService.GO_EXTRA_PORT, 0),
                 ).create()
                 .startCommand(0, 0)
-        val GoHotspot =
+        val hotspot =
             com.glassstorm.phonemanager.domain.context.FromContext<
                 com.glassstorm.phonemanager.domain.adapter.network.HotspotController,
-            >(AppComposition.GoAppContext())
+            >(AppComposition.appContext())
 
         // When the access point state is inspected
         // Then it never claims ACTIVE, and the hub listener still came up so wired
         // peers stay reachable
-        assertThat(GoHotspot.GoIsActive()).isFalse()
-        val GoHub =
+        assertThat(hotspot.isActive()).isFalse()
+        val hub =
             com.glassstorm.phonemanager.domain.context.FromContext<
                 com.glassstorm.phonemanager.domain.adapter.transport.HubServer,
-            >(AppComposition.GoAppContext())
-        assertThat(GoHub.GoIsRunning()).isTrue()
+            >(AppComposition.appContext())
+        assertThat(hub.isRunning()).isTrue()
 
-        GoController.destroy()
+        controller.destroy()
     }
 
     @Test
@@ -169,20 +169,20 @@ class HubForegroundServiceTest {
         // Given a created service, which records the Android Context into the
         // composition root before anything resolves it
         Robolectric.buildService(HubForegroundService::class.java).create().destroy()
-        val GoCtx = AppComposition.GoAppContext()
+        val ctx = AppComposition.appContext()
 
         // When the network ports are resolved by their domain types
-        val GoHotspot =
+        val hotspot =
             com.glassstorm.phonemanager.domain.context.FromContextOrNull<
                 com.glassstorm.phonemanager.domain.adapter.network.HotspotController,
-            >(GoCtx)
-        val GoDiscovery =
+            >(ctx)
+        val discovery =
             com.glassstorm.phonemanager.domain.context.FromContextOrNull<
                 com.glassstorm.phonemanager.domain.adapter.network.Discovery,
-            >(GoCtx)
+            >(ctx)
 
         // Then the platform-backed adapters are registered, so bring-up is possible
-        assertThat(GoHotspot).isNotNull()
-        assertThat(GoDiscovery).isNotNull()
+        assertThat(hotspot).isNotNull()
+        assertThat(discovery).isNotNull()
     }
 }

@@ -31,18 +31,18 @@ import java.util.concurrent.Executors
  */
 class PairingConcurrencyTest {
     @get:Rule
-    val GoDeadline: Timeout = Timeout.seconds(60)
+    val deadline: Timeout = Timeout.seconds(60)
 
-    private lateinit var GoCtx: Context
-    private lateinit var GoRepo: FakeDeviceRepository
-    private lateinit var GoPairing: PairingServiceImpl
+    private lateinit var ctx: Context
+    private lateinit var repo: FakeDeviceRepository
+    private lateinit var pairing: PairingServiceImpl
 
     @Before
-    fun GoBuildService() {
-        GoCtx = Context()
-        GoRepo = FakeDeviceRepository()
-        Register<DeviceRepository>(GoCtx, GoRepo)
-        GoPairing = PairingServiceImpl(GoCtx, GoClock = { System.currentTimeMillis() })
+    fun buildService() {
+        ctx = Context()
+        repo = FakeDeviceRepository()
+        Register<DeviceRepository>(ctx, repo)
+        pairing = PairingServiceImpl(ctx, clock = { System.currentTimeMillis() })
     }
 
     // ------------------------------------------------- case 1: single-use under race
@@ -50,37 +50,37 @@ class PairingConcurrencyTest {
     @Test
     fun `concurrent attempts with the correct pin mint exactly one token`() {
         // Given an open single-use window and N callers lined up on one barrier
-        val GoWindow = GoPairing.GoOpenWindow(ttlMs = 120_000L)
-        val GoWorkers = 32
-        val GoGate = CyclicBarrier(GoWorkers)
-        val GoPool: ExecutorService = Executors.newFixedThreadPool(GoWorkers)
+        val window = pairing.openWindow(ttlMs = 120_000L)
+        val workers = 32
+        val gate = CyclicBarrier(workers)
+        val pool: ExecutorService = Executors.newFixedThreadPool(workers)
 
         try {
-            // When all N fire GoPair with the CORRECT pin simultaneously
-            val GoFutures =
-                (0 until GoWorkers).map { GoIndex ->
-                    GoPool.submit<PairOutcome> {
-                        GoGate.await()
-                        GoPairing.GoPair(GoWindow.GoPin, "peer-$GoIndex", "phone")
+            // When all N fire pair with the CORRECT pin simultaneously
+            val futures =
+                (0 until workers).map { index ->
+                    pool.submit<PairOutcome> {
+                        gate.await()
+                        pairing.pair(window.pin, "peer-$index", "phone")
                     }
                 }
-            val GoOutcomes = GoFutures.map { it.get() }
+            val outcomes = futures.map { it.get() }
 
             // Then EXACTLY one succeeded and every other caller saw the PIN consumed
-            val GoOkCount = GoOutcomes.count { it is PairOutcome.GoOk }
-            val GoConsumedCount =
-                GoOutcomes.count {
-                    it is PairOutcome.GoRejected && it.GoReason == PairOutcome.GoReasonPinConsumed
+            val okCount = outcomes.count { it is PairOutcome.Ok }
+            val consumedCount =
+                outcomes.count {
+                    it is PairOutcome.Rejected && it.reason == PairOutcome.GoReasonPinConsumed
                 }
-            assertThat(GoOkCount).isEqualTo(1)
-            assertThat(GoConsumedCount).isEqualTo(GoWorkers - 1)
+            assertThat(okCount).isEqualTo(1)
+            assertThat(consumedCount).isEqualTo(workers - 1)
 
             // And the repository holds exactly ONE device, whose token verifies
-            assertThat(GoRepo.GoList()).hasSize(1)
-            val GoOk = GoOutcomes.filterIsInstance<PairOutcome.GoOk>().single()
-            assertThat(GoPairing.GoVerifyToken(GoOk.GoToken)?.GoDeviceId).isEqualTo(GoOk.GoDeviceId)
+            assertThat(repo.list()).hasSize(1)
+            val ok = outcomes.filterIsInstance<PairOutcome.Ok>().single()
+            assertThat(pairing.verifyToken(ok.token)?.deviceId).isEqualTo(ok.deviceId)
         } finally {
-            GoPool.shutdownNow()
+            pool.shutdownNow()
         }
     }
 
@@ -89,39 +89,39 @@ class PairingConcurrencyTest {
     @Test
     fun `concurrent wrong pin attempts cannot undercount the attempt cap`() {
         // Given an open window and N callers lined up to guess a WRONG pin at once
-        val GoWindow = GoPairing.GoOpenWindow(ttlMs = 120_000L)
-        val GoWrong = GoWindow.GoPin.GoPinOtherThan(GoWindow)
-        val GoWorkers = 32
-        val GoGate = CyclicBarrier(GoWorkers)
-        val GoPool: ExecutorService = Executors.newFixedThreadPool(GoWorkers)
+        val window = pairing.openWindow(ttlMs = 120_000L)
+        val wrong = window.pin.pinOtherThan(window)
+        val workers = 32
+        val gate = CyclicBarrier(workers)
+        val pool: ExecutorService = Executors.newFixedThreadPool(workers)
 
         try {
             // When all N wrong attempts land together
-            val GoFutures =
-                (0 until GoWorkers).map { GoIndex ->
-                    GoPool.submit<PairOutcome> {
-                        GoGate.await()
-                        GoPairing.GoPair(GoWrong, "peer-$GoIndex", "phone")
+            val futures =
+                (0 until workers).map { index ->
+                    pool.submit<PairOutcome> {
+                        gate.await()
+                        pairing.pair(wrong, "peer-$index", "phone")
                     }
                 }
-            GoFutures.forEach { it.get() }
+            futures.forEach { it.get() }
 
             // Then the cap was reached, so even the CORRECT pin is now locked out
-            val GoLate = GoPairing.GoPair(GoWindow.GoPin, "late-peer", "phone")
-            assertThat(GoLate).isInstanceOf(PairOutcome.GoRejected::class.java)
-            assertThat((GoLate as PairOutcome.GoRejected).GoReason)
+            val late = pairing.pair(window.pin, "late-peer", "phone")
+            assertThat(late).isInstanceOf(PairOutcome.Rejected::class.java)
+            assertThat((late as PairOutcome.Rejected).reason)
                 .isEqualTo(PairOutcome.GoReasonPinLocked)
 
             // And no wrong attempt ever persisted a device
-            assertThat(GoRepo.GoList()).isEmpty()
+            assertThat(repo.list()).isEmpty()
         } finally {
-            GoPool.shutdownNow()
+            pool.shutdownNow()
         }
     }
 
     /** Returns a 6-digit PIN string that is guaranteed different from the window's. */
-    private fun String.GoPinOtherThan(window: Pairing): String {
-        val GoCandidate = if (this == window.GoPin) "000000" else this
-        return if (GoCandidate == window.GoPin) "111111" else GoCandidate
+    private fun String.pinOtherThan(window: Pairing): String {
+        val candidate = if (this == window.pin) "000000" else this
+        return if (candidate == window.pin) "111111" else candidate
     }
 }

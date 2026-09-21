@@ -23,8 +23,8 @@ import kotlinx.coroutines.launch
  *
  * ## Per-session counters
  *
- * `StreamService.GoStats()` reports CUMULATIVE totals for the relay's lifetime,
- * so the ViewModel snapshots the counters when a session starts ([GoBaseline])
+ * `StreamService.stats()` reports CUMULATIVE totals for the relay's lifetime,
+ * so the ViewModel snapshots the counters when a session starts ([baseline])
  * and renders the difference. A second session therefore starts at zero instead
  * of inheriting the previous session's frames, and stopping returns to the idle
  * zeros by clearing the state outright.
@@ -32,89 +32,89 @@ import kotlinx.coroutines.launch
  * ## Cadence and lifecycle
  *
  * Two jobs run while a session is live: a poll loop refreshing the counters on a
- * bounded interval, and a collector over `GoResults(sessionId)`. Both live in
+ * bounded interval, and a collector over `results(sessionId)`. Both live in
  * `viewModelScope`, so a stop cancels them explicitly and a cleared ViewModel
  * cancels them automatically — neither can outlive the session or the screen.
  */
 class StreamViewModel(
-    private val GoContext: Context,
-    private val GoPollIntervalMs: Long = GoDefaultPollIntervalMs,
+    private val context: Context,
+    private val pollIntervalMs: Long = GoDefaultPollIntervalMs,
 ) : ViewModel() {
-    private val GoStream: StreamService? = FromContextOrNull<StreamService>(GoContext)
-    private val GoPairing: PairingService? = FromContextOrNull<PairingService>(GoContext)
+    private val stream: StreamService? = FromContextOrNull<StreamService>(context)
+    private val pairing: PairingService? = FromContextOrNull<PairingService>(context)
 
-    private val GoState = MutableStateFlow(StreamUiState(GoAvailable = GoStream != null))
+    private val state = MutableStateFlow(StreamUiState(available = stream != null))
 
-    val GoUiState: StateFlow<StreamUiState> = GoState.asStateFlow()
+    val uiState: StateFlow<StreamUiState> = state.asStateFlow()
 
-    private var GoBaseline: RelayStats = GoZeroStats
-    private var GoPollJob: Job? = null
-    private var GoResultsJob: Job? = null
+    private var baseline: RelayStats = zeroStats
+    private var pollJob: Job? = null
+    private var resultsJob: Job? = null
 
     /** Open a relay session for the first paired peer and start refreshing it. */
-    fun GoOnStart() {
-        val GoService = GoStream ?: return
-        if (GoState.value.GoSessionId != null) return
+    fun onStart() {
+        val service = stream ?: return
+        if (state.value.sessionId != null) return
 
-        GoBaseline = GoService.GoStats()
-        val GoPeerId =
-            GoPairing?.GoListPaired()?.firstOrNull()?.GoDeviceId ?: GoDefaultPeerId
-        val GoSession = GoService.GoOpenSession(GoPeerId)
+        baseline = service.stats()
+        val peerId =
+            pairing?.listPaired()?.firstOrNull()?.deviceId ?: GoDefaultPeerId
+        val session = service.openSession(peerId)
 
-        GoState.value =
-            GoState.value.copy(
-                GoSessionId = GoSession.GoSessionId,
-                GoPeerId = GoSession.GoDeviceId,
+        state.value =
+            state.value.copy(
+                sessionId = session.sessionId,
+                peerId = session.deviceId,
             )
-        GoRefresh()
+        refresh()
 
-        GoPollJob =
+        pollJob =
             viewModelScope.launch {
                 while (true) {
-                    delay(GoPollIntervalMs)
-                    GoRefresh()
+                    delay(pollIntervalMs)
+                    refresh()
                 }
             }
-        GoResultsJob = viewModelScope.launch { GoCollectResults(GoSession.GoSessionId) }
+        resultsJob = viewModelScope.launch { collectResults(session.sessionId) }
     }
 
     /** Close the live session and return the screen to its idle zeros. */
-    fun GoOnStop() {
-        val GoService = GoStream ?: return
-        val GoSessionId = GoState.value.GoSessionId ?: return
+    fun onStop() {
+        val service = stream ?: return
+        val sessionId = state.value.sessionId ?: return
 
-        GoCancelJobs()
-        GoState.value = StreamUiState(GoAvailable = true)
-        viewModelScope.launch { GoService.GoCloseSession(GoSessionId) }
+        cancelJobs()
+        state.value = StreamUiState(available = true)
+        viewModelScope.launch { service.closeSession(sessionId) }
     }
 
-    private fun GoCancelJobs() {
-        GoPollJob?.cancel()
-        GoPollJob = null
-        GoResultsJob?.cancel()
-        GoResultsJob = null
+    private fun cancelJobs() {
+        pollJob?.cancel()
+        pollJob = null
+        resultsJob?.cancel()
+        resultsJob = null
     }
 
-    private suspend fun GoCollectResults(sessionId: String) {
-        GoStream?.GoResults(sessionId)?.collect { GoResult ->
-            GoState.value =
-                GoState.value.copy(
-                    GoLatestTranscript = GoResult.GoText,
-                    GoLatestSpeakerLabel = GoResult.GoSpeakerLabel,
+    private suspend fun collectResults(sessionId: String) {
+        stream?.results(sessionId)?.collect { result ->
+            state.value =
+                state.value.copy(
+                    latestTranscript = result.text,
+                    latestSpeakerLabel = result.speakerLabel,
                 )
         }
     }
 
-    private fun GoRefresh() {
-        val GoService = GoStream ?: return
-        val GoStats = GoService.GoStats()
-        GoState.value =
-            GoState.value.copy(
-                GoAudioFrames = GoStats.GoAudioFrames - GoBaseline.GoAudioFrames,
-                GoVideoFrames = GoStats.GoVideoFrames - GoBaseline.GoVideoFrames,
-                GoVideoDropped = GoStats.GoVideoDropped - GoBaseline.GoVideoDropped,
-                GoTranscripts = GoStats.GoTranscripts - GoBaseline.GoTranscripts,
-                GoLiveSessions = GoStats.GoLiveSessions,
+    private fun refresh() {
+        val service = stream ?: return
+        val stats = service.stats()
+        state.value =
+            state.value.copy(
+                audioFrames = stats.audioFrames - baseline.audioFrames,
+                videoFrames = stats.videoFrames - baseline.videoFrames,
+                videoDropped = stats.videoDropped - baseline.videoDropped,
+                transcripts = stats.transcripts - baseline.transcripts,
+                liveSessions = stats.liveSessions,
             )
     }
 
@@ -127,11 +127,11 @@ class StreamViewModel(
     }
 }
 
-private val GoZeroStats =
+private val zeroStats =
     RelayStats(
-        GoAudioFrames = 0L,
-        GoVideoFrames = 0L,
-        GoVideoDropped = 0L,
-        GoTranscripts = 0L,
-        GoLiveSessions = 0,
+        audioFrames = 0L,
+        videoFrames = 0L,
+        videoDropped = 0L,
+        transcripts = 0L,
+        liveSessions = 0,
     )

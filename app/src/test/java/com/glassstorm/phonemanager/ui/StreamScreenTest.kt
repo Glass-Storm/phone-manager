@@ -42,207 +42,207 @@ class StreamScreenTest {
 
     @Test
     fun `renders the unavailable state when the stream port is absent`() {
-        composeRule.GoSetStreamContent(Context())
+        composeRule.setStreamContent(Context())
 
-        composeRule.GoAssertText("Stream")
-        composeRule.GoAssertText("Stream service not available")
+        composeRule.assertText("Stream")
+        composeRule.assertText("Stream service not available")
     }
 
     @Test
     fun `a session starts idle with every counter at zero`() {
-        val GoCtx = Context().also { Register<StreamService>(it, FakeStreamService()) }
+        val ctx = Context().also { Register<StreamService>(it, FakeStreamService()) }
 
-        composeRule.GoSetStreamContent(GoCtx)
+        composeRule.setStreamContent(ctx)
 
-        composeRule.GoAssertText("Session: idle")
-        composeRule.GoAssertText("Audio frames in: 0")
-        composeRule.GoAssertText("Video frames in: 0")
-        composeRule.GoAssertText("Video dropped: 0")
-        composeRule.GoAssertText("Transcripts out: 0")
-        composeRule.GoAssertText("Live sessions: 0")
+        composeRule.assertText("Session: idle")
+        composeRule.assertText("Audio frames in: 0")
+        composeRule.assertText("Video frames in: 0")
+        composeRule.assertText("Video dropped: 0")
+        composeRule.assertText("Transcripts out: 0")
+        composeRule.assertText("Live sessions: 0")
     }
 
     @Test
     fun `counters update while a session is live`() {
-        val GoPeer = FakeStreamService()
-        val GoCtx = Context().also { Register<StreamService>(it, GoPeer) }
+        val peer = FakeStreamService()
+        val ctx = Context().also { Register<StreamService>(it, peer) }
 
-        composeRule.GoSetStreamContent(GoCtx)
-        composeRule.GoClick("Start session")
+        composeRule.setStreamContent(ctx)
+        composeRule.click("Start session")
 
-        composeRule.GoAssertText("Session: live")
-        composeRule.GoAssertText("Live sessions: 1")
+        composeRule.assertText("Session: live")
+        composeRule.assertText("Live sessions: 1")
 
         // The peer pushes media AFTER the session opened, so only the refresh loop
         // can surface these numbers.
-        GoPeer.GoReportStats(
-            GoAudioFrames = 3L,
-            GoVideoFrames = 5L,
-            GoVideoDropped = 1L,
-            GoTranscripts = 2L,
+        peer.reportStats(
+            audioFrames = 3L,
+            videoFrames = 5L,
+            videoDropped = 1L,
+            transcripts = 2L,
         )
-        composeRule.GoAdvancePollClock()
+        composeRule.advancePollClock()
 
-        composeRule.GoAssertText("Audio frames in: 3")
-        composeRule.GoAssertText("Video frames in: 5")
-        composeRule.GoAssertText("Video dropped: 1")
-        composeRule.GoAssertText("Transcripts out: 2")
+        composeRule.assertText("Audio frames in: 3")
+        composeRule.assertText("Video frames in: 5")
+        composeRule.assertText("Video dropped: 1")
+        composeRule.assertText("Transcripts out: 2")
         composeRule.onNodeWithText("Audio frames in: 0").assertDoesNotExist()
     }
 
     @Test
     fun `the latest transcript renders with its speaker label`() {
-        val GoPeer = FakeStreamService()
-        val GoCtx = Context().also { Register<StreamService>(it, GoPeer) }
+        val peer = FakeStreamService()
+        val ctx = Context().also { Register<StreamService>(it, peer) }
 
-        composeRule.GoSetStreamContent(GoCtx)
-        composeRule.GoClick("Start session")
+        composeRule.setStreamContent(ctx)
+        composeRule.click("Start session")
 
-        composeRule.GoAssertText("No transcript yet")
+        composeRule.assertText("No transcript yet")
 
-        GoPeer.GoEmitTranscript("hello world", GoSpeakerLabel = "Speaker 1")
-        composeRule.GoAdvancePollClock()
+        peer.emitTranscript("hello world", speakerLabel = "Speaker 1")
+        composeRule.advancePollClock()
 
-        composeRule.GoAssertText("hello world")
-        composeRule.GoAssertText("Speaker: Speaker 1")
+        composeRule.assertText("hello world")
+        composeRule.assertText("Speaker: Speaker 1")
         composeRule.onNodeWithText("No transcript yet").assertDoesNotExist()
     }
 
     @Test
     fun `a later transcript replaces the earlier one`() {
-        val GoPeer = FakeStreamService()
-        val GoCtx = Context().also { Register<StreamService>(it, GoPeer) }
+        val peer = FakeStreamService()
+        val ctx = Context().also { Register<StreamService>(it, peer) }
 
-        composeRule.GoSetStreamContent(GoCtx)
-        composeRule.GoClick("Start session")
+        composeRule.setStreamContent(ctx)
+        composeRule.click("Start session")
 
-        GoPeer.GoEmitTranscript("first", GoSpeakerLabel = "Speaker 1")
-        composeRule.GoAdvancePollClock()
-        composeRule.GoAssertText("first")
+        peer.emitTranscript("first", speakerLabel = "Speaker 1")
+        composeRule.advancePollClock()
+        composeRule.assertText("first")
 
-        GoPeer.GoEmitTranscript("second", GoSpeakerLabel = "Speaker 2")
-        composeRule.GoAdvancePollClock()
+        peer.emitTranscript("second", speakerLabel = "Speaker 2")
+        composeRule.advancePollClock()
 
-        composeRule.GoAssertText("second")
-        composeRule.GoAssertText("Speaker: Speaker 2")
+        composeRule.assertText("second")
+        composeRule.assertText("Speaker: Speaker 2")
         composeRule.onNodeWithText("first").assertDoesNotExist()
     }
 
     @Test
     fun `stopping the session zeroes the counters and drops the transcript`() {
-        val GoPeer = FakeStreamService()
-        val GoCtx = Context().also { Register<StreamService>(it, GoPeer) }
+        val peer = FakeStreamService()
+        val ctx = Context().also { Register<StreamService>(it, peer) }
 
-        composeRule.GoSetStreamContent(GoCtx)
-        composeRule.GoClick("Start session")
+        composeRule.setStreamContent(ctx)
+        composeRule.click("Start session")
 
-        GoPeer.GoReportStats(
-            GoAudioFrames = 9L,
-            GoVideoFrames = 9L,
-            GoVideoDropped = 4L,
-            GoTranscripts = 2L,
+        peer.reportStats(
+            audioFrames = 9L,
+            videoFrames = 9L,
+            videoDropped = 4L,
+            transcripts = 2L,
         )
-        GoPeer.GoEmitTranscript("seen while live", GoSpeakerLabel = "Speaker 1")
-        composeRule.GoAdvancePollClock()
-        composeRule.GoAssertText("Audio frames in: 9")
-        composeRule.GoAssertText("seen while live")
+        peer.emitTranscript("seen while live", speakerLabel = "Speaker 1")
+        composeRule.advancePollClock()
+        composeRule.assertText("Audio frames in: 9")
+        composeRule.assertText("seen while live")
 
-        composeRule.GoClick("Stop session")
+        composeRule.click("Stop session")
 
-        composeRule.GoAssertText("Session: idle")
-        composeRule.GoAssertText("Audio frames in: 0")
-        composeRule.GoAssertText("Video frames in: 0")
-        composeRule.GoAssertText("Video dropped: 0")
-        composeRule.GoAssertText("Transcripts out: 0")
-        composeRule.GoAssertText("Live sessions: 0")
-        composeRule.GoAssertText("No transcript yet")
+        composeRule.assertText("Session: idle")
+        composeRule.assertText("Audio frames in: 0")
+        composeRule.assertText("Video frames in: 0")
+        composeRule.assertText("Video dropped: 0")
+        composeRule.assertText("Transcripts out: 0")
+        composeRule.assertText("Live sessions: 0")
+        composeRule.assertText("No transcript yet")
         composeRule.onNodeWithText("seen while live").assertDoesNotExist()
     }
 
     @Test
     fun `stopping without starting is a no-op and never crashes`() {
-        val GoPeer = FakeStreamService()
-        val GoCtx = Context().also { Register<StreamService>(it, GoPeer) }
-        val GoViewModel = StreamViewModel(GoCtx)
+        val peer = FakeStreamService()
+        val ctx = Context().also { Register<StreamService>(it, peer) }
+        val viewModel = StreamViewModel(ctx)
 
         // The Stop control is disabled while idle, so the idempotent path is driven
         // at the ViewModel level: a stop with no session must not close anything.
-        GoViewModel.GoOnStop()
+        viewModel.onStop()
 
-        assertThat(GoPeer.GoClosedIds()).isEmpty()
-        assertThat(GoViewModel.GoUiState.value.GoSessionId).isNull()
-        assertThat(GoViewModel.GoUiState.value.GoAudioFrames).isEqualTo(0L)
+        assertThat(peer.closedIds()).isEmpty()
+        assertThat(viewModel.uiState.value.sessionId).isNull()
+        assertThat(viewModel.uiState.value.audioFrames).isEqualTo(0L)
     }
 
     @Test
     fun `a stopped session can be started again on a fresh session id`() {
-        val GoPeer = FakeStreamService(GoSessionIds = listOf("s-1", "s-2"))
-        val GoCtx = Context().also { Register<StreamService>(it, GoPeer) }
+        val peer = FakeStreamService(sessionIds = listOf("s-1", "s-2"))
+        val ctx = Context().also { Register<StreamService>(it, peer) }
 
-        composeRule.GoSetStreamContent(GoCtx)
-        composeRule.GoClick("Start session")
-        composeRule.GoClick("Stop session")
+        composeRule.setStreamContent(ctx)
+        composeRule.click("Start session")
+        composeRule.click("Stop session")
 
-        GoPeer.GoReportStats(
-            GoAudioFrames = 8L,
-            GoVideoFrames = 0L,
-            GoVideoDropped = 0L,
-            GoTranscripts = 0L,
+        peer.reportStats(
+            audioFrames = 8L,
+            videoFrames = 0L,
+            videoDropped = 0L,
+            transcripts = 0L,
         )
-        composeRule.GoClick("Start session")
+        composeRule.click("Start session")
 
-        composeRule.GoAssertText("Session: live")
+        composeRule.assertText("Session: live")
         // The second open mints a DIFFERENT session id; the baseline taken at start
         // means the counters show THIS session, not the cumulative relay total.
-        composeRule.GoAssertText("Audio frames in: 0")
-        assertThat(GoPeer.GoOpenCount()).isEqualTo(2)
+        composeRule.assertText("Audio frames in: 0")
+        assertThat(peer.openCount()).isEqualTo(2)
     }
 
     @Test
     fun `clearing the ViewModel mid-refresh leaves no live coroutine behind`() {
-        val GoPeer = FakeStreamService()
-        val GoCtx = Context().also { Register<StreamService>(it, GoPeer) }
-        val GoStore = ViewModelStore()
-        val GoViewModel = StreamViewModel(GoCtx)
-        GoStore.put("stream", GoViewModel)
+        val peer = FakeStreamService()
+        val ctx = Context().also { Register<StreamService>(it, peer) }
+        val store = ViewModelStore()
+        val viewModel = StreamViewModel(ctx)
+        store.put("stream", viewModel)
 
-        GoViewModel.GoOnStart()
-        composeRule.GoAdvancePollClock()
-        assertThat(GoViewModel.GoUiState.value.GoSessionId).isNotNull()
+        viewModel.onStart()
+        composeRule.advancePollClock()
+        assertThat(viewModel.uiState.value.sessionId).isNotNull()
 
-        GoStore.clear()
+        store.clear()
 
         // No further poll may run after clear: the counters stay where clear left
         // them even as the peer keeps reporting new frames.
-        val GoFrozen = GoViewModel.GoUiState.value
-        GoPeer.GoReportStats(
-            GoAudioFrames = 99L,
-            GoVideoFrames = 99L,
-            GoVideoDropped = 99L,
-            GoTranscripts = 99L,
+        val frozen = viewModel.uiState.value
+        peer.reportStats(
+            audioFrames = 99L,
+            videoFrames = 99L,
+            videoDropped = 99L,
+            transcripts = 99L,
         )
-        composeRule.GoAdvancePollClock()
-        assertThat(GoViewModel.GoUiState.value).isEqualTo(GoFrozen)
+        composeRule.advancePollClock()
+        assertThat(viewModel.uiState.value).isEqualTo(frozen)
     }
 
-    private fun ComposeContentTestRule.GoSetStreamContent(GoCtx: Context) {
+    private fun ComposeContentTestRule.setStreamContent(ctx: Context) {
         setContent {
             AppTheme {
-                StreamScreen(GoContext = GoCtx)
+                StreamScreen(context = ctx)
             }
         }
     }
 
-    private fun ComposeContentTestRule.GoAssertText(text: String) {
+    private fun ComposeContentTestRule.assertText(text: String) {
         onNodeWithText(text).performScrollTo().assertIsDisplayed()
     }
 
-    private fun ComposeContentTestRule.GoClick(text: String) {
+    private fun ComposeContentTestRule.click(text: String) {
         onNodeWithText(text).performScrollTo().performClick()
         waitForIdle()
     }
 
-    private fun ComposeContentTestRule.GoAdvancePollClock() {
+    private fun ComposeContentTestRule.advancePollClock() {
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(1_000L))
         waitForIdle()
     }

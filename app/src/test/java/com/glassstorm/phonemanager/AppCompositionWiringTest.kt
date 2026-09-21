@@ -15,7 +15,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
-import android.content.Context as GoAndroidContext
+import android.content.Context as AndroidContext
 
 /**
  * The T17 wiring change, proven at the composition root.
@@ -30,57 +30,57 @@ import android.content.Context as GoAndroidContext
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [29])
 class AppCompositionWiringTest {
-    private val GoAndroid: GoAndroidContext = ApplicationProvider.getApplicationContext()
+    private val android: AndroidContext = ApplicationProvider.getApplicationContext()
 
     @Test
     fun `an android context selects the sqlite device repository`() {
         // Given a registry built with a real Android Context
-        val GoCtx: Context = AppComposition.GoBuildContext(GoAndroid)
+        val ctx: Context = AppComposition.buildContext(android)
 
         // When the repository port is resolved
-        val GoRepo = FromContext<DeviceRepository>(GoCtx)
+        val repo = FromContext<DeviceRepository>(ctx)
 
         // Then the persistent adapter is the one bound, not the in-memory fake
-        assertThat(GoRepo).isInstanceOf(SqliteDeviceRepository::class.java)
+        assertThat(repo).isInstanceOf(SqliteDeviceRepository::class.java)
     }
 
     @Test
     fun `no android context keeps the in-memory repository fallback`() {
         // Given a registry built without an Android Context (the pure-JVM slice)
-        val GoCtx: Context = AppComposition.GoBuildContext(null)
+        val ctx: Context = AppComposition.buildContext(null)
 
         // Then the in-memory fallback is bound, so the JVM-only tests keep working
-        assertThat(FromContext<DeviceRepository>(GoCtx))
+        assertThat(FromContext<DeviceRepository>(ctx))
             .isInstanceOf(MemoryDeviceRepository::class.java)
     }
 
     @Test
     fun `the app config port is registered and round-trips an engine choice`() {
         // Given a registry built with a real Android Context
-        val GoCtx = AppComposition.GoBuildContext(GoAndroid)
+        val ctx = AppComposition.buildContext(android)
 
         // When the config port is resolved and a non-default engine is stored
-        val GoConfig = FromContext<AppConfig>(GoCtx)
-        GoConfig.GoSetSttEngine(SttEngine.SPEECHMATICS)
-        GoConfig.GoSetRegion("eu")
-        GoConfig.GoSetHotspotMode(HotspotMode.AUTO)
+        val config = FromContext<AppConfig>(ctx)
+        config.setSttEngine(SttEngine.SPEECHMATICS)
+        config.setRegion("eu")
+        config.setHotspotMode(HotspotMode.AUTO)
 
         // Then it is the adapter-backed store and the values read back through the port
-        assertThat(GoConfig).isInstanceOf(RuntimeConfigStore::class.java)
-        assertThat(GoConfig.GoSttEngine()).isEqualTo(SttEngine.SPEECHMATICS)
-        assertThat(GoConfig.GoRegion()).isEqualTo("eu")
-        assertThat(GoConfig.GoHotspotMode()).isEqualTo(HotspotMode.AUTO)
+        assertThat(config).isInstanceOf(RuntimeConfigStore::class.java)
+        assertThat(config.sttEngine()).isEqualTo(SttEngine.SPEECHMATICS)
+        assertThat(config.region()).isEqualTo("eu")
+        assertThat(config.hotspotMode()).isEqualTo(HotspotMode.AUTO)
     }
 
     @Test
     fun `the config port is absent from a context built without an android context`() {
         // Given the pure-JVM registry, which has no SharedPreferences to persist into
-        val GoCtx = AppComposition.GoBuildContext(null)
+        val ctx = AppComposition.buildContext(null)
 
         // Then the config port degrades to absent rather than crashing construction
         assertThat(
             com.glassstorm.phonemanager.domain.context
-                .FromContextOrNull<AppConfig>(GoCtx),
+                .FromContextOrNull<AppConfig>(ctx),
         ).isNull()
     }
 }

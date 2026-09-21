@@ -21,84 +21,84 @@ import java.io.BufferedReader
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [29])
 class BackupRulesTest {
-    private val GoContext: Context = ApplicationProvider.getApplicationContext()
+    private val context: Context = ApplicationProvider.getApplicationContext()
 
     @Test
     fun `the packaged manifest wires the full-backup rules`() {
         // Given the packaged application
-        val GoApp =
-            GoContext.packageManager
-                .getPackageInfo(GoContext.packageName, PackageManager.GET_PERMISSIONS)
+        val app =
+            context.packageManager
+                .getPackageInfo(context.packageName, PackageManager.GET_PERMISSIONS)
                 .applicationInfo!!
 
         // When the full-backup resource is read reflectively (it is @hide in the
         // public SDK stub, exactly like networkSecurityConfigRes)
-        val GoFullBackup = GoApp.javaClass.getField("fullBackupContent").get(GoApp)
+        val fullBackup = app.javaClass.getField("fullBackupContent").get(app)
 
         // Then it points at the real resource, so the rules are actually applied
-        assertThat(GoFullBackup).isEqualTo(R.xml.backup_rules)
+        assertThat(fullBackup).isEqualTo(R.xml.backup_rules)
     }
 
     @Test
     fun `the manifest declares both backup rule attributes`() {
         // Given the manifest source (the dataExtractionRules field only exists from
         // API 31, so the API-29 packaged application cannot report it)
-        val GoSource = GoReadSource("src/main/AndroidManifest.xml")
+        val source = readSource("src/main/AndroidManifest.xml")
 
         // Then both attributes are declared and reference the right resources
-        assertThat(GoSource).contains("android:fullBackupContent=\"@xml/backup_rules\"")
-        assertThat(GoSource).contains("android:dataExtractionRules=\"@xml/data_extraction_rules\"")
+        assertThat(source).contains("android:fullBackupContent=\"@xml/backup_rules\"")
+        assertThat(source).contains("android:dataExtractionRules=\"@xml/data_extraction_rules\"")
     }
 
     @Test
     fun `the full-backup rules exclude the api key prefs and the sqlite database`() {
         // Given the raw rules a reviewer would read
-        val GoSource = GoReadSource("src/main/res/xml/backup_rules.xml")
+        val source = readSource("src/main/res/xml/backup_rules.xml")
 
         // Then both secrets-bearing artifacts are excluded
-        assertThat(GoSource).contains("<exclude domain=\"sharedpref\" path=\"runtime_config.xml\"")
-        assertThat(GoSource).contains("<exclude domain=\"database\" path=\"phone_manager.db\"")
-        assertThat(GoSource).contains("full-backup-content")
+        assertThat(source).contains("<exclude domain=\"sharedpref\" path=\"runtime_config.xml\"")
+        assertThat(source).contains("<exclude domain=\"database\" path=\"phone_manager.db\"")
+        assertThat(source).contains("full-backup-content")
     }
 
     @Test
     fun `the data-extraction rules exclude both artifacts from cloud backup and transfer`() {
         // Given the raw rules
-        val GoSource = GoReadSource("src/main/res/xml/data_extraction_rules.xml")
+        val source = readSource("src/main/res/xml/data_extraction_rules.xml")
 
         // Then cloud backup and device transfer each exclude both artifacts
-        assertThat(GoSource).contains("cloud-backup")
-        assertThat(GoSource).contains("device-transfer")
-        assertThat(GoSource).contains("<exclude domain=\"sharedpref\" path=\"runtime_config.xml\"")
-        assertThat(GoSource).contains("<exclude domain=\"database\" path=\"phone_manager.db\"")
+        assertThat(source).contains("cloud-backup")
+        assertThat(source).contains("device-transfer")
+        assertThat(source).contains("<exclude domain=\"sharedpref\" path=\"runtime_config.xml\"")
+        assertThat(source).contains("<exclude domain=\"database\" path=\"phone_manager.db\"")
     }
 
     @Test
     fun `the parsed backup rules contain the exclusions`() {
         // Given the parsed resource, which proves the XML is well-formed and reachable
-        val GoParser = GoContext.resources.getXml(R.xml.backup_rules)
+        val parser = context.resources.getXml(R.xml.backup_rules)
 
         // When every exclude element is collected
-        val GoExcludes = mutableListOf<String>()
-        var GoEvent = GoParser.eventType
-        while (GoEvent != org.xmlpull.v1.XmlPullParser.END_DOCUMENT) {
-            if (GoEvent == org.xmlpull.v1.XmlPullParser.START_TAG && GoParser.name == "exclude") {
-                GoExcludes.add(
-                    "${GoParser.getAttributeValue(null, "domain")}:" +
-                        GoParser.getAttributeValue(null, "path"),
+        val excludes = mutableListOf<String>()
+        var event = parser.eventType
+        while (event != org.xmlpull.v1.XmlPullParser.END_DOCUMENT) {
+            if (event == org.xmlpull.v1.XmlPullParser.START_TAG && parser.name == "exclude") {
+                excludes.add(
+                    "${parser.getAttributeValue(null, "domain")}:" +
+                        parser.getAttributeValue(null, "path"),
                 )
             }
-            GoEvent = GoParser.next()
+            event = parser.next()
         }
 
         // Then both exclusions are present in the parsed tree
-        assertThat(GoExcludes).containsAtLeast(
+        assertThat(excludes).containsAtLeast(
             "sharedpref:runtime_config.xml",
             "database:phone_manager.db",
         )
     }
 
-    private fun GoReadSource(path: String): String =
+    private fun readSource(path: String): String =
         // Gradle runs unit tests with the MODULE root as the working directory.
         java.io
             .File(path)

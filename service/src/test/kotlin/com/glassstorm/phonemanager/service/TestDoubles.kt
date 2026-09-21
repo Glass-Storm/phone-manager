@@ -21,28 +21,28 @@ import java.util.concurrent.atomic.AtomicInteger
  * threads without the map itself being the thing under test.
  */
 class FakeDeviceRepository : DeviceRepository {
-    private val GoRows: MutableMap<String, Device> = ConcurrentHashMap()
+    private val rows: MutableMap<String, Device> = ConcurrentHashMap()
 
-    override fun GoUpsert(device: Device) {
-        GoRows[device.GoDeviceId] = device
+    override fun upsert(device: Device) {
+        rows[device.deviceId] = device
     }
 
-    override fun GoGet(deviceId: String): Device? = GoRows[deviceId]
+    override fun get(deviceId: String): Device? = rows[deviceId]
 
-    override fun GoGetByTokenHash(tokenHash: String): Device? = GoRows.values.firstOrNull { it.GoTokenHash == tokenHash }
+    override fun getByTokenHash(tokenHash: String): Device? = rows.values.firstOrNull { it.tokenHash == tokenHash }
 
-    override fun GoList(): List<Device> = GoRows.values.sortedBy { it.GoDeviceId }
+    override fun list(): List<Device> = rows.values.sortedBy { it.deviceId }
 
-    override fun GoTouch(
+    override fun touch(
         deviceId: String,
         seenAtMs: Long,
     ) {
-        val GoExisting = GoRows[deviceId] ?: return
-        GoRows[deviceId] = GoExisting.copy(GoLastSeenMs = seenAtMs)
+        val existing = rows[deviceId] ?: return
+        rows[deviceId] = existing.copy(lastSeenMs = seenAtMs)
     }
 
-    override fun GoDelete(deviceId: String) {
-        GoRows.remove(deviceId)
+    override fun delete(deviceId: String) {
+        rows.remove(deviceId)
     }
 }
 
@@ -52,41 +52,41 @@ class FakeDeviceRepository : DeviceRepository {
  * assertable).
  */
 class FakeSttPort(
-    private val GoTranscript: String = "hello from fake stt",
+    private val transcript: String = "hello from fake stt",
 ) : SttPort {
-    private val GoAudioCount = AtomicInteger()
+    private val audioCount = AtomicInteger()
 
-    val GoAudioFrameCount: Int get() = GoAudioCount.get()
+    val audioFrameCount: Int get() = audioCount.get()
 
-    private val GoClosing = Collections.synchronizedList(mutableListOf<String>())
+    private val closing = Collections.synchronizedList(mutableListOf<String>())
 
-    /** Session ids passed to [GoClose], in arrival order. */
-    val GoClosedSessions: List<String> get() = synchronized(GoClosing) { GoClosing.toList() }
+    /** Session ids passed to [close], in arrival order. */
+    val closedSessions: List<String> get() = synchronized(closing) { closing.toList() }
 
-    override suspend fun GoTranscribe(
+    override suspend fun transcribe(
         sessionId: String,
         audioPcm16: ByteArray,
         sampleRateHz: Int,
     ): String? {
-        GoAudioCount.incrementAndGet()
-        return GoTranscript
+        audioCount.incrementAndGet()
+        return transcript
     }
 
-    override suspend fun GoClose(sessionId: String) {
-        GoClosing += sessionId
+    override suspend fun close(sessionId: String) {
+        closing += sessionId
     }
 }
 
 /** [FrameSink] fake that records every opaque video NAL it is handed. */
 class FakeFrameSink : FrameSink {
-    private val GoNals = Collections.synchronizedList(mutableListOf<ByteArray>())
+    private val nals = Collections.synchronizedList(mutableListOf<ByteArray>())
 
-    val GoVideoNals: List<ByteArray> get() = synchronized(GoNals) { GoNals.toList() }
+    val videoNals: List<ByteArray> get() = synchronized(nals) { nals.toList() }
 
-    override fun GoAcceptVideo(
+    override fun acceptVideo(
         sessionId: String,
         h264Nal: ByteArray,
     ) {
-        GoNals += h264Nal
+        nals += h264Nal
     }
 }

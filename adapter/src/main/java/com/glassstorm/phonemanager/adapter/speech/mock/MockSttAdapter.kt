@@ -25,60 +25,60 @@ import java.util.concurrent.ConcurrentHashMap
  *
  * ## Session lifecycle
  *
- * A session is OPENED implicitly by the first [GoTranscribe] and CLOSED by
- * [GoClose]. [GoClose] is idempotent, and a chunk arriving after close is
+ * A session is OPENED implicitly by the first [transcribe] and CLOSED by
+ * [close]. [close] is idempotent, and a chunk arriving after close is
  * ignored (returns `null`) rather than silently reviving the session — the relay
  * guarantees it never transcribes after close (T14), so this is a defensive
  * no-op, not a reachable state.
  */
 class MockSttAdapter : SttPort {
     /** `sessionId -> true` means open. A CLOSED session is tracked to reject late chunks. */
-    private val GoOpenSessions: MutableSet<String> = ConcurrentHashMap.newKeySet()
+    private val openSessions: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
     /** Sessions explicitly closed; a late chunk must not reopen one. */
-    private val GoClosedSessions: MutableSet<String> = ConcurrentHashMap.newKeySet()
+    private val closedSessions: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
-    override suspend fun GoTranscribe(
+    override suspend fun transcribe(
         sessionId: String,
         audioPcm16: ByteArray,
         sampleRateHz: Int,
     ): String? {
-        if (sessionId in GoClosedSessions) return null
-        GoOpenSessions.add(sessionId)
+        if (sessionId in closedSessions) return null
+        openSessions.add(sessionId)
         // An empty chunk carries no utterance. This is an ordinary outcome, not an
         // error: the contract forbids throwing here.
         if (audioPcm16.isEmpty()) return null
-        return GoPseudoTranscript(audioPcm16)
+        return pseudoTranscript(audioPcm16)
     }
 
-    override suspend fun GoClose(sessionId: String) {
-        GoOpenSessions.remove(sessionId)
-        GoClosedSessions.add(sessionId)
+    override suspend fun close(sessionId: String) {
+        openSessions.remove(sessionId)
+        closedSessions.add(sessionId)
     }
 
     /**
      * Adapter-local observability (mirrors T8/T11 adapter state accessors): true
      * while [sessionId] has been opened and not closed. Not part of the port.
      */
-    fun GoIsSessionOpen(sessionId: String): Boolean = sessionId in GoOpenSessions
+    fun isSessionOpen(sessionId: String): Boolean = sessionId in openSessions
 
     /** Adapter-local observability: the engine's declared input rate. */
-    fun GoSampleRateHz(): Int = GO_SAMPLE_RATE_HZ
+    fun sampleRateHz(): Int = GO_SAMPLE_RATE_HZ
 
     /**
      * The deterministic pseudo-transcript: length + content hash, both derived
      * from the bytes alone. FNV-1a 64-bit is used explicitly because
      * `ByteArray.hashCode()` is identity-based and would break determinism.
      */
-    private fun GoPseudoTranscript(audioPcm16: ByteArray): String = "mock:${audioPcm16.size}:${GoFnv1a64Hex(audioPcm16)}"
+    private fun pseudoTranscript(audioPcm16: ByteArray): String = "mock:${audioPcm16.size}:${fnv1a64Hex(audioPcm16)}"
 
-    private fun GoFnv1a64Hex(bytes: ByteArray): String {
-        var GoHash = GO_FNV_OFFSET_BASIS
-        for (GoByte in bytes) {
-            GoHash = GoHash xor (GoByte.toLong() and 0xFF)
-            GoHash *= GO_FNV_PRIME
+    private fun fnv1a64Hex(bytes: ByteArray): String {
+        var hash = GO_FNV_OFFSET_BASIS
+        for (byte in bytes) {
+            hash = hash xor (byte.toLong() and 0xFF)
+            hash *= GO_FNV_PRIME
         }
-        return GoHash.toULong().toString(16).padStart(16, '0')
+        return hash.toULong().toString(16).padStart(16, '0')
     }
 
     private companion object {

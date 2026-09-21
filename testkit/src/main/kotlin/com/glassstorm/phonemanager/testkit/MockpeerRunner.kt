@@ -20,7 +20,7 @@ import java.util.concurrent.TimeUnit
  *    silent skip, because a skipped transport gate would report green over an
  *    unproven risk.
  */
-data class GoProcessRun(
+data class ProcessRun(
     val exitCode: Int,
     val stdout: String,
     val stderr: String,
@@ -33,38 +33,38 @@ data class GoProcessRun(
  * Launch [command] in [workingDir] under a hard deadline, draining both pipes on
  * daemon threads so a verbose child cannot deadlock on a full OS pipe buffer.
  */
-fun GoRun(
+fun run(
     command: List<String>,
     workingDir: File,
-): GoProcessRun {
-    val GoProcess =
+): ProcessRun {
+    val process =
         try {
             ProcessBuilder(command).directory(workingDir).redirectErrorStream(false).start()
-        } catch (GoFailure: Exception) {
-            return GoProcessRun(
+        } catch (failure: Exception) {
+            return ProcessRun(
                 exitCode = GO_ERROR,
                 stdout = "",
-                stderr = GoFailure.message ?: "spawn failed",
+                stderr = failure.message ?: "spawn failed",
                 process = null,
             )
         }
 
-    val GoStdout = StringBuilder()
-    val GoStderr = StringBuilder()
-    val GoOutThread = GoDrain(GoProcess.inputStream.bufferedReader(), GoStdout)
-    val GoErrThread = GoDrain(GoProcess.errorStream.bufferedReader(), GoStderr)
+    val stdout = StringBuilder()
+    val stderr = StringBuilder()
+    val outThread = drain(process.inputStream.bufferedReader(), stdout)
+    val errThread = drain(process.errorStream.bufferedReader(), stderr)
 
-    val GoFinished = GoProcess.waitFor(GO_DEADLINE_SECONDS, TimeUnit.SECONDS)
-    if (!GoFinished) {
-        GoProcess.destroyForcibly()
-        GoProcess.waitFor(GO_REAP_SECONDS, TimeUnit.SECONDS)
+    val finished = process.waitFor(GO_DEADLINE_SECONDS, TimeUnit.SECONDS)
+    if (!finished) {
+        process.destroyForcibly()
+        process.waitFor(GO_REAP_SECONDS, TimeUnit.SECONDS)
     }
-    GoOutThread.join(GO_DRAIN_JOIN_MS)
-    GoErrThread.join(GO_DRAIN_JOIN_MS)
+    outThread.join(GO_DRAIN_JOIN_MS)
+    errThread.join(GO_DRAIN_JOIN_MS)
 
-    val GoExit = if (GoFinished) GoProcess.exitValue() else GO_TIMED_OUT
-    val GoSuffix = if (GoFinished) "" else "\n[harness] child exceeded ${GO_DEADLINE_SECONDS}s and was force-destroyed"
-    return GoProcessRun(GoExit, GoStdout.toString(), GoStderr.toString() + GoSuffix, GoProcess)
+    val exit = if (finished) process.exitValue() else GO_TIMED_OUT
+    val suffix = if (finished) "" else "\n[harness] child exceeded ${GO_DEADLINE_SECONDS}s and was force-destroyed"
+    return ProcessRun(exit, stdout.toString(), stderr.toString() + suffix, process)
 }
 
 /**
@@ -73,39 +73,39 @@ fun GoRun(
  * `/usr/local/go/bin/go` is not on a non-login shell's PATH, which is exactly
  * how the CI/agent shells here behave, so the pinned absolute path is preferred.
  */
-fun GoGoBinary(): String {
-    val GoPinned = File("/usr/local/go/bin/go")
-    return if (GoPinned.canExecute()) GoPinned.absolutePath else "go"
+fun goBinary(): String {
+    val pinned = File("/usr/local/go/bin/go")
+    return if (pinned.canExecute()) pinned.absolutePath else "go"
 }
 
 /** Resolve the repo root by walking up until the mockpeer Go module is found. */
-fun GoRepoRoot(): File {
-    var GoDir: File? = File(System.getProperty("user.dir")).absoluteFile
-    while (GoDir != null) {
-        if (File(GoDir, "tools/mockpeer/go.mod").isFile) return GoDir
-        GoDir = GoDir.parentFile
+fun repoRoot(): File {
+    var dir: File? = File(System.getProperty("user.dir")).absoluteFile
+    while (dir != null) {
+        if (File(dir, "tools/mockpeer/go.mod").isFile) return dir
+        dir = dir.parentFile
     }
     error("could not locate the repo root (tools/mockpeer/go.mod) from ${System.getProperty("user.dir")}")
 }
 
-private fun GoDrain(
+private fun drain(
     reader: Reader,
     sink: StringBuilder,
 ): Thread {
-    val GoThread =
+    val thread =
         Thread {
-            reader.use { GoSource ->
-                val GoBuf = CharArray(4_096)
+            reader.use { source ->
+                val buf = CharArray(4_096)
                 while (true) {
-                    val GoRead = GoSource.read(GoBuf)
-                    if (GoRead < 0) break
-                    synchronized(sink) { sink.append(GoBuf, 0, GoRead) }
+                    val read = source.read(buf)
+                    if (read < 0) break
+                    synchronized(sink) { sink.append(buf, 0, read) }
                 }
             }
         }
-    GoThread.isDaemon = true
-    GoThread.start()
-    return GoThread
+    thread.isDaemon = true
+    thread.start()
+    return thread
 }
 
 const val GO_DEADLINE_SECONDS: Long = 90

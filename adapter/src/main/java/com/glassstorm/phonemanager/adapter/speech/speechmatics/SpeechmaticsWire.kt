@@ -40,7 +40,7 @@ private const val PCM16_SCALE = 32_768f
  * Unknown, blank and `null` regions fall back to `us`, matching the reference
  * store's `regionToWsUrl`. Matching is trimmed and case-insensitive.
  */
-fun GoRegionToWsUrl(region: String?): String =
+fun regionToWsUrl(region: String?): String =
     when (region?.trim()?.lowercase()) {
         "global" -> "wss://global.rt.speechmatics.com/v2"
         "eu" -> "wss://eu.rt.speechmatics.com/v2"
@@ -55,23 +55,23 @@ fun GoRegionToWsUrl(region: String?): String =
  * A trailing odd byte is ignored rather than throwing: the hub relays opaque
  * audio, so a malformed final byte MUST NOT take the session down.
  */
-fun GoPcm16ToFloat32Le(pcm16: ByteArray): ByteArray {
-    val GoOut =
+fun pcm16ToFloat32Le(pcm16: ByteArray): ByteArray {
+    val out =
         ByteBuffer
             .allocate((pcm16.size / BYTES_PER_PCM16_SAMPLE) * FLOAT32_BYTES)
             .order(ByteOrder.LITTLE_ENDIAN)
-    var GoIndex = 0
-    while (GoIndex + 1 < pcm16.size) {
-        val GoLow = pcm16[GoIndex].toInt() and 0xFF
-        val GoHigh = pcm16[GoIndex + 1].toInt()
-        GoOut.putFloat(((GoHigh shl 8) or GoLow).toFloat() / PCM16_SCALE)
-        GoIndex += BYTES_PER_PCM16_SAMPLE
+    var index = 0
+    while (index + 1 < pcm16.size) {
+        val low = pcm16[index].toInt() and 0xFF
+        val high = pcm16[index + 1].toInt()
+        out.putFloat(((high shl 8) or low).toFloat() / PCM16_SCALE)
+        index += BYTES_PER_PCM16_SAMPLE
     }
-    return GoOut.array()
+    return out.array()
 }
 
 /** The `StartRecognition` handshake frame: raw `pcm_f32le` at 16 kHz. */
-fun GoStartRecognitionJson(language: String = GO_DEFAULT_LANGUAGE): String =
+fun startRecognitionJson(language: String = GO_DEFAULT_LANGUAGE): String =
     JSONObject()
         .put("message", "StartRecognition")
         .put(
@@ -84,17 +84,17 @@ fun GoStartRecognitionJson(language: String = GO_DEFAULT_LANGUAGE): String =
         .toString()
 
 /** The `StopRecognition` teardown frame, carrying the PROVIDER's session id. */
-fun GoStopRecognitionJson(providerSessionId: String): String =
+fun stopRecognitionJson(providerSessionId: String): String =
     JSONObject()
         .put("message", "StopRecognition")
         .put("session_id", providerSessionId)
         .toString()
 
 /** The message discriminator, or `""` when [message] is not JSON. */
-fun GoMessageName(message: String): String =
+fun messageName(message: String): String =
     try {
         JSONObject(message).optString("message", "")
-    } catch (GoMalformed: JSONException) {
+    } catch (malformed: JSONException) {
         ""
     }
 
@@ -102,18 +102,18 @@ fun GoMessageName(message: String): String =
  * Extract the `key_value` JWT from a token-endpoint response body, or `null`
  * when the body is malformed or carries no token.
  */
-fun GoJwtFromTokenResponse(body: String): String? =
+fun jwtFromTokenResponse(body: String): String? =
     try {
         JSONObject(body).optString("key_value").ifEmpty { null }
-    } catch (GoMalformed: JSONException) {
+    } catch (malformed: JSONException) {
         null
     }
 
 /** The provider's session id from a `RecognitionStarted` frame, or `null`. */
-fun GoProviderSessionId(message: String): String? =
+fun providerSessionId(message: String): String? =
     try {
         JSONObject(message).optString("session_id").ifEmpty { null }
-    } catch (GoMalformed: JSONException) {
+    } catch (malformed: JSONException) {
         null
     }
 
@@ -122,23 +122,23 @@ fun GoProviderSessionId(message: String): String? =
  * for any other frame (notably `AddPartialTranscript`, which is deliberately
  * ignored: the port emits only complete utterances).
  */
-fun GoTranscriptFromMessage(message: String): String? {
-    val GoFrame =
+fun transcriptFromMessage(message: String): String? {
+    val frame =
         try {
             JSONObject(message)
-        } catch (GoMalformed: JSONException) {
+        } catch (malformed: JSONException) {
             return null
         }
-    if (GoFrame.optString("message") != GO_ADD_TRANSCRIPT) return null
-    val GoResults = GoFrame.optJSONArray("results") ?: return null
-    val GoBuilder = StringBuilder()
-    for (GoIndex in 0 until GoResults.length()) {
-        val GoAlternatives = GoResults.optJSONObject(GoIndex)?.optJSONArray("alternatives") ?: continue
-        val GoContent = GoAlternatives.optJSONObject(0)?.optString("content") ?: continue
-        if (GoBuilder.isNotEmpty()) GoBuilder.append(' ')
-        GoBuilder.append(GoContent)
+    if (frame.optString("message") != GO_ADD_TRANSCRIPT) return null
+    val results = frame.optJSONArray("results") ?: return null
+    val builder = StringBuilder()
+    for (index in 0 until results.length()) {
+        val alternatives = results.optJSONObject(index)?.optJSONArray("alternatives") ?: continue
+        val content = alternatives.optJSONObject(0)?.optString("content") ?: continue
+        if (builder.isNotEmpty()) builder.append(' ')
+        builder.append(content)
     }
-    return GoBuilder.toString().ifBlank { null }
+    return builder.toString().ifBlank { null }
 }
 
 private const val GO_ADD_TRANSCRIPT = "AddTranscript"

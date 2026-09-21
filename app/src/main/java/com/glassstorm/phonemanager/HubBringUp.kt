@@ -18,25 +18,25 @@ import com.glassstorm.phonemanager.domain.network.HotspotUnavailableException
 sealed interface HotspotBringUp {
     /** The programmatic LocalOnlyHotspot reservation is live. */
     data class Hotspot(
-        val GoInfo: HotspotInfo,
+        val info: HotspotInfo,
     ) : HotspotBringUp
 
     /** An already-active system tether was detected and adopted. */
     data class ManualTether(
-        val GoInfo: HotspotInfo,
+        val info: HotspotInfo,
     ) : HotspotBringUp
 
-    /** No access point could be brought up; [GoReason] names the cause. */
+    /** No access point could be brought up; [reason] names the cause. */
     data class Unavailable(
-        val GoReason: String,
+        val reason: String,
     ) : HotspotBringUp
 }
 
 /** The observable result of one hub bring-up, kept for the UI and for tests. */
 data class HubBringUpReport(
-    val GoHotspot: HotspotBringUp,
-    val GoPort: Int,
-    val GoAdvertising: Boolean,
+    val hotspot: HotspotBringUp,
+    val port: Int,
+    val advertising: Boolean,
 )
 
 /**
@@ -61,89 +61,89 @@ data class HubBringUpReport(
  * there is no hub without it.
  */
 class HubBringUp(
-    private val GoCtx: Context,
-    private val GoPermissionBlocker: () -> String?,
+    private val ctx: Context,
+    private val permissionBlocker: () -> String?,
 ) {
-    private var GoWasStarted: Boolean = false
+    private var wasStarted: Boolean = false
 
     /** Bring the hub up in dependency order and report what actually came up. */
-    fun GoBringUp(requestedPort: Int): HubBringUpReport {
-        val GoHub =
-            FromContextOrNull<HubServer>(GoCtx)
+    fun bringUp(requestedPort: Int): HubBringUpReport {
+        val hub =
+            FromContextOrNull<HubServer>(ctx)
                 ?: throw MissingComponentException("HubServer")
 
-        val GoHotspot = GoBringUpHotspot()
-        val GoPort = GoStartListener(GoHub, requestedPort)
-        val GoAdvertising = GoAdvertiseDiscovery(GoPort)
+        val hotspot = bringUpHotspot()
+        val port = startListener(hub, requestedPort)
+        val advertising = advertiseDiscovery(port)
 
-        GoWasStarted = true
-        return HubBringUpReport(GoHotspot, GoPort, GoAdvertising)
+        wasStarted = true
+        return HubBringUpReport(hotspot, port, advertising)
     }
 
     /** Tear the hub down in exact reverse order. Idempotent. */
-    fun GoTearDown() {
-        if (!GoWasStarted) return
-        GoWasStarted = false
-        GoStopAdvertisingDiscovery()
-        GoStopListener()
-        GoStopHotspot()
+    fun tearDown() {
+        if (!wasStarted) return
+        wasStarted = false
+        stopAdvertisingDiscovery()
+        stopListener()
+        stopHotspot()
     }
 
-    private fun GoBringUpHotspot(): HotspotBringUp {
-        val GoController =
-            FromContextOrNull<HotspotController>(GoCtx)
+    private fun bringUpHotspot(): HotspotBringUp {
+        val controller =
+            FromContextOrNull<HotspotController>(ctx)
                 ?: return HotspotBringUp.Unavailable("no HotspotController registered")
 
-        GoDetectManualTether(GoController)?.let { return it }
+        detectManualTether(controller)?.let { return it }
 
-        val GoBlocker = GoPermissionBlocker()
-        if (GoBlocker != null) {
-            return HotspotBringUp.Unavailable("missing runtime permission $GoBlocker")
+        val blocker = permissionBlocker()
+        if (blocker != null) {
+            return HotspotBringUp.Unavailable("missing runtime permission $blocker")
         }
 
         return try {
-            HotspotBringUp.Hotspot(GoController.GoStartHotspot())
+            HotspotBringUp.Hotspot(controller.startHotspot())
         } catch (goRefused: HotspotUnavailableException) {
-            HotspotBringUp.Unavailable(goRefused.GoFailure.toString())
+            HotspotBringUp.Unavailable(goRefused.failure.toString())
         }
     }
 
-    private fun GoDetectManualTether(GoController: HotspotController): HotspotBringUp? =
-        runCatching { GoController.GoDetectManualTether() }
+    private fun detectManualTether(controller: HotspotController): HotspotBringUp? =
+        runCatching { controller.detectManualTether() }
             .getOrNull()
             ?.let { HotspotBringUp.ManualTether(it) }
 
-    private fun GoStartListener(
-        GoHub: HubServer,
+    private fun startListener(
+        hub: HubServer,
         requestedPort: Int,
     ): Int {
-        if (!GoHub.GoIsRunning()) {
-            GoHub.GoStart(requestedPort)
+        if (!hub.isRunning()) {
+            hub.start(requestedPort)
         }
-        return GoHub.GoBoundPort()
+        return hub.boundPort()
     }
 
-    private fun GoAdvertiseDiscovery(port: Int): Boolean {
-        val GoDiscovery = FromContextOrNull<Discovery>(GoCtx) ?: return false
+    private fun advertiseDiscovery(port: Int): Boolean {
+        val discovery = FromContextOrNull<Discovery>(ctx) ?: return false
         if (port <= 0) return false
         return runCatching {
-            GoDiscovery.GoAdvertise(GO_DISCOVERY_NAME, port)
+            discovery.advertise(GO_DISCOVERY_NAME, port)
             true
         }.getOrDefault(false)
     }
 
-    private fun GoStopAdvertisingDiscovery() {
-        FromContextOrNull<Discovery>(GoCtx)?.let { runCatching { it.GoStopAdvertise() } }
+    private fun stopAdvertisingDiscovery() {
+        FromContextOrNull<Discovery>(ctx)?.let { runCatching { it.stopAdvertise() } }
     }
 
-    private fun GoStopListener() {
-        FromContextOrNull<HubServer>(GoCtx)?.let { runCatching { it.GoStop() } }
+    private fun stopListener() {
+        FromContextOrNull<HubServer>(ctx)?.let { runCatching { it.stop() } }
     }
 
-    private fun GoStopHotspot() {
-        val GoController = FromContextOrNull<HotspotController>(GoCtx) ?: return
-        if (!GoController.GoIsActive()) return
-        runCatching { GoController.GoStopHotspot() }
+    private fun stopHotspot() {
+        val controller = FromContextOrNull<HotspotController>(ctx) ?: return
+        if (!controller.isActive()) return
+        runCatching { controller.stopHotspot() }
     }
 
     companion object {
@@ -154,7 +154,7 @@ class HubBringUp(
 
 /** Thrown when the hub cannot come up because a required port was never registered. */
 class MissingComponentException(
-    GoComponent: String,
+    component: String,
 ) : IllegalStateException(
-        "hub bring-up needs a registered $GoComponent",
+        "hub bring-up needs a registered $component",
     )

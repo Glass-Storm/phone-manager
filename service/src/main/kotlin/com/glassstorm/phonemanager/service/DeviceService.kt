@@ -15,18 +15,18 @@ import com.glassstorm.phonemanager.domain.service.DeviceService
  * by construction.
  */
 class DeviceServiceImpl(
-    private val GoCtx: Context,
+    private val ctx: Context,
 ) : DeviceService {
-    private fun GoRepo(): DeviceRepository = FromContext<DeviceRepository>(GoCtx)
+    private fun repo(): DeviceRepository = FromContext<DeviceRepository>(ctx)
 
-    override fun GoRegisterDevice(device: Device): Device {
-        GoRepo().GoUpsert(device)
+    override fun registerDevice(device: Device): Device {
+        repo().upsert(device)
         return device
     }
 
-    override fun GoListDevices(): List<Device> = GoRepo().GoList()
+    override fun listDevices(): List<Device> = repo().list()
 
-    override fun GoRemoveDevice(deviceId: String) {
-        GoRepo().GoDelete(deviceId)
+    override fun removeDevice(deviceId: String) {
+        repo().delete(deviceId)
     }
 }

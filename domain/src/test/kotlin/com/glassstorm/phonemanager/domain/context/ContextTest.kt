@@ -7,97 +7,97 @@ import org.junit.Test
 
 /** Given/When/Then unit tests for the sing-box-style Context registry. */
 class ContextTest {
-    private class GoCounter {
-        var GoValue: Int = 0
+    private class Counter {
+        var value: Int = 0
     }
 
     @Test
     fun `register then FromContext returns the same instance`() {
         // Given a fresh context and one instance
-        val GoCtx = Context()
-        val GoInstance = GoCounter()
+        val ctx = Context()
+        val instance = Counter()
 
         // When it is registered and later resolved
-        Register(GoCtx, GoInstance)
-        val GoResolved = FromContext<GoCounter>(GoCtx)
+        Register(ctx, instance)
+        val resolved = FromContext<Counter>(ctx)
 
         // Then it is the identical instance, not a copy
-        assertThat(GoResolved).isSameInstanceAs(GoInstance)
+        assertThat(resolved).isSameInstanceAs(instance)
     }
 
     @Test
     fun `FromContext throws MissingFromContextException for an unknown type`() {
         // Given an empty context
-        val GoCtx = Context()
+        val ctx = Context()
 
         // When/Then resolving an unregistered type fails with the typed exception
         assertThrows(MissingFromContextException::class.java) {
-            FromContext<GoCounter>(GoCtx)
+            FromContext<Counter>(ctx)
         }
     }
 
     @Test
     fun `FromContextOrNull returns null for an unknown type`() {
         // Given an empty context
-        val GoCtx = Context()
+        val ctx = Context()
 
         // When/Then the or-null variant does not throw
-        assertThat(FromContextOrNull<GoCounter>(GoCtx)).isNull()
+        assertThat(FromContextOrNull<Counter>(ctx)).isNull()
     }
 
     @Test
     fun `re-registering the same type overwrites the previous instance`() {
         // Given a context holding one instance
-        val GoCtx = Context()
-        val GoFirst = GoCounter()
-        val GoSecond = GoCounter()
-        Register(GoCtx, GoFirst)
+        val ctx = Context()
+        val first = Counter()
+        val second = Counter()
+        Register(ctx, first)
 
         // When a second instance of the same type is registered
-        Register(GoCtx, GoSecond)
+        Register(ctx, second)
 
         // Then resolution yields the newer instance
-        assertThat(FromContext<GoCounter>(GoCtx)).isSameInstanceAs(GoSecond)
+        assertThat(FromContext<Counter>(ctx)).isSameInstanceAs(second)
     }
 
     @Test
     fun `unregister then lookup throws`() {
         // Given a registered instance
-        val GoCtx = Context()
-        Register(GoCtx, GoCounter())
+        val ctx = Context()
+        Register(ctx, Counter())
 
         // When it is unregistered
-        GoCtx.GoUnregister(GoCounter::class)
+        ctx.unregister(Counter::class)
 
         // Then resolution fails
         assertThrows(MissingFromContextException::class.java) {
-            FromContext<GoCounter>(GoCtx)
+            FromContext<Counter>(ctx)
         }
     }
 
     @Test
     fun `registry keys on the declared type so distinct types coexist`() {
         // Given two different types registered under the same context
-        val GoCtx = Context()
-        val GoCounterInstance = GoCounter()
-        val GoDevice =
+        val ctx = Context()
+        val counterInstance = Counter()
+        val device =
             Device(
-                GoDeviceId = "d-1",
-                GoDeviceName = "glass",
-                GoRole = "GLASS",
-                GoTokenHash = "hash-d-1",
-                GoPairedAtMs = 1_000L,
-                GoLastSeenMs = null,
+                deviceId = "d-1",
+                deviceName = "glass",
+                role = "GLASS",
+                tokenHash = "hash-d-1",
+                pairedAtMs = 1_000L,
+                lastSeenMs = null,
             )
-        Register(GoCtx, GoCounterInstance)
-        Register(GoCtx, GoDevice)
+        Register(ctx, counterInstance)
+        Register(ctx, device)
 
         // When both are resolved
-        val GoResolvedCounter = FromContext<GoCounter>(GoCtx)
-        val GoResolvedDevice = FromContext<Device>(GoCtx)
+        val resolvedCounter = FromContext<Counter>(ctx)
+        val resolvedDevice = FromContext<Device>(ctx)
 
         // Then each keeps its own slot keyed by KClass
-        assertThat(GoResolvedCounter).isSameInstanceAs(GoCounterInstance)
-        assertThat(GoResolvedDevice).isSameInstanceAs(GoDevice)
+        assertThat(resolvedCounter).isSameInstanceAs(counterInstance)
+        assertThat(resolvedDevice).isSameInstanceAs(device)
     }
 }

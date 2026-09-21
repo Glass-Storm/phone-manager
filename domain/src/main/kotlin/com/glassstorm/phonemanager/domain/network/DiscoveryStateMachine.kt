@@ -36,12 +36,12 @@ enum class DiscoveryEvent {
 sealed interface DiscoveryFailure {
     /** `registerService` failed (listener `onRegistrationFailed`). */
     data class AdvertiseFailed(
-        val GoReason: String,
+        val reason: String,
     ) : DiscoveryFailure
 
     /** mDNS resolution failed (`onResolveFailed`). */
     data class ResolveFailed(
-        val GoReason: String,
+        val reason: String,
     ) : DiscoveryFailure
 
     /** The resolution window elapsed with no peer. */
@@ -49,29 +49,29 @@ sealed interface DiscoveryFailure {
 
     /** The event is not valid for the current state. */
     data class IllegalTransition(
-        val GoFrom: DiscoveryState,
-        val GoEvent: DiscoveryEvent,
+        val from: DiscoveryState,
+        val event: DiscoveryEvent,
     ) : DiscoveryFailure
 }
 
 /** Outcome of feeding one event into the machine. */
 sealed interface DiscoveryTransition {
-    /** The machine changed to (or idempotently remained in) [GoState]. */
+    /** The machine changed to (or idempotently remained in) [state]. */
     data class Moved(
-        val GoState: DiscoveryState,
+        val state: DiscoveryState,
     ) : DiscoveryTransition
 
-    /** The event was refused; the machine stayed in [GoState] and [GoFailure] says why. */
+    /** The event was refused; the machine stayed in [state] and [failure] says why. */
     data class Rejected(
-        val GoState: DiscoveryState,
-        val GoFailure: DiscoveryFailure,
+        val state: DiscoveryState,
+        val failure: DiscoveryFailure,
     ) : DiscoveryTransition
 }
 
 /** Outcome of picking between an mDNS hit and the configured direct-IP gateway. */
 sealed interface DiscoverySelection {
     data class Selected(
-        val GoPeer: PeerAddress,
+        val peer: PeerAddress,
     ) : DiscoverySelection
 
     data object NoPeer : DiscoverySelection
@@ -84,30 +84,30 @@ sealed interface DiscoverySelection {
  * [DiscoveryState]/[DiscoveryEvent] is exhaustive, so a newly added state or
  * event becomes a compile error rather than a silent fall-through.
  *
- * [GoGatewayFallback] is the direct-IP address used when mDNS misses; when it is
+ * [gatewayFallback] is the direct-IP address used when mDNS misses; when it is
  * `null` a miss degrades to [DiscoveryState.TIMEOUT] instead of a fallback.
  */
 class DiscoveryStateMachine(
-    private val GoGatewayFallback: PeerAddress?,
+    private val gatewayFallback: PeerAddress?,
 ) {
-    var GoState: DiscoveryState = DiscoveryState.IDLE
+    var state: DiscoveryState = DiscoveryState.IDLE
         private set
 
     /** The cause of the most recent refusal/failure, for diagnostics. */
-    var GoLastFailure: DiscoveryFailure? = null
+    var lastFailure: DiscoveryFailure? = null
         private set
 
-    fun GoAccept(
+    fun accept(
         event: DiscoveryEvent,
         failure: DiscoveryFailure? = null,
     ): DiscoveryTransition =
-        when (GoState) {
-            DiscoveryState.IDLE -> GoFromIdle(event, failure)
-            DiscoveryState.ADVERTISING -> GoFromAdvertising(event, failure)
-            DiscoveryState.RESOLVING -> GoFromResolving(event, failure)
-            DiscoveryState.RESOLVED -> GoFromSettled(event, failure)
-            DiscoveryState.FALLBACK -> GoFromSettled(event, failure)
-            DiscoveryState.TIMEOUT -> GoFromSettled(event, failure)
+        when (state) {
+            DiscoveryState.IDLE -> fromIdle(event, failure)
+            DiscoveryState.ADVERTISING -> fromAdvertising(event, failure)
+            DiscoveryState.RESOLVING -> fromResolving(event, failure)
+            DiscoveryState.RESOLVED -> fromSettled(event, failure)
+            DiscoveryState.FALLBACK -> fromSettled(event, failure)
+            DiscoveryState.TIMEOUT -> fromSettled(event, failure)
         }
 
     /**
@@ -115,102 +115,102 @@ class DiscoveryStateMachine(
      *
      * The fallback is deliberately second so a later mDNS hit still wins.
      */
-    fun GoSelectPeer(
+    fun selectPeer(
         mdns: PeerAddress?,
         gateway: PeerAddress?,
     ): DiscoverySelection {
-        val GoWinner = mdns ?: gateway ?: return DiscoverySelection.NoPeer
-        return DiscoverySelection.Selected(GoWinner)
+        val winner = mdns ?: gateway ?: return DiscoverySelection.NoPeer
+        return DiscoverySelection.Selected(winner)
     }
 
-    private fun GoFromIdle(
+    private fun fromIdle(
         event: DiscoveryEvent,
         failure: DiscoveryFailure?,
     ): DiscoveryTransition =
         when (event) {
-            DiscoveryEvent.START_ADVERTISE -> GoMoveTo(DiscoveryState.ADVERTISING)
-            DiscoveryEvent.STOP_REQUESTED -> GoMoveTo(DiscoveryState.IDLE)
-            DiscoveryEvent.ADVERTISE_FAILED -> GoReject(event, failure, DiscoveryState.IDLE)
+            DiscoveryEvent.START_ADVERTISE -> moveTo(DiscoveryState.ADVERTISING)
+            DiscoveryEvent.STOP_REQUESTED -> moveTo(DiscoveryState.IDLE)
+            DiscoveryEvent.ADVERTISE_FAILED -> reject(event, failure, DiscoveryState.IDLE)
             DiscoveryEvent.ADVERTISE_REGISTERED,
             DiscoveryEvent.START_RESOLVE,
             DiscoveryEvent.MDNS_RESOLVED,
             DiscoveryEvent.MDNS_FAILED,
             DiscoveryEvent.RESOLVE_TIMEOUT,
-            -> GoReject(event, failure)
+            -> reject(event, failure)
         }
 
-    private fun GoFromAdvertising(
+    private fun fromAdvertising(
         event: DiscoveryEvent,
         failure: DiscoveryFailure?,
     ): DiscoveryTransition =
         when (event) {
-            DiscoveryEvent.ADVERTISE_REGISTERED -> GoMoveTo(DiscoveryState.ADVERTISING)
-            DiscoveryEvent.START_RESOLVE -> GoMoveTo(DiscoveryState.RESOLVING)
+            DiscoveryEvent.ADVERTISE_REGISTERED -> moveTo(DiscoveryState.ADVERTISING)
+            DiscoveryEvent.START_RESOLVE -> moveTo(DiscoveryState.RESOLVING)
             DiscoveryEvent.ADVERTISE_FAILED -> {
-                GoLastFailure = failure ?: DiscoveryFailure.AdvertiseFailed("advertise failed")
-                GoState = DiscoveryState.IDLE
-                DiscoveryTransition.Rejected(DiscoveryState.IDLE, GoLastFailure!!)
+                lastFailure = failure ?: DiscoveryFailure.AdvertiseFailed("advertise failed")
+                state = DiscoveryState.IDLE
+                DiscoveryTransition.Rejected(DiscoveryState.IDLE, lastFailure!!)
             }
-            DiscoveryEvent.START_ADVERTISE -> GoMoveTo(DiscoveryState.ADVERTISING)
-            DiscoveryEvent.STOP_REQUESTED -> GoMoveTo(DiscoveryState.IDLE)
+            DiscoveryEvent.START_ADVERTISE -> moveTo(DiscoveryState.ADVERTISING)
+            DiscoveryEvent.STOP_REQUESTED -> moveTo(DiscoveryState.IDLE)
             DiscoveryEvent.MDNS_RESOLVED,
             DiscoveryEvent.MDNS_FAILED,
             DiscoveryEvent.RESOLVE_TIMEOUT,
-            -> GoReject(event, failure)
+            -> reject(event, failure)
         }
 
-    private fun GoFromResolving(
+    private fun fromResolving(
         event: DiscoveryEvent,
         failure: DiscoveryFailure?,
     ): DiscoveryTransition =
         when (event) {
-            DiscoveryEvent.MDNS_RESOLVED -> GoMoveTo(DiscoveryState.RESOLVED)
-            DiscoveryEvent.MDNS_FAILED -> GoMissToFallback(failure)
-            DiscoveryEvent.RESOLVE_TIMEOUT -> GoMissToFallback(failure ?: DiscoveryFailure.ResolveTimedOut)
-            DiscoveryEvent.START_ADVERTISE -> GoMoveTo(DiscoveryState.ADVERTISING)
-            DiscoveryEvent.STOP_REQUESTED -> GoMoveTo(DiscoveryState.IDLE)
+            DiscoveryEvent.MDNS_RESOLVED -> moveTo(DiscoveryState.RESOLVED)
+            DiscoveryEvent.MDNS_FAILED -> missToFallback(failure)
+            DiscoveryEvent.RESOLVE_TIMEOUT -> missToFallback(failure ?: DiscoveryFailure.ResolveTimedOut)
+            DiscoveryEvent.START_ADVERTISE -> moveTo(DiscoveryState.ADVERTISING)
+            DiscoveryEvent.STOP_REQUESTED -> moveTo(DiscoveryState.IDLE)
             DiscoveryEvent.ADVERTISE_REGISTERED,
             DiscoveryEvent.ADVERTISE_FAILED,
             DiscoveryEvent.START_RESOLVE,
-            -> GoReject(event, failure)
+            -> reject(event, failure)
         }
 
-    private fun GoFromSettled(
+    private fun fromSettled(
         event: DiscoveryEvent,
         failure: DiscoveryFailure?,
     ): DiscoveryTransition =
         when (event) {
-            DiscoveryEvent.START_RESOLVE -> GoMoveTo(DiscoveryState.RESOLVING)
-            DiscoveryEvent.START_ADVERTISE -> GoMoveTo(DiscoveryState.ADVERTISING)
-            DiscoveryEvent.STOP_REQUESTED -> GoMoveTo(DiscoveryState.IDLE)
+            DiscoveryEvent.START_RESOLVE -> moveTo(DiscoveryState.RESOLVING)
+            DiscoveryEvent.START_ADVERTISE -> moveTo(DiscoveryState.ADVERTISING)
+            DiscoveryEvent.STOP_REQUESTED -> moveTo(DiscoveryState.IDLE)
             DiscoveryEvent.ADVERTISE_REGISTERED,
             DiscoveryEvent.ADVERTISE_FAILED,
             DiscoveryEvent.MDNS_RESOLVED,
             DiscoveryEvent.MDNS_FAILED,
             DiscoveryEvent.RESOLVE_TIMEOUT,
-            -> GoReject(event, failure)
+            -> reject(event, failure)
         }
 
-    private fun GoMissToFallback(failure: DiscoveryFailure?): DiscoveryTransition {
-        GoLastFailure = failure
-        val GoNext = if (GoGatewayFallback != null) DiscoveryState.FALLBACK else DiscoveryState.TIMEOUT
-        GoState = GoNext
-        return DiscoveryTransition.Moved(GoNext)
-    }
-
-    private fun GoMoveTo(next: DiscoveryState): DiscoveryTransition {
-        GoState = next
+    private fun missToFallback(failure: DiscoveryFailure?): DiscoveryTransition {
+        lastFailure = failure
+        val next = if (gatewayFallback != null) DiscoveryState.FALLBACK else DiscoveryState.TIMEOUT
+        state = next
         return DiscoveryTransition.Moved(next)
     }
 
-    private fun GoReject(
+    private fun moveTo(next: DiscoveryState): DiscoveryTransition {
+        state = next
+        return DiscoveryTransition.Moved(next)
+    }
+
+    private fun reject(
         event: DiscoveryEvent,
         failure: DiscoveryFailure?,
-        state: DiscoveryState = GoState,
+        state: DiscoveryState = this.state,
     ): DiscoveryTransition {
-        val GoFailure = failure ?: DiscoveryFailure.IllegalTransition(state, event)
-        GoLastFailure = GoFailure
-        return DiscoveryTransition.Rejected(state, GoFailure)
+        val failure = failure ?: DiscoveryFailure.IllegalTransition(state, event)
+        lastFailure = failure
+        return DiscoveryTransition.Rejected(state, failure)
     }
 }
 
@@ -224,7 +224,7 @@ class DiscoveryStateMachine(
  * The Tiramisu extension version is only queried on API 33 — [goTiramisuExtensionVersion]
  * is never invoked below 33 or from 34 (it must not be, since the extension is a 33 construct).
  */
-fun GoNeedsMulticastLock(
+fun needsMulticastLock(
     goSdkInt: Int,
     goTiramisuExtensionVersion: () -> Int,
 ): Boolean =
@@ -245,4 +245,4 @@ fun GoNeedsMulticastLock(
  * the conservative API-35 boundary is kept deliberately, since it matches the
  * plan and never loses a working path.)
  */
-fun GoUsesServiceInfoCallback(goSdkInt: Int): Boolean = goSdkInt >= 35
+fun usesServiceInfoCallback(goSdkInt: Int): Boolean = goSdkInt >= 35

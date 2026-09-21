@@ -9,9 +9,9 @@ import com.glassstorm.phonemanager.domain.dto.Device
  * resolves its [DeviceRepository] collaborator through the Context registry.
  */
 interface DeviceService {
-    fun GoRegisterDevice(device: Device): Device
+    fun registerDevice(device: Device): Device
 
-    fun GoListDevices(): List<Device>
+    fun listDevices(): List<Device>
 
-    fun GoRemoveDevice(deviceId: String)
+    fun removeDevice(deviceId: String)
 }

@@ -19,13 +19,13 @@ import java.util.concurrent.TimeUnit
  */
 
 /** Exchanges an API key for a short-lived realtime JWT. Returns `null` on failure. */
-fun interface GoTokenFetcher {
-    fun GoFetch(apiKey: String): String?
+fun interface TokenFetcher {
+    fun fetch(apiKey: String): String?
 }
 
 /** Opens the realtime WebSocket for an already-authenticated URL. */
-fun interface GoSocketOpener {
-    fun GoOpen(
+fun interface SocketOpener {
+    fun open(
         url: String,
         listener: WebSocketListener,
     ): WebSocket
@@ -41,7 +41,7 @@ private const val GO_WS_CONNECT_TIMEOUT_SECONDS: Long = 15L
 private const val GO_WS_READ_TIMEOUT_SECONDS: Long = 60L
 
 /** The shared OkHttp client; connection pooling is desirable across sessions. */
-fun GoSpeechmaticsHttpClient(): OkHttpClient =
+fun speechmaticsHttpClient(): OkHttpClient =
     OkHttpClient
         .Builder()
         .connectTimeout(GO_TIMEOUT_SECONDS, TimeUnit.SECONDS)
@@ -51,31 +51,31 @@ fun GoSpeechmaticsHttpClient(): OkHttpClient =
         .build()
 
 /**
- * Production [GoTokenFetcher]: `POST https://mp.speechmatics.com/v1/api_keys?type=rt`
+ * Production [TokenFetcher]: `POST https://mp.speechmatics.com/v1/api_keys?type=rt`
  * with `Authorization: Bearer <api_key>` and a `{"ttl":600}` body.
  *
  * The key travels ONLY in the request header — never a URL, never a log line.
  */
 class HttpTokenFetcher(
-    private val GoHttp: OkHttpClient = GoSpeechmaticsHttpClient(),
-) : GoTokenFetcher {
-    override fun GoFetch(apiKey: String): String? {
-        val GoBody = """{"ttl":$GO_TOKEN_TTL_SECONDS}"""
-        val GoRequest =
+    private val http: OkHttpClient = speechmaticsHttpClient(),
+) : TokenFetcher {
+    override fun fetch(apiKey: String): String? {
+        val body = """{"ttl":$GO_TOKEN_TTL_SECONDS}"""
+        val request =
             Request
                 .Builder()
                 .url(GO_TOKEN_URL)
                 .addHeader("Content-Type", "application/json")
                 .addHeader("Authorization", "Bearer $apiKey")
-                .post(GoBody.toRequestBody("application/json".toMediaType()))
+                .post(body.toRequestBody("application/json".toMediaType()))
                 .build()
         return try {
-            GoHttp.newCall(GoRequest).execute().use { GoResponse: Response ->
-                val GoText = GoResponse.body?.string() ?: return null
-                if (!GoResponse.isSuccessful) return null
-                GoJwtFromTokenResponse(GoText)
+            http.newCall(request).execute().use { response: Response ->
+                val text = response.body?.string() ?: return null
+                if (!response.isSuccessful) return null
+                jwtFromTokenResponse(text)
             }
-        } catch (GoNetwork: java.io.IOException) {
+        } catch (network: java.io.IOException) {
             // Ordinary connectivity failure: the port's contract is a `null`
             // outcome, not a crash. The caller decides whether to retry.
             null
@@ -83,15 +83,15 @@ class HttpTokenFetcher(
     }
 }
 
-/** Production [GoSocketOpener] over OkHttp's WebSocket transport. */
+/** Production [SocketOpener] over OkHttp's WebSocket transport. */
 class OkHttpSocketOpener(
-    private val GoHttp: OkHttpClient = GoSpeechmaticsHttpClient(),
-) : GoSocketOpener {
-    override fun GoOpen(
+    private val http: OkHttpClient = speechmaticsHttpClient(),
+) : SocketOpener {
+    override fun open(
         url: String,
         listener: WebSocketListener,
     ): WebSocket =
-        GoHttp
+        http
             .newBuilder()
             .connectTimeout(GO_WS_CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
             .readTimeout(GO_WS_READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)

@@ -32,11 +32,11 @@ import java.time.Instant
  */
 @Composable
 fun DevicesScreen(
-    GoContext: Context,
+    context: Context,
     modifier: Modifier = Modifier,
 ) {
-    val GoViewModel: DevicesViewModel = viewModel { DevicesViewModel(GoContext) }
-    val GoState by GoViewModel.GoUiState.collectAsState()
+    val viewModel: DevicesViewModel = viewModel { DevicesViewModel(context) }
+    val state by viewModel.uiState.collectAsState()
 
     Column(
         modifier =
@@ -48,19 +48,19 @@ fun DevicesScreen(
     ) {
         Text(text = "Devices", style = AppTheme.typography.h2)
 
-        if (!GoState.GoAvailable) {
+        if (!state.available) {
             Text(text = "Device store not available")
             return@Column
         }
 
-        GoDeviceListCard(GoState, GoViewModel)
+        deviceListCard(state, viewModel)
     }
 }
 
 @Composable
-private fun GoDeviceListCard(
-    GoState: DevicesUiState,
-    GoViewModel: DevicesViewModel,
+private fun deviceListCard(
+    state: DevicesUiState,
+    viewModel: DevicesViewModel,
 ) {
     Card {
         Column(
@@ -69,25 +69,25 @@ private fun GoDeviceListCard(
         ) {
             Text(text = "Paired devices", style = AppTheme.typography.h4)
 
-            if (GoState.GoDevices.isEmpty()) {
+            if (state.devices.isEmpty()) {
                 Text(text = "No paired devices")
                 return@Column
             }
 
-            GoState.GoDevices.forEach { GoDevice ->
-                Text(text = GoDevice.GoDeviceName)
+            state.devices.forEach { device ->
+                Text(text = device.deviceName)
                 Text(
-                    text = "Role: ${GoDevice.GoRole}",
+                    text = "Role: ${device.role}",
                     style = AppTheme.typography.label2,
                 )
                 Text(
-                    text = "Last seen: ${GoDevice.GoLastSeenLabel()}",
+                    text = "Last seen: ${device.lastSeenLabel()}",
                     style = AppTheme.typography.label2,
                 )
                 Button(
-                    text = "Revoke ${GoDevice.GoDeviceName}",
+                    text = "Revoke ${device.deviceName}",
                     variant = ButtonVariant.DestructiveOutlined,
-                    onClick = { GoViewModel.GoOnRevoke(GoDevice.GoDeviceId) },
+                    onClick = { viewModel.onRevoke(device.deviceId) },
                 )
                 HorizontalDivider()
             }
@@ -96,4 +96,4 @@ private fun GoDeviceListCard(
 }
 
 /** A device seen after pairing: the instant. A device never seen: `never`. */
-private fun Device.GoLastSeenLabel(): String = GoLastSeenMs?.let { Instant.ofEpochMilli(it).toString() } ?: "never"
+private fun Device.lastSeenLabel(): String = lastSeenMs?.let { Instant.ofEpochMilli(it).toString() } ?: "never"

@@ -31,11 +31,11 @@ import com.glassstorm.phonemanager.ui.components.card.Card
  */
 @Composable
 fun DashboardScreen(
-    GoContext: Context,
+    context: Context,
     modifier: Modifier = Modifier,
 ) {
-    val GoViewModel: DashboardViewModel = viewModel { DashboardViewModel(GoContext) }
-    val GoState by GoViewModel.GoUiState.collectAsState()
+    val viewModel: DashboardViewModel = viewModel { DashboardViewModel(context) }
+    val state by viewModel.uiState.collectAsState()
 
     Column(
         modifier =
@@ -47,16 +47,16 @@ fun DashboardScreen(
     ) {
         Text(text = "Dashboard", style = AppTheme.typography.h2)
 
-        GoHubCard(GoState, GoViewModel)
+        hubCard(state, viewModel)
 
-        GoHotspotCard(GoState, GoViewModel)
+        hotspotCard(state, viewModel)
     }
 }
 
 @Composable
-private fun GoHubCard(
-    GoState: DashboardUiState,
-    GoViewModel: DashboardViewModel,
+private fun hubCard(
+    state: DashboardUiState,
+    viewModel: DashboardViewModel,
 ) {
     Card(modifier = Modifier.padding(vertical = 2.dp)) {
         Column(
@@ -65,28 +65,28 @@ private fun GoHubCard(
         ) {
             Text(text = "Hub", style = AppTheme.typography.h4)
 
-            if (!GoState.GoHubAvailable) {
+            if (!state.hubAvailable) {
                 Text(text = "Hub server not available")
                 return@Column
             }
 
-            Text(text = if (GoState.GoRunning) "Hub: running" else "Hub: stopped")
-            Text(text = "Port: ${GoState.GoBoundPort}")
-            Text(text = "Paired devices: ${GoState.GoPairedCount}")
+            Text(text = if (state.running) "Hub: running" else "Hub: stopped")
+            Text(text = "Port: ${state.boundPort}")
+            Text(text = "Paired devices: ${state.pairedCount}")
 
             HorizontalDivider()
 
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Button(
                     text = "Start hub",
-                    enabled = !GoState.GoRunning,
-                    onClick = GoViewModel::GoOnStartHub,
+                    enabled = !state.running,
+                    onClick = viewModel::onStartHub,
                 )
                 Button(
                     text = "Stop hub",
                     variant = ButtonVariant.SecondaryOutlined,
-                    enabled = GoState.GoRunning,
-                    onClick = GoViewModel::GoOnStopHub,
+                    enabled = state.running,
+                    onClick = viewModel::onStopHub,
                 )
             }
         }
@@ -94,9 +94,9 @@ private fun GoHubCard(
 }
 
 @Composable
-private fun GoHotspotCard(
-    GoState: DashboardUiState,
-    GoViewModel: DashboardViewModel,
+private fun hotspotCard(
+    state: DashboardUiState,
+    viewModel: DashboardViewModel,
 ) {
     Card(modifier = Modifier.padding(vertical = 2.dp)) {
         Column(
@@ -105,17 +105,17 @@ private fun GoHotspotCard(
         ) {
             Text(text = "Hotspot", style = AppTheme.typography.h4)
 
-            if (!GoState.GoHotspotAvailable) {
+            if (!state.hotspotAvailable) {
                 Text(text = "Hotspot not available")
                 return@Column
             }
 
-            GoState.GoHotspotError?.let { Text(text = it) }
+            state.hotspotError?.let { Text(text = it) }
 
-            GoState.GoHotspot?.let { GoInfo ->
-                Text(text = "SSID: ${GoInfo.GoSsid}")
-                Text(text = "Passphrase: ${GoInfo.GoPassphrase}")
-                Text(text = "Gateway: ${GoInfo.GoGatewayIp}")
+            state.hotspot?.let { info ->
+                Text(text = "SSID: ${info.ssid}")
+                Text(text = "Passphrase: ${info.passphrase}")
+                Text(text = "Gateway: ${info.gatewayIp}")
             }
 
             HorizontalDivider()
@@ -123,14 +123,14 @@ private fun GoHotspotCard(
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Button(
                     text = "Start hotspot",
-                    enabled = GoState.GoHotspot == null,
-                    onClick = GoViewModel::GoOnStartHotspot,
+                    enabled = state.hotspot == null,
+                    onClick = viewModel::onStartHotspot,
                 )
                 Button(
                     text = "Stop hotspot",
                     variant = ButtonVariant.SecondaryOutlined,
-                    enabled = GoState.GoHotspot != null,
-                    onClick = GoViewModel::GoOnStopHotspot,
+                    enabled = state.hotspot != null,
+                    onClick = viewModel::onStopHotspot,
                 )
             }
         }

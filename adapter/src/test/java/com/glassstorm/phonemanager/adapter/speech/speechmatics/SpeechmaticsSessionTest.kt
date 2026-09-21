@@ -22,19 +22,19 @@ import java.util.concurrent.atomic.AtomicInteger
  */
 @RunWith(RobolectricTestRunner::class)
 class SpeechmaticsSessionTest {
-    private class GoFakeSocket : WebSocket {
-        val GoBinaryFrames: MutableList<ByteString> = mutableListOf()
-        val GoTextFrames: MutableList<String> = mutableListOf()
-        val GoCloseCount = AtomicInteger()
-        private var GoListener: WebSocketListener? = null
+    private class FakeSocket : WebSocket {
+        val binaryFrames: MutableList<ByteString> = mutableListOf()
+        val textFrames: MutableList<String> = mutableListOf()
+        val closeCount = AtomicInteger()
+        private var listener: WebSocketListener? = null
 
-        fun GoAttach(listener: WebSocketListener) {
-            GoListener = listener
+        fun attach(listener: WebSocketListener) {
+            this.listener = listener
         }
 
         /** Simulate the provider acknowledging the handshake. */
-        fun GoOpen() {
-            GoListener?.onOpen(
+        fun open() {
+            listener?.onOpen(
                 this,
                 Response
                     .Builder()
@@ -51,8 +51,8 @@ class SpeechmaticsSessionTest {
         }
 
         /** Simulate a complete-utterance result frame from the provider. */
-        fun GoEmit(text: String) {
-            GoListener?.onMessage(this, """{"message":"AddTranscript","results":[{"alternatives":[{"content":"$text"}]}]}""")
+        fun emit(text: String) {
+            listener?.onMessage(this, """{"message":"AddTranscript","results":[{"alternatives":[{"content":"$text"}]}]}""")
         }
 
         override fun request(): okhttp3.Request =
@@ -64,12 +64,12 @@ class SpeechmaticsSessionTest {
         override fun queueSize(): Long = 0
 
         override fun send(text: String): Boolean {
-            GoTextFrames.add(text)
+            textFrames.add(text)
             return true
         }
 
         override fun send(bytes: ByteString): Boolean {
-            GoBinaryFrames.add(bytes)
+            binaryFrames.add(bytes)
             return true
         }
 
@@ -77,136 +77,136 @@ class SpeechmaticsSessionTest {
             code: Int,
             reason: String?,
         ): Boolean {
-            GoCloseCount.incrementAndGet()
+            closeCount.incrementAndGet()
             return true
         }
 
         override fun cancel() = Unit
     }
 
-    private class GoFakeTransport(
-        val GoSockets: MutableList<GoFakeSocket> = mutableListOf(),
+    private class FakeTransport(
+        val sockets: MutableList<FakeSocket> = mutableListOf(),
     ) {
-        val GoTransport: SpeechmaticsTransport =
+        val transport: SpeechmaticsTransport =
             SpeechmaticsTransport(
-                GoTokenFetcher = GoTokenFetcher { "fake-jwt" },
-                GoSocketOpener =
-                    GoSocketOpener { _, listener ->
-                        GoFakeSocket().also {
-                            it.GoAttach(listener)
-                            GoSockets.add(it)
+                tokenFetcher = TokenFetcher { "fake-jwt" },
+                socketOpener =
+                    SocketOpener { _, listener ->
+                        FakeSocket().also {
+                            it.attach(listener)
+                            sockets.add(it)
                         }
                     },
-                GoResultWaitMs = 10L,
+                resultWaitMs = 10L,
             )
     }
 
-    private fun GoAdapter(transport: GoFakeTransport) =
+    private fun adapter(transport: FakeTransport) =
         SpeechmaticsSttAdapter(
-            SpeechmaticsConfig(GoApiKey = "fake-key", GoRegion = "eu"),
-            transport.GoTransport,
+            SpeechmaticsConfig(apiKey = "fake-key", region = "eu"),
+            transport.transport,
         )
 
     @Test
     fun `no socket is opened until the first audio chunk arrives`() =
         runBlocking {
-            val GoTransport = GoFakeTransport()
-            val GoAdapter = GoAdapter(GoTransport)
+            val transport = FakeTransport()
+            val adapter = adapter(transport)
 
-            assertThat(GoTransport.GoSockets).isEmpty()
-            assertThat(GoAdapter.GoIsSessionOpen("s1")).isFalse()
+            assertThat(transport.sockets).isEmpty()
+            assertThat(adapter.isSessionOpen("s1")).isFalse()
         }
 
     @Test
     fun `the first chunk connects, handshakes and sends encoded audio`() =
         runBlocking {
-            val GoTransport = GoFakeTransport()
-            val GoAdapter = GoAdapter(GoTransport)
+            val transport = FakeTransport()
+            val adapter = adapter(transport)
 
-            GoAdapter.GoTranscribe("s1", ByteArray(4) { 1 }, 16_000)
+            adapter.transcribe("s1", ByteArray(4) { 1 }, 16_000)
 
-            assertThat(GoTransport.GoSockets).hasSize(1)
-            val GoSocket = GoTransport.GoSockets.first()
-            GoSocket.GoOpen()
-            assertThat(GoSocket.GoTextFrames).hasSize(1)
-            assertThat(GoSocket.GoTextFrames.first()).contains("StartRecognition")
+            assertThat(transport.sockets).hasSize(1)
+            val socket = transport.sockets.first()
+            socket.open()
+            assertThat(socket.textFrames).hasSize(1)
+            assertThat(socket.textFrames.first()).contains("StartRecognition")
             // Two PCM16 samples become one 8-byte float32 frame.
-            assertThat(GoSocket.GoBinaryFrames).hasSize(1)
-            assertThat(GoSocket.GoBinaryFrames.first().size).isEqualTo(8)
+            assertThat(socket.binaryFrames).hasSize(1)
+            assertThat(socket.binaryFrames.first().size).isEqualTo(8)
         }
 
     @Test
     fun `a complete utterance is returned to the caller`() =
         runBlocking {
-            val GoTransport = GoFakeTransport()
-            val GoAdapter = GoAdapter(GoTransport)
-            GoAdapter.GoTranscribe("s1", ByteArray(4) { 1 }, 16_000)
-            val GoSocket = GoTransport.GoSockets.first()
-            GoSocket.GoOpen()
-            GoSocket.GoEmit("hello world")
+            val transport = FakeTransport()
+            val adapter = adapter(transport)
+            adapter.transcribe("s1", ByteArray(4) { 1 }, 16_000)
+            val socket = transport.sockets.first()
+            socket.open()
+            socket.emit("hello world")
 
-            val GoResult = GoAdapter.GoTranscribe("s1", ByteArray(4) { 1 }, 16_000)
+            val result = adapter.transcribe("s1", ByteArray(4) { 1 }, 16_000)
 
-            assertThat(GoResult).isEqualTo("hello world")
+            assertThat(result).isEqualTo("hello world")
         }
 
     @Test
     fun `a second chunk reuses the existing socket`() =
         runBlocking {
-            val GoTransport = GoFakeTransport()
-            val GoAdapter = GoAdapter(GoTransport)
+            val transport = FakeTransport()
+            val adapter = adapter(transport)
 
-            GoAdapter.GoTranscribe("s1", ByteArray(4) { 1 }, 16_000)
-            GoAdapter.GoTranscribe("s1", ByteArray(4) { 1 }, 16_000)
+            adapter.transcribe("s1", ByteArray(4) { 1 }, 16_000)
+            adapter.transcribe("s1", ByteArray(4) { 1 }, 16_000)
 
-            assertThat(GoTransport.GoSockets).hasSize(1)
+            assertThat(transport.sockets).hasSize(1)
         }
 
     @Test
     fun `close is idempotent and sends StopRecognition exactly once`() =
         runBlocking {
-            val GoTransport = GoFakeTransport()
-            val GoAdapter = GoAdapter(GoTransport)
-            GoAdapter.GoTranscribe("s1", ByteArray(4) { 1 }, 16_000)
-            val GoSocket = GoTransport.GoSockets.first()
-            GoSocket.GoOpen()
+            val transport = FakeTransport()
+            val adapter = adapter(transport)
+            adapter.transcribe("s1", ByteArray(4) { 1 }, 16_000)
+            val socket = transport.sockets.first()
+            socket.open()
 
-            GoAdapter.GoClose("s1")
-            GoAdapter.GoClose("s1")
+            adapter.close("s1")
+            adapter.close("s1")
 
-            assertThat(GoSocket.GoCloseCount.get()).isEqualTo(1)
-            assertThat(GoAdapter.GoIsSessionOpen("s1")).isFalse()
+            assertThat(socket.closeCount.get()).isEqualTo(1)
+            assertThat(adapter.isSessionOpen("s1")).isFalse()
         }
 
     @Test
     fun `closing a session that never connected is a no-op`() =
         runBlocking {
-            val GoTransport = GoFakeTransport()
-            val GoAdapter = GoAdapter(GoTransport)
+            val transport = FakeTransport()
+            val adapter = adapter(transport)
 
-            GoAdapter.GoClose("never-opened")
+            adapter.close("never-opened")
 
-            assertThat(GoTransport.GoSockets).isEmpty()
+            assertThat(transport.sockets).isEmpty()
         }
 
     @Test
     fun `a failed token exchange yields null without opening a socket`() =
         runBlocking {
-            val GoTransport =
+            val transport =
                 SpeechmaticsTransport(
-                    GoTokenFetcher = GoTokenFetcher { null },
-                    GoSocketOpener = GoSocketOpener { _, _ -> error("must not be called") },
-                    GoResultWaitMs = 10L,
+                    tokenFetcher = TokenFetcher { null },
+                    socketOpener = SocketOpener { _, _ -> error("must not be called") },
+                    resultWaitMs = 10L,
                 )
-            val GoAdapter =
+            val adapter =
                 SpeechmaticsSttAdapter(
-                    SpeechmaticsConfig(GoApiKey = "fake-key", GoRegion = "eu"),
-                    GoTransport,
+                    SpeechmaticsConfig(apiKey = "fake-key", region = "eu"),
+                    transport,
                 )
 
-            val GoResult = GoAdapter.GoTranscribe("s1", ByteArray(4) { 1 }, 16_000)
+            val result = adapter.transcribe("s1", ByteArray(4) { 1 }, 16_000)
 
-            assertThat(GoResult).isNull()
-            assertThat(GoAdapter.GoIsSessionOpen("s1")).isTrue()
+            assertThat(result).isNull()
+            assertThat(adapter.isSessionOpen("s1")).isTrue()
         }
 }

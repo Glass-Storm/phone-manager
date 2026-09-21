@@ -19,9 +19,9 @@ private const val GO_NORMAL_CLOSURE: Int = 1000
 
 /** Everything the cloud engine needs to authenticate and address the service. */
 data class SpeechmaticsConfig(
-    val GoApiKey: String,
-    val GoRegion: String = "us",
-    val GoLanguage: String = GO_DEFAULT_LANGUAGE,
+    val apiKey: String,
+    val region: String = "us",
+    val language: String = GO_DEFAULT_LANGUAGE,
 )
 
 /**
@@ -32,9 +32,9 @@ data class SpeechmaticsConfig(
  * test can never be forced onto the network.
  */
 class SpeechmaticsTransport(
-    val GoTokenFetcher: GoTokenFetcher = HttpTokenFetcher(),
-    val GoSocketOpener: GoSocketOpener = OkHttpSocketOpener(),
-    val GoResultWaitMs: Long = GO_DEFAULT_RESULT_WAIT_MS,
+    val tokenFetcher: TokenFetcher = HttpTokenFetcher(),
+    val socketOpener: SocketOpener = OkHttpSocketOpener(),
+    val resultWaitMs: Long = GO_DEFAULT_RESULT_WAIT_MS,
 )
 
 /**
@@ -48,7 +48,7 @@ class SpeechmaticsTransport(
  * ## Lazy, per-session lifecycle
  *
  * A session connects on its FIRST audio chunk (never in the constructor), so
- * selecting this engine costs nothing until audio actually arrives. [GoClose]
+ * selecting this engine costs nothing until audio actually arrives. [close]
  * sends the provider `StopRecognition` frame and closes the socket; it is
  * idempotent and tolerates a session that never connected.
  *
@@ -62,86 +62,86 @@ class SpeechmaticsTransport(
  * never placed in a URL and never written anywhere but the app-private store.
  */
 class SpeechmaticsSttAdapter(
-    private val GoConfig: SpeechmaticsConfig,
-    private val GoTransport: SpeechmaticsTransport = SpeechmaticsTransport(),
+    private val config: SpeechmaticsConfig,
+    private val transport: SpeechmaticsTransport = SpeechmaticsTransport(),
 ) : SttPort {
-    private val GoSessions: ConcurrentHashMap<String, GoSession> = ConcurrentHashMap()
+    private val sessions: ConcurrentHashMap<String, Session> = ConcurrentHashMap()
 
-    override suspend fun GoTranscribe(
+    override suspend fun transcribe(
         sessionId: String,
         audioPcm16: ByteArray,
         sampleRateHz: Int,
     ): String? {
         // No key => no network, no session, an ordinary "no utterance".
-        if (GoConfig.GoApiKey.isBlank()) return null
-        val GoSession = GoSessions.computeIfAbsent(sessionId) { GoSession() }
+        if (config.apiKey.isBlank()) return null
+        val session = sessions.computeIfAbsent(sessionId) { Session() }
         return withContext(Dispatchers.IO) {
-            if (!GoEnsureConnected(GoSession)) return@withContext null
-            val GoSocket = GoSession.GoSocket ?: return@withContext null
-            if (!GoSocket.send(GoPcm16ToFloat32Le(audioPcm16).toByteString())) return@withContext null
-            GoSession.GoTranscripts.poll(GoTransport.GoResultWaitMs, TimeUnit.MILLISECONDS)
+            if (!ensureConnected(session)) return@withContext null
+            val socket = session.socket ?: return@withContext null
+            if (!socket.send(pcm16ToFloat32Le(audioPcm16).toByteString())) return@withContext null
+            session.transcripts.poll(transport.resultWaitMs, TimeUnit.MILLISECONDS)
         }
     }
 
-    override suspend fun GoClose(sessionId: String) {
-        val GoSession = GoSessions.remove(sessionId) ?: return
-        GoSession.GoListener.GoDetach()
-        val GoSocket = GoSession.GoSocket ?: return
+    override suspend fun close(sessionId: String) {
+        val session = sessions.remove(sessionId) ?: return
+        session.listener.detach()
+        val socket = session.socket ?: return
         withContext(Dispatchers.IO) {
-            GoSession.GoProviderId.get()?.let { GoSocket.send(GoStopRecognitionJson(it)) }
+            session.providerId.get()?.let { socket.send(stopRecognitionJson(it)) }
             // close() is idempotent in OkHttp: a second call is a no-op.
-            GoSocket.close(GO_NORMAL_CLOSURE, null)
+            socket.close(GO_NORMAL_CLOSURE, null)
         }
     }
 
     /** Adapter-local observability (mirrors T8/T11 accessors): a session holds live state. */
-    fun GoIsSessionOpen(sessionId: String): Boolean = GoSessions.containsKey(sessionId)
+    fun isSessionOpen(sessionId: String): Boolean = sessions.containsKey(sessionId)
 
-    private fun GoEnsureConnected(session: GoSession): Boolean {
-        if (session.GoSocket != null) return true
-        val GoJwt = GoTransport.GoTokenFetcher.GoFetch(GoConfig.GoApiKey) ?: return false
-        val GoUrl = "${GoRegionToWsUrl(GoConfig.GoRegion)}?jwt=$GoJwt"
-        val GoSocket = GoTransport.GoSocketOpener.GoOpen(GoUrl, session.GoListener)
-        session.GoSocket = GoSocket
+    private fun ensureConnected(session: Session): Boolean {
+        if (session.socket != null) return true
+        val jwt = transport.tokenFetcher.fetch(config.apiKey) ?: return false
+        val url = "${regionToWsUrl(config.region)}?jwt=$jwt"
+        val socket = transport.socketOpener.open(url, session.listener)
+        session.socket = socket
         return true
     }
 
-    /** Per-session state shared with [GoSpeechmaticsListener] callbacks. */
-    private class GoSession {
-        val GoTranscripts: LinkedBlockingQueue<String> = LinkedBlockingQueue()
-        val GoProviderId: AtomicReference<String?> = AtomicReference(null)
-        val GoListener: GoSpeechmaticsListener = GoSpeechmaticsListener(GoTranscripts, GoProviderId)
+    /** Per-session state shared with [SpeechmaticsListener] callbacks. */
+    private class Session {
+        val transcripts: LinkedBlockingQueue<String> = LinkedBlockingQueue()
+        val providerId: AtomicReference<String?> = AtomicReference(null)
+        val listener: SpeechmaticsListener = SpeechmaticsListener(transcripts, providerId)
 
-        @Volatile var GoSocket: WebSocket? = null
+        @Volatile var socket: WebSocket? = null
     }
 
     /** Bridges OkHttp's callbacks into the session's result queue. */
-    private class GoSpeechmaticsListener(
-        private val GoTranscripts: LinkedBlockingQueue<String>,
-        private val GoProviderId: AtomicReference<String?>,
+    private class SpeechmaticsListener(
+        private val transcripts: LinkedBlockingQueue<String>,
+        private val providerId: AtomicReference<String?>,
     ) : WebSocketListener() {
-        @Volatile private var GoDetached = false
+        @Volatile private var detached = false
 
         /** Stop accepting results (the session is being torn down). */
-        fun GoDetach() {
-            GoDetached = true
+        fun detach() {
+            detached = true
         }
 
         override fun onOpen(
             webSocket: WebSocket,
             response: Response,
         ) {
-            if (GoDetached) return
-            webSocket.send(GoStartRecognitionJson())
+            if (detached) return
+            webSocket.send(startRecognitionJson())
         }
 
         override fun onMessage(
             webSocket: WebSocket,
             text: String,
         ) {
-            if (GoDetached) return
-            GoProviderSessionId(text)?.let { GoProviderId.set(it) }
-            GoTranscriptFromMessage(text)?.let { GoTranscripts.offer(it) }
+            if (detached) return
+            providerSessionId(text)?.let { providerId.set(it) }
+            transcriptFromMessage(text)?.let { transcripts.offer(it) }
         }
 
         override fun onFailure(
@@ -152,7 +152,7 @@ class SpeechmaticsSttAdapter(
             // A dropped uplink is an ordinary outcome for this port: no throw, the
             // caller simply gets no transcript. The failure is deliberately not
             // logged: the socket URL carries the short-lived jwt query parameter.
-            GoDetached = true
+            detached = true
         }
     }
 }

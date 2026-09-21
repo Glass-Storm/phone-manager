@@ -19,20 +19,20 @@ import java.io.File
  * `--token-out` / `--token-file` (0600) and NEVER appears on stdout, in a log, or
  * in the evidence transcript.
  *
- * @param GoPort the bound hub port the peer dials on `127.0.0.1`.
- * @param GoOpenWindow opens a pairing window and returns its PIN.
- * @param GoRevokeAll revokes every paired device (the post-revoke leg).
+ * @param port the bound hub port the peer dials on `127.0.0.1`.
+ * @param openWindow opens a pairing window and returns its PIN.
+ * @param revokeAll revokes every paired device (the post-revoke leg).
  */
 class MockPeerDriver(
-    private val GoPort: Int,
-    private val GoOpenWindow: () -> String,
-    private val GoRevokeAll: () -> Unit,
+    private val port: Int,
+    private val openWindow: () -> String,
+    private val revokeAll: () -> Unit,
 ) {
     /** Every child process launched, so the caller can reap them in teardown. */
-    private val GoChildren: MutableList<Process> = mutableListOf()
+    private val children: MutableList<Process> = mutableListOf()
 
     /** Per-driver token path: unique, so concurrent suites can never collide. */
-    private val GoTokenFile: File by lazy {
+    private val tokenFile: File by lazy {
         File(
             File(System.getProperty("java.io.tmpdir"), "mockpeer-token").apply { mkdirs() },
             "revoked-leg-${java.util.UUID.randomUUID()}.token",
@@ -40,24 +40,24 @@ class MockPeerDriver(
     }
 
     /** The first invocation's result, read by the caller for byte-level assertions. */
-    lateinit var GoFirstRun: GoProcessRun
+    lateinit var firstRun: ProcessRun
         private set
 
     /** The post-revoke invocation's result. */
-    lateinit var GoRevokedRun: GoProcessRun
+    lateinit var revokedRun: ProcessRun
         private set
 
     /**
      * Invocation 1: pair -> heartbeat -> OpenStream (audio+video) -> session-ok.
      * The freshly issued token is written to a 0600 temp file, never to stdout.
      */
-    fun GoPairHeartbeatStream(frames: Int = 10): GoProcessRun {
-        GoFirstRun =
-            GoMockPeer(
+    fun pairHeartbeatStream(frames: Int = 10): ProcessRun {
+        firstRun =
+            mockPeer(
                 "--addr",
-                "127.0.0.1:$GoPort",
+                "127.0.0.1:$port",
                 "--pin",
-                GoOpenWindow(),
+                openWindow(),
                 "--scenario",
                 "full",
                 "--mode",
@@ -65,74 +65,74 @@ class MockPeerDriver(
                 "--frames",
                 "$frames",
                 "--token-out",
-                GoTokenFile.absolutePath,
+                tokenFile.absolutePath,
                 "--timeout",
                 "60",
             )
-        return GoFirstRun
+        return firstRun
     }
 
     /**
      * Invocation 2: the SAME token, after every device has been revoked. The hub
      * MUST now refuse, and the peer MUST say `UNAUTHENTICATED` with a non-zero exit.
      */
-    fun GoRevokedLeg(): GoProcessRun {
-        GoRevokeAll()
-        GoRevokedRun =
-            GoMockPeer(
+    fun revokedLeg(): ProcessRun {
+        revokeAll()
+        revokedRun =
+            mockPeer(
                 "--addr",
-                "127.0.0.1:$GoPort",
+                "127.0.0.1:$port",
                 "--scenario",
                 "full",
                 "--token-file",
-                GoTokenFile.absolutePath,
+                tokenFile.absolutePath,
                 "--expect-unauthenticated",
                 "--timeout",
                 "30",
             )
-        return GoRevokedRun
+        return revokedRun
     }
 
     /** The three media lines the full scenario prints, in order. */
-    fun GoFullLines(run: GoProcessRun = GoFirstRun): List<String> =
+    fun fullLines(run: ProcessRun = firstRun): List<String> =
         listOf(
             "pair-ok",
             "heartbeat-ok",
-            "session-ok frames=${GoCount(run.stdout, "frames")}",
+            "session-ok frames=${count(run.stdout, "frames")}",
         )
 
-    /** Register an externally launched child so [GoReap] still guarantees reaping. */
-    fun GoRegisterForReaping(process: Process) {
-        GoChildren += process
+    /** Register an externally launched child so [reap] still guarantees reaping. */
+    fun registerForReaping(process: Process) {
+        children += process
     }
 
     /** Delete the ephemeral token file and reap every child. Never throws. */
-    fun GoReap() {
-        runCatching { GoTokenFile.delete() }
-        GoChildren.forEach { child ->
+    fun reap() {
+        runCatching { tokenFile.delete() }
+        children.forEach { child ->
             runCatching {
                 if (child.isAlive) child.destroyForcibly()
                 child.waitFor(GO_REAP_SECONDS, java.util.concurrent.TimeUnit.SECONDS)
             }
         }
-        GoChildren.clear()
+        children.clear()
     }
 
-    private fun GoMockPeer(vararg args: String): GoProcessRun {
-        val GoCommand = listOf(GoGoBinary(), "run", "./tools/mockpeer") + args
-        val GoResult = GoRun(GoCommand, GoRepoRoot())
-        GoResult.process?.let { GoChildren += it }
-        return GoResult
+    private fun mockPeer(vararg args: String): ProcessRun {
+        val command = listOf(goBinary(), "run", "./tools/mockpeer") + args
+        val result = run(command, repoRoot())
+        result.process?.let { children += it }
+        return result
     }
 
-    private fun GoCount(
+    private fun count(
         stdout: String,
         name: String,
     ): Int {
-        val GoMatch =
+        val match =
             Regex("""$name=(\d+)""").find(stdout)
                 ?: error("mockpeer stdout did not carry `$name=<int>`: $stdout")
-        return GoMatch.groupValues[1].toInt()
+        return match.groupValues[1].toInt()
     }
 }
 
@@ -145,7 +145,7 @@ class MockPeerDriver(
  */
 object MockPeerTranscript {
     /** The frozen ordered sequence. */
-    fun GoLines(
+    fun lines(
         pairOk: Boolean,
         heartbeatOk: Boolean,
         frames: Int,
@@ -161,18 +161,18 @@ object MockPeerTranscript {
         )
 
     /** Append the harness's transcript to the evidence file as ONE atomic append. */
-    fun GoWrite(
+    fun write(
         evidencePath: String,
         harness: String,
         lines: List<String>,
     ) {
-        val GoFile = File(evidencePath).absoluteFile
-        GoFile.parentFile?.mkdirs()
-        val GoBlock =
+        val file = File(evidencePath).absoluteFile
+        file.parentFile?.mkdirs()
+        val block =
             buildString {
                 appendLine("=== $harness ===")
                 lines.forEach { appendLine(it) }
             }
-        GoFile.appendBytes(GoBlock.toByteArray())
+        file.appendBytes(block.toByteArray())
     }
 }

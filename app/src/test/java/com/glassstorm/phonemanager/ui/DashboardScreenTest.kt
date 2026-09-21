@@ -33,7 +33,7 @@ class DashboardScreenTest {
 
     @Test
     fun `renders the unavailable state when no ports are registered`() {
-        composeRule.GoSetDashboardContent(Context())
+        composeRule.setDashboardContent(Context())
 
         composeRule.onNodeWithText("Dashboard").assertIsDisplayed()
         composeRule.onNodeWithText("Hub server not available").assertIsDisplayed()
@@ -42,18 +42,18 @@ class DashboardScreenTest {
 
     @Test
     fun `starting the hub shows the bound port and the paired device count`() {
-        val GoPairing =
+        val pairing =
             FakePairingService().also {
-                it.GoSeedDevice(deviceId = "d-1", deviceName = "Glass One")
-                it.GoSeedDevice(deviceId = "d-2", deviceName = "Ubuntu Daemon", role = "DAEMON")
+                it.seedDevice(deviceId = "d-1", deviceName = "Glass One")
+                it.seedDevice(deviceId = "d-2", deviceName = "Ubuntu Daemon", role = "DAEMON")
             }
-        val GoCtx =
+        val ctx =
             Context().also {
-                Register<HubServer>(it, FakeHubServer(GoBoundPortValue = 40404))
-                Register<PairingService>(it, GoPairing)
+                Register<HubServer>(it, FakeHubServer(boundPortValue = 40404))
+                Register<PairingService>(it, pairing)
             }
 
-        composeRule.GoSetDashboardContent(GoCtx)
+        composeRule.setDashboardContent(ctx)
         composeRule.onNodeWithText("Hub: stopped").assertIsDisplayed()
 
         composeRule.onNodeWithText("Start hub").performClick()
@@ -68,12 +68,12 @@ class DashboardScreenTest {
 
     @Test
     fun `starting the hotspot shows the credentials and the gateway ip`() {
-        val GoCtx =
+        val ctx =
             Context().also {
                 Register<HotspotController>(it, FakeHotspotController())
             }
 
-        composeRule.GoSetDashboardContent(GoCtx)
+        composeRule.setDashboardContent(ctx)
         composeRule.onNodeWithText("Start hotspot").performClick()
         composeRule.waitForIdle()
 
@@ -84,25 +84,25 @@ class DashboardScreenTest {
 
     @Test
     fun `a failing hotspot start renders the typed reason instead of crashing`() {
-        val GoCtx =
+        val ctx =
             Context().also {
                 Register<HotspotController>(
                     it,
-                    FakeHotspotController(GoFailWith = HotspotFailure.StartFailed(GoReason = "denied")),
+                    FakeHotspotController(failWith = HotspotFailure.StartFailed(reason = "denied")),
                 )
             }
 
-        composeRule.GoSetDashboardContent(GoCtx)
+        composeRule.setDashboardContent(ctx)
         composeRule.onNodeWithText("Start hotspot").performClick()
         composeRule.waitForIdle()
 
         composeRule.onNodeWithText("Hotspot failed: denied").assertIsDisplayed()
     }
 
-    private fun androidx.compose.ui.test.junit4.ComposeContentTestRule.GoSetDashboardContent(GoCtx: Context) {
+    private fun androidx.compose.ui.test.junit4.ComposeContentTestRule.setDashboardContent(ctx: Context) {
         setContent {
             AppTheme {
-                DashboardScreen(GoContext = GoCtx)
+                DashboardScreen(context = ctx)
             }
         }
     }

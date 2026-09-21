@@ -22,13 +22,13 @@ import org.junit.Test
  * `Heartbeat`) fails here.
  */
 class AuthInterceptorTest {
-    private val GoAuthKey: Metadata.Key<String> =
+    private val authKey: Metadata.Key<String> =
         Metadata.Key.of("authorization", Metadata.ASCII_STRING_MARSHALLER)
 
-    private class GoRecordingCall<ReqT : Any, RespT : Any>(
-        private val GoDescriptor: MethodDescriptor<ReqT, RespT>,
+    private class RecordingCall<ReqT : Any, RespT : Any>(
+        private val descriptor: MethodDescriptor<ReqT, RespT>,
     ) : ServerCall<ReqT, RespT>() {
-        var GoClosed: Status? = null
+        var closed: Status? = null
 
         override fun request(requests: Int) = Unit
 
@@ -44,100 +44,100 @@ class AuthInterceptorTest {
             status: Status,
             trailers: Metadata,
         ) {
-            GoClosed = status
+            closed = status
         }
 
-        override fun getMethodDescriptor(): MethodDescriptor<ReqT, RespT> = GoDescriptor
+        override fun getMethodDescriptor(): MethodDescriptor<ReqT, RespT> = descriptor
     }
 
-    private class GoRecordingHandler<ReqT : Any, RespT : Any> : ServerCallHandler<ReqT, RespT> {
-        var GoCalled: Boolean = false
+    private class RecordingHandler<ReqT : Any, RespT : Any> : ServerCallHandler<ReqT, RespT> {
+        var called: Boolean = false
 
         override fun startCall(
             call: ServerCall<ReqT, RespT>,
             headers: Metadata,
         ): ServerCall.Listener<ReqT> {
-            GoCalled = true
+            called = true
             return object : ServerCall.Listener<ReqT>() {}
         }
     }
 
-    private val GoDevice =
+    private val device =
         Device(
-            GoDeviceId = "d-1",
-            GoDeviceName = "glass-1",
-            GoRole = "GLASS",
-            GoTokenHash = "hash-d-1",
-            GoPairedAtMs = 1_000L,
-            GoLastSeenMs = null,
+            deviceId = "d-1",
+            deviceName = "glass-1",
+            role = "GLASS",
+            tokenHash = "hash-d-1",
+            pairedAtMs = 1_000L,
+            lastSeenMs = null,
         )
 
-    private val GoVerifier = TokenVerifier { token -> GoDevice.takeIf { token == "good-token" } }
+    private val verifier = TokenVerifier { token -> device.takeIf { token == "good-token" } }
 
-    private fun GoMetadata(header: String?): Metadata =
+    private fun metadata(header: String?): Metadata =
         Metadata().apply {
-            if (header != null) put(GoAuthKey, header)
+            if (header != null) put(authKey, header)
         }
 
-    private fun <ReqT : Any, RespT : Any> GoIntercept(
+    private fun <ReqT : Any, RespT : Any> intercept(
         descriptor: MethodDescriptor<ReqT, RespT>,
         headers: Metadata,
-    ): Pair<GoRecordingCall<ReqT, RespT>, GoRecordingHandler<ReqT, RespT>> {
-        val GoCall = GoRecordingCall(descriptor)
-        val GoHandler = GoRecordingHandler<ReqT, RespT>()
-        AuthInterceptor(GoVerifier).interceptCall(GoCall, headers, GoHandler)
-        return GoCall to GoHandler
+    ): Pair<RecordingCall<ReqT, RespT>, RecordingHandler<ReqT, RespT>> {
+        val call = RecordingCall(descriptor)
+        val handler = RecordingHandler<ReqT, RespT>()
+        AuthInterceptor(verifier).interceptCall(call, headers, handler)
+        return call to handler
     }
 
     @Test
     fun `pair is the one method allowed without a token`() {
         // Given the Pair descriptor and no metadata
         // When intercepted
-        val (GoCall, GoHandler) = GoIntercept(PairingServiceGrpc.getPairMethod(), GoMetadata(null))
+        val (call, handler) = intercept(PairingServiceGrpc.getPairMethod(), metadata(null))
 
         // Then the service body is reached and the call is not closed as unauth
-        assertThat(GoHandler.GoCalled).isTrue()
-        assertThat(GoCall.GoClosed).isNull()
+        assertThat(handler.called).isTrue()
+        assertThat(call.closed).isNull()
     }
 
     @Test
     fun `heartbeat without metadata never reaches the service and closes UNAUTHENTICATED`() {
         // Given the Heartbeat descriptor and NO authorization header
         // When intercepted
-        val (GoCall, GoHandler) = GoIntercept(PairingServiceGrpc.getHeartbeatMethod(), GoMetadata(null))
+        val (call, handler) = intercept(PairingServiceGrpc.getHeartbeatMethod(), metadata(null))
 
         // Then the handler is never invoked and the call closes on the exact status
-        assertThat(GoHandler.GoCalled).isFalse()
-        assertThat(GoCall.GoClosed?.code).isEqualTo(Status.Code.UNAUTHENTICATED)
+        assertThat(handler.called).isFalse()
+        assertThat(call.closed?.code).isEqualTo(Status.Code.UNAUTHENTICATED)
     }
 
     @Test
     fun `heartbeat with an unknown token never reaches the service`() {
         // Given a well-formed Bearer header carrying an unknown token
         // When intercepted
-        val (GoCall, GoHandler) =
-            GoIntercept(PairingServiceGrpc.getHeartbeatMethod(), GoMetadata("Bearer not-a-real-token"))
+        val (call, handler) =
+            intercept(PairingServiceGrpc.getHeartbeatMethod(), metadata("Bearer not-a-real-token"))
 
         // Then it is rejected without touching the service
-        assertThat(GoHandler.GoCalled).isFalse()
-        assertThat(GoCall.GoClosed?.code).isEqualTo(Status.Code.UNAUTHENTICATED)
+        assertThat(handler.called).isFalse()
+        assertThat(call.closed?.code).isEqualTo(Status.Code.UNAUTHENTICATED)
     }
 
     @Test
     fun `heartbeat with a valid bearer token reaches the service and carries the device id`() {
         // Given a valid Bearer header
         // When intercepted
-        val (GoCall, GoHandler) = GoIntercept(PairingServiceGrpc.getHeartbeatMethod(), GoMetadata("Bearer good-token"))
+        val (call, handler) = intercept(PairingServiceGrpc.getHeartbeatMethod(), metadata("Bearer good-token"))
 
         // Then the body runs and the call was not closed
-        assertThat(GoHandler.GoCalled).isTrue()
-        assertThat(GoCall.GoClosed).isNull()
+        assertThat(handler.called).isTrue()
+        assertThat(call.closed).isNull()
     }
 
     @Test
     fun `only the exact Pair method name is allowlisted, not other Pair-ish descriptors`() {
         // Given descriptors whose full method names resemble Pair
-        val GoNames =
+        val names =
             listOf(
                 PairingServiceGrpc.getPairMethod().fullMethodName,
                 PairingServiceGrpc.getHeartbeatMethod().fullMethodName,
@@ -145,17 +145,17 @@ class AuthInterceptorTest {
 
         // Then the allowlist constant is exactly the generated Pair name
         assertThat(AuthInterceptor.GO_PAIR_METHOD).isEqualTo("ecosys.v1.PairingService/Pair")
-        assertThat(GoNames.first()).isEqualTo("ecosys.v1.PairingService/Pair")
-        assertThat(GoNames.last()).isEqualTo("ecosys.v1.PairingService/Heartbeat")
+        assertThat(names.first()).isEqualTo("ecosys.v1.PairingService/Pair")
+        assertThat(names.last()).isEqualTo("ecosys.v1.PairingService/Heartbeat")
     }
 
     @Test
     fun `empty bearer value is rejected before the verifier is consulted`() {
         // Given a "Bearer " header with an empty token
-        val (GoCall, GoHandler) = GoIntercept(PairingServiceGrpc.getHeartbeatMethod(), GoMetadata("Bearer "))
+        val (call, handler) = intercept(PairingServiceGrpc.getHeartbeatMethod(), metadata("Bearer "))
 
         // Then it is rejected and never verified
-        assertThat(GoHandler.GoCalled).isFalse()
-        assertThat(GoCall.GoClosed?.code).isEqualTo(Status.Code.UNAUTHENTICATED)
+        assertThat(handler.called).isFalse()
+        assertThat(call.closed?.code).isEqualTo(Status.Code.UNAUTHENTICATED)
     }
 }

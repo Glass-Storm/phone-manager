@@ -8,19 +8,19 @@ package com.glassstorm.phonemanager.domain.adapter.transport
  * both satisfy this shape, and `:app` resolves whichever one it composed through
  * the Context registry.
  *
- * [GoStop] MUST be idempotent, and [GoBoundPort] reports the port actually bound
- * (`0` when stopped) — callers use it after a `GoStart(0)` ephemeral-port bind.
+ * [stop] MUST be idempotent, and [boundPort] reports the port actually bound
+ * (`0` when stopped) — callers use it after a `start(0)` ephemeral-port bind.
  */
 interface HubServer {
     /** Start listening on [port] (`0` = ephemeral). Idempotent while already running. */
-    fun GoStart(port: Int)
+    fun start(port: Int)
 
     /** Stop listening and release the port. Idempotent when already stopped. */
-    fun GoStop()
+    fun stop()
 
     /** Whether the listener is currently accepting connections. */
-    fun GoIsRunning(): Boolean
+    fun isRunning(): Boolean
 
     /** The bound TCP port, or `0` when not running. */
-    fun GoBoundPort(): Int
+    fun boundPort(): Int
 }

@@ -19,10 +19,10 @@ import java.nio.ByteOrder
  * return append(nal, body...)
  * ```
  */
-fun GoSyntheticVideoNal(index: Int): ByteArray {
-    val GoNal = byteArrayOf(0x00, 0x00, 0x00, 0x01, 0x65)
-    val GoBody = ByteArray(24) { i -> ((index * 17 + i) % 251).toByte() }
-    return GoNal + GoBody
+fun syntheticVideoNal(index: Int): ByteArray {
+    val nal = byteArrayOf(0x00, 0x00, 0x00, 0x01, 0x65)
+    val body = ByteArray(24) { i -> ((index * 17 + i) % 251).toByte() }
+    return nal + body
 }
 
 /**
@@ -40,13 +40,13 @@ fun GoSyntheticVideoNal(index: Int): ByteArray {
  * Go computes in `int` and truncates to `int16` on the way in, so the Kotlin side
  * reproduces the same wrap explicitly before writing the little-endian pair.
  */
-fun GoSyntheticAudioFrame(index: Int): ByteArray {
-    val GoBuf = ByteBuffer.allocate(GO_AUDIO_SAMPLES_PER_FRAME * 2).order(ByteOrder.LITTLE_ENDIAN)
+fun syntheticAudioFrame(index: Int): ByteArray {
+    val buf = ByteBuffer.allocate(GO_AUDIO_SAMPLES_PER_FRAME * 2).order(ByteOrder.LITTLE_ENDIAN)
     for (i in 0 until GO_AUDIO_SAMPLES_PER_FRAME) {
-        val GoWide = (index * 31 + i * 7) % 32767
-        GoBuf.putShort(GoWide.toShort())
+        val wide = (index * 31 + i * 7) % 32767
+        buf.putShort(wide.toShort())
     }
-    return GoBuf.array()
+    return buf.array()
 }
 
 /** Mirrors `audioSamplesPerFrame` in `frames.go` (20 ms of mono audio at 16 kHz). */

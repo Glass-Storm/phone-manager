@@ -31,7 +31,7 @@ import java.util.concurrent.atomic.AtomicLong
  *
  * ## Architecture
  *
- * Each session owns a [RelayQueue] and TWO independent pump loops on [GoScope]
+ * Each session owns a [RelayQueue] and TWO independent pump loops on [scope]
  * (one audio, one video — no `select`, so a slow STT engine can never starve the
  * video sink or vice versa):
  *
@@ -39,125 +39,125 @@ import java.util.concurrent.atomic.AtomicLong
  *    result channel;
  *  * the video pump hands NALs to the [FrameSink] byte-for-byte unchanged.
  *
- * [GoCloseSession] DRAINS rather than discards: it closes the queue, joins the
+ * [closeSession] DRAINS rather than discards: it closes the queue, joins the
  * pumps (so already-queued frames still reach STT/sink), closes the result
  * channel, then releases the STT session exactly once. It never cancels.
  *
- * Counters are [AtomicLong] because the pumps run on [GoScope], not the caller's
+ * Counters are [AtomicLong] because the pumps run on [scope], not the caller's
  * thread.
  */
 class StreamServiceImpl(
-    private val GoCtx: Context,
-    private val GoAudioCapacity: Int = GO_DEFAULT_AUDIO_CAPACITY,
-    private val GoVideoCapacity: Int = GO_DEFAULT_VIDEO_CAPACITY,
-    private val GoScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
+    private val ctx: Context,
+    private val audioCapacity: Int = GO_DEFAULT_AUDIO_CAPACITY,
+    private val videoCapacity: Int = GO_DEFAULT_VIDEO_CAPACITY,
+    private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
 ) : StreamService {
-    private val GoRandom = SecureRandom()
-    private val GoSessions: ConcurrentHashMap<String, GoSessionState> = ConcurrentHashMap()
+    private val random = SecureRandom()
+    private val sessions: ConcurrentHashMap<String, SessionState> = ConcurrentHashMap()
 
-    private val GoAudioFrames = AtomicLong()
-    private val GoVideoFrames = AtomicLong()
-    private val GoVideoDropped = AtomicLong()
-    private val GoTranscripts = AtomicLong()
+    private val audioFrames = AtomicLong()
+    private val videoFrames = AtomicLong()
+    private val videoDropped = AtomicLong()
+    private val transcripts = AtomicLong()
 
-    override fun GoOpenSession(deviceId: String): RelaySession {
-        val GoRelay = RelaySession(GoSessionId = GoNewSessionId(), GoDeviceId = deviceId)
-        val GoQueue = RelayQueue(GoAudioCapacity, GoVideoCapacity)
-        val GoResults = Channel<RelayResult>(Channel.UNLIMITED)
-        val GoSessionId = GoRelay.GoSessionId
+    override fun openSession(deviceId: String): RelaySession {
+        val relay = RelaySession(sessionId = newSessionId(), deviceId = deviceId)
+        val queue = RelayQueue(audioCapacity, videoCapacity)
+        val results = Channel<RelayResult>(Channel.UNLIMITED)
+        val sessionId = relay.sessionId
         // One parent job per session: joining it drains BOTH pumps.
-        val GoPump =
-            GoScope.launch {
-                launch { GoAudioPump(GoSessionId, GoQueue, GoResults) }
-                launch { GoVideoPump(GoSessionId, GoQueue) }
+        val pump =
+            scope.launch {
+                launch { audioPump(sessionId, queue, results) }
+                launch { videoPump(sessionId, queue) }
             }
-        GoSessions[GoSessionId] = GoSessionState(GoRelay, GoQueue, GoResults, GoPump)
-        return GoRelay
+        sessions[sessionId] = SessionState(relay, queue, results, pump)
+        return relay
     }
 
-    override suspend fun GoPushAudio(
+    override suspend fun pushAudio(
         sessionId: String,
         audioPcm16: ByteArray,
         sampleRateHz: Int,
     ) {
-        val GoState = GoSessions[sessionId] ?: return
+        val state = sessions[sessionId] ?: return
         try {
             // Parks while the audio queue is full — audio is never dropped.
-            GoState.GoQueue.GoAdmitAudio(audioPcm16)
-        } catch (GoClosed: ClosedSendChannelException) {
+            state.queue.admitAudio(audioPcm16)
+        } catch (closed: ClosedSendChannelException) {
             // The session closed between the lookup and the send: a no-op, like an
             // unknown session. Not admitted, so it is not counted.
             return
         }
-        GoAudioFrames.incrementAndGet()
+        audioFrames.incrementAndGet()
     }
 
-    override fun GoPushVideo(
+    override fun pushVideo(
         sessionId: String,
         h264Nal: ByteArray,
     ) {
-        val GoState = GoSessions[sessionId] ?: return
-        GoVideoFrames.incrementAndGet()
-        if (GoState.GoQueue.GoAdmitVideo(h264Nal)) GoVideoDropped.incrementAndGet()
+        val state = sessions[sessionId] ?: return
+        videoFrames.incrementAndGet()
+        if (state.queue.admitVideo(h264Nal)) videoDropped.incrementAndGet()
     }
 
-    override fun GoResults(sessionId: String): Flow<RelayResult> = GoSessions[sessionId]?.GoResults?.receiveAsFlow() ?: emptyFlow()
+    override fun results(sessionId: String): Flow<RelayResult> = sessions[sessionId]?.results?.receiveAsFlow() ?: emptyFlow()
 
-    override suspend fun GoCloseSession(sessionId: String) {
+    override suspend fun closeSession(sessionId: String) {
         // remove FIRST: a concurrent push then sees "closed" and is a no-op, so no
         // frame can be enqueued into a queue that is about to be closed.
-        val GoState = GoSessions.remove(sessionId) ?: return
-        GoState.GoQueue.GoClose()
-        GoState.GoPump.join()
-        GoState.GoResults.close()
-        FromContext<SttPort>(GoCtx).GoClose(sessionId)
+        val state = sessions.remove(sessionId) ?: return
+        state.queue.close()
+        state.pump.join()
+        state.results.close()
+        FromContext<SttPort>(ctx).close(sessionId)
     }
 
-    override fun GoStats(): RelayStats =
+    override fun stats(): RelayStats =
         RelayStats(
-            GoAudioFrames = GoAudioFrames.get(),
-            GoVideoFrames = GoVideoFrames.get(),
-            GoVideoDropped = GoVideoDropped.get(),
-            GoTranscripts = GoTranscripts.get(),
-            GoLiveSessions = GoSessions.size,
+            audioFrames = audioFrames.get(),
+            videoFrames = videoFrames.get(),
+            videoDropped = videoDropped.get(),
+            transcripts = transcripts.get(),
+            liveSessions = sessions.size,
         )
 
-    private suspend fun GoAudioPump(
+    private suspend fun audioPump(
         sessionId: String,
         queue: RelayQueue,
         results: Channel<RelayResult>,
     ) {
-        for (GoPcm in queue.GoAudio) {
-            val GoText =
-                FromContext<SttPort>(GoCtx)
-                    .GoTranscribe(sessionId, GoPcm, StreamService.GoAudioSampleRateHz)
-            if (GoText != null) {
-                GoTranscripts.incrementAndGet()
-                results.send(RelayResult(GoText = GoText, GoSpeakerLabel = "", GoPtsMs = 0L))
+        for (pcm in queue.audio) {
+            val text =
+                FromContext<SttPort>(ctx)
+                    .transcribe(sessionId, pcm, StreamService.GoAudioSampleRateHz)
+            if (text != null) {
+                transcripts.incrementAndGet()
+                results.send(RelayResult(text = text, speakerLabel = "", ptsMs = 0L))
             }
         }
     }
 
-    private suspend fun GoVideoPump(
+    private suspend fun videoPump(
         sessionId: String,
         queue: RelayQueue,
     ) {
-        for (GoNal in queue.GoVideo) {
+        for (nal in queue.video) {
             // Opaque by contract: the exact bytes are handed on, never decoded.
-            FromContext<FrameSink>(GoCtx).GoAcceptVideo(sessionId, GoNal)
+            FromContext<FrameSink>(ctx).acceptVideo(sessionId, nal)
         }
     }
 
-    private fun GoNewSessionId(): String {
-        val GoBytes = ByteArray(16).also { GoRandom.nextBytes(it) }
-        return GoBytes.joinToString("") { "%02x".format(it) }
+    private fun newSessionId(): String {
+        val bytes = ByteArray(16).also { random.nextBytes(it) }
+        return bytes.joinToString("") { "%02x".format(it) }
     }
 
-    private class GoSessionState(
-        val GoRelay: RelaySession,
-        val GoQueue: RelayQueue,
-        val GoResults: Channel<RelayResult>,
-        val GoPump: Job,
+    private class SessionState(
+        val relay: RelaySession,
+        val queue: RelayQueue,
+        val results: Channel<RelayResult>,
+        val pump: Job,
     )
 
     private companion object {

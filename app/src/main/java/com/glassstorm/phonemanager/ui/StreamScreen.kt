@@ -32,11 +32,11 @@ import com.glassstorm.phonemanager.ui.components.card.Card
  */
 @Composable
 fun StreamScreen(
-    GoContext: Context,
+    context: Context,
     modifier: Modifier = Modifier,
 ) {
-    val GoViewModel: StreamViewModel = viewModel { StreamViewModel(GoContext) }
-    val GoState by GoViewModel.GoUiState.collectAsState()
+    val viewModel: StreamViewModel = viewModel { StreamViewModel(context) }
+    val state by viewModel.uiState.collectAsState()
 
     Column(
         modifier =
@@ -48,25 +48,25 @@ fun StreamScreen(
     ) {
         Text(text = "Stream", style = AppTheme.typography.h2)
 
-        if (!GoState.GoAvailable) {
+        if (!state.available) {
             Text(text = "Stream service not available")
             return@Column
         }
 
-        GoSessionCard(GoState, GoViewModel)
+        sessionCard(state, viewModel)
 
-        GoCountersCard(GoState)
+        countersCard(state)
 
-        GoTranscriptCard(GoState)
+        transcriptCard(state)
     }
 }
 
 @Composable
-private fun GoSessionCard(
-    GoState: StreamUiState,
-    GoViewModel: StreamViewModel,
+private fun sessionCard(
+    state: StreamUiState,
+    viewModel: StreamViewModel,
 ) {
-    val GoLive = GoState.GoSessionId != null
+    val live = state.sessionId != null
 
     Card {
         Column(
@@ -75,23 +75,23 @@ private fun GoSessionCard(
         ) {
             Text(text = "Session", style = AppTheme.typography.h4)
 
-            Text(text = if (GoLive) "Session: live" else "Session: idle")
-            GoState.GoPeerId?.let { Text(text = "Peer: $it") }
-            Text(text = "Live sessions: ${GoState.GoLiveSessions}")
+            Text(text = if (live) "Session: live" else "Session: idle")
+            state.peerId?.let { Text(text = "Peer: $it") }
+            Text(text = "Live sessions: ${state.liveSessions}")
 
             HorizontalDivider()
 
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Button(
                     text = "Start session",
-                    enabled = !GoLive,
-                    onClick = GoViewModel::GoOnStart,
+                    enabled = !live,
+                    onClick = viewModel::onStart,
                 )
                 Button(
                     text = "Stop session",
                     variant = ButtonVariant.DestructiveOutlined,
-                    enabled = GoLive,
-                    onClick = GoViewModel::GoOnStop,
+                    enabled = live,
+                    onClick = viewModel::onStop,
                 )
             }
         }
@@ -99,7 +99,7 @@ private fun GoSessionCard(
 }
 
 @Composable
-private fun GoCountersCard(GoState: StreamUiState) {
+private fun countersCard(state: StreamUiState) {
     Card {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -107,16 +107,16 @@ private fun GoCountersCard(GoState: StreamUiState) {
         ) {
             Text(text = "Relay counters", style = AppTheme.typography.h4)
 
-            Text(text = "Audio frames in: ${GoState.GoAudioFrames}")
-            Text(text = "Video frames in: ${GoState.GoVideoFrames}")
-            Text(text = "Video dropped: ${GoState.GoVideoDropped}")
-            Text(text = "Transcripts out: ${GoState.GoTranscripts}")
+            Text(text = "Audio frames in: ${state.audioFrames}")
+            Text(text = "Video frames in: ${state.videoFrames}")
+            Text(text = "Video dropped: ${state.videoDropped}")
+            Text(text = "Transcripts out: ${state.transcripts}")
         }
     }
 }
 
 @Composable
-private fun GoTranscriptCard(GoState: StreamUiState) {
+private fun transcriptCard(state: StreamUiState) {
     Card {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -124,13 +124,13 @@ private fun GoTranscriptCard(GoState: StreamUiState) {
         ) {
             Text(text = "Latest transcript", style = AppTheme.typography.h4)
 
-            val GoText = GoState.GoLatestTranscript
-            if (GoText == null) {
+            val text = state.latestTranscript
+            if (text == null) {
                 Text(text = "No transcript yet")
             } else {
-                Text(text = GoText)
+                Text(text = text)
                 Text(
-                    text = "Speaker: ${GoState.GoLatestSpeakerLabel.orEmpty()}",
+                    text = "Speaker: ${state.latestSpeakerLabel.orEmpty()}",
                     style = AppTheme.typography.label2,
                 )
             }

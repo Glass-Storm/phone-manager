@@ -29,7 +29,7 @@ import java.net.InetSocketAddress
  *    An IPv4 literal is passed EXPLICITLY because `InetSocketAddress(port)` and
  *    `ServerBuilder.forPort()` resolve to the IPv6 wildcard on some runtimes, and
  *    an IPv6-only listener is unreachable to the peers this project targets.
- *  * **All interfaces (`0.0.0.0`)** — used ONLY by [GoForLanPeers], the
+ *  * **All interfaces (`0.0.0.0`)** — used ONLY by [forLanPeers], the
  *    production start. It is required because the phone IS the hotspot: the
  *    glasses and the Ubuntu daemon connect to the phone across the LAN, so the
  *    hub must accept off-device connections. It is never selected in tests.
@@ -38,38 +38,38 @@ import java.net.InetSocketAddress
  * reach the internet), and grpc-java's TLS path is broken on Android anyway. See
  * the frozen protocol contract for the documented upgrade path.
  *
- * @param GoCtx the composition root's registry, holding every domain port the two
- *        gRPC services and the [AuthInterceptor] resolve at [GoStart] time.
- * @param GoBindAddress the IPv4 bind address; see the bind-address decision above.
+ * @param ctx the composition root's registry, holding every domain port the two
+ *        gRPC services and the [AuthInterceptor] resolve at [start] time.
+ * @param bindAddress the IPv4 bind address; see the bind-address decision above.
  */
 class HubServerAdapter(
-    private val GoCtx: Context,
-    private val GoBindAddress: String = GO_LOOPBACK_ADDRESS,
+    private val ctx: Context,
+    private val bindAddress: String = GO_LOOPBACK_ADDRESS,
 ) : HubServer {
-    private val GoHub: GrpcHubServer = GrpcHubServer { GoNewBuilder(it) }
+    private val hub: GrpcHubServer = GrpcHubServer { newBuilder(it) }
 
-    override fun GoStart(port: Int) = GoHub.GoStart(port)
+    override fun start(port: Int) = hub.start(port)
 
-    override fun GoStop() = GoHub.GoStop()
+    override fun stop() = hub.stop()
 
-    override fun GoIsRunning(): Boolean = GoHub.GoIsRunning()
+    override fun isRunning(): Boolean = hub.isRunning()
 
-    override fun GoBoundPort(): Int = GoHub.GoBoundPort()
+    override fun boundPort(): Int = hub.boundPort()
 
     /** The interface this instance binds; exposed so the UI/logs can report it. */
-    fun GoBindAddress(): String = GoBindAddress
+    fun bindAddress(): String = bindAddress
 
     /**
-     * Build a fresh, unstarted server for [port]. Invoked on every [GoStart], so
+     * Build a fresh, unstarted server for [port]. Invoked on every [start], so
      * all collaborators are resolved lazily — a Context that is still being
      * populated when the adapter object is constructed is fine.
      */
-    private fun GoNewBuilder(port: Int): ServerBuilder<*> =
+    private fun newBuilder(port: Int): ServerBuilder<*> =
         NettyServerBuilder
-            .forAddress(InetSocketAddress(GoBindAddress, port))
-            .addService(PairingGrpcService(GoCtx))
-            .addService(StreamGrpcService(GoCtx))
-            .intercept(AuthInterceptor(GoTokenVerifier()))
+            .forAddress(InetSocketAddress(bindAddress, port))
+            .addService(PairingGrpcService(ctx))
+            .addService(StreamGrpcService(ctx))
+            .intercept(AuthInterceptor(tokenVerifier()))
 
     /**
      * The [AuthInterceptor] collaborator. Resolved by its own type so no
@@ -77,7 +77,7 @@ class HubServerAdapter(
      * implementation under BOTH [com.glassstorm.phonemanager.domain.service.PairingService]
      * and [TokenVerifier].
      */
-    private fun GoTokenVerifier(): TokenVerifier = FromContext<TokenVerifier>(GoCtx)
+    private fun tokenVerifier(): TokenVerifier = FromContext<TokenVerifier>(ctx)
 
     companion object {
         /** IPv4 loopback — tests only. */
@@ -90,6 +90,6 @@ class HubServerAdapter(
         const val GO_ALL_INTERFACES_ADDRESS: String = "0.0.0.0"
 
         /** The adapter the app uses: reachable by hotspot peers on the LAN. */
-        fun GoForLanPeers(GoCtx: Context): HubServerAdapter = HubServerAdapter(GoCtx, GO_ALL_INTERFACES_ADDRESS)
+        fun forLanPeers(ctx: Context): HubServerAdapter = HubServerAdapter(ctx, GO_ALL_INTERFACES_ADDRESS)
     }
 }

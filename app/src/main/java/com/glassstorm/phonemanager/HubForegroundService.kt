@@ -24,7 +24,7 @@ import com.glassstorm.phonemanager.permission.HubPermissions
  * port. This class names no concrete adapter.
  */
 class HubForegroundService : Service() {
-    private var GoBringUp: HubBringUp? = null
+    private var bringUp: HubBringUp? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -32,10 +32,10 @@ class HubForegroundService : Service() {
         super.onCreate()
         // The network adapters need a real WifiManager/NsdManager, so the Android
         // Context is recorded before anything resolves the registry.
-        AppComposition.GoInitAndroid(this)
+        AppComposition.initAndroid(this)
         // The channel MUST exist before startForeground on API 26+, or the OS
         // rejects the notification and the service crashes.
-        GoEnsureChannel()
+        ensureChannel()
     }
 
     override fun onStartCommand(
@@ -43,15 +43,15 @@ class HubForegroundService : Service() {
         flags: Int,
         startId: Int,
     ): Int {
-        startForeground(GO_NOTIFICATION_ID, GoNotification())
-        if (GoBringUp == null) {
-            GoBringUp =
+        startForeground(GO_NOTIFICATION_ID, notification())
+        if (bringUp == null) {
+            bringUp =
                 HubBringUp(
-                    GoCtx = AppComposition.GoAppContext(),
-                    GoPermissionBlocker = {
-                        HubPermissions.GoBlockingHotspotPermission(applicationContext)
+                    ctx = AppComposition.appContext(),
+                    permissionBlocker = {
+                        HubPermissions.blockingHotspotPermission(applicationContext)
                     },
-                ).also { it.GoBringUp(GoRequestedPort(intent)) }
+                ).also { it.bringUp(requestedPort(intent)) }
         }
         // Restart the hub after the OS reclaims the process: the hub is the whole
         // point of this service, so a stolen process must come back.
@@ -59,20 +59,20 @@ class HubForegroundService : Service() {
     }
 
     override fun onDestroy() {
-        GoBringUp?.GoTearDown()
-        GoBringUp = null
+        bringUp?.tearDown()
+        bringUp = null
         super.onDestroy()
     }
 
-    private fun GoRequestedPort(intent: Intent?): Int =
+    private fun requestedPort(intent: Intent?): Int =
         intent?.getIntExtra(GO_EXTRA_PORT, AppComposition.GO_DEFAULT_HUB_PORT)
             ?: AppComposition.GO_DEFAULT_HUB_PORT
 
-    private fun GoEnsureChannel() {
+    private fun ensureChannel() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-        val GoManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        if (GoManager.getNotificationChannel(GO_CHANNEL_ID) != null) return
-        GoManager.createNotificationChannel(
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        if (manager.getNotificationChannel(GO_CHANNEL_ID) != null) return
+        manager.createNotificationChannel(
             NotificationChannel(
                 GO_CHANNEL_ID,
                 GO_CHANNEL_NAME,
@@ -81,7 +81,7 @@ class HubForegroundService : Service() {
         )
     }
 
-    private fun GoNotification(): Notification =
+    private fun notification(): Notification =
         Notification
             .Builder(this, GO_CHANNEL_ID)
             .setContentTitle(GO_NOTIFICATION_TITLE)
@@ -111,7 +111,7 @@ class HubForegroundService : Service() {
         const val GO_EXTRA_PORT: String = "com.glassstorm.phonemanager.extra.HUB_PORT"
 
         /** Start the hub from anywhere in the app. */
-        fun GoStartService(context: Context) {
+        fun startService(context: Context) {
             context.startForegroundService(Intent(context, HubForegroundService::class.java))
         }
     }

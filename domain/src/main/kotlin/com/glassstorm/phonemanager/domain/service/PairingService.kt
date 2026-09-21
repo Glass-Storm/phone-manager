@@ -18,18 +18,18 @@ import com.glassstorm.phonemanager.domain.dto.Pairing
  */
 interface PairingService {
     /** Open a single-use pairing window of [ttlMs], returning the freshly drawn [Pairing]. */
-    fun GoOpenWindow(ttlMs: Long): Pairing
+    fun openWindow(ttlMs: Long): Pairing
 
     /** Close the current window immediately. Idempotent when no window is open. */
-    fun GoStopWindow()
+    fun stopWindow()
 
     /**
      * Redeem [pin] for a new pairing.
      *
-     * Returns [PairOutcome.GoOk] with the device id and the one-time token, or a
-     * typed [PairOutcome.GoRejected] carrying a `PairOutcome.GoReason*` value.
+     * Returns [PairOutcome.Ok] with the device id and the one-time token, or a
+     * typed [PairOutcome.Rejected] carrying a `PairOutcome.reason*` value.
      */
-    fun GoPair(
+    fun pair(
         pin: String,
         deviceName: String,
         role: String,
@@ -41,19 +41,19 @@ interface PairingService {
      * Returns `null` when the token is unknown, tampered, or belongs to a revoked
      * device.
      */
-    fun GoVerifyToken(token: String): Device?
+    fun verifyToken(token: String): Device?
 
     /** Record that [deviceId] was seen at [seenAtMs] without re-deriving its token. */
-    fun GoTouchLastSeen(
+    fun touchLastSeen(
         deviceId: String,
         seenAtMs: Long,
     )
 
     /** Revoke [deviceId]: its token stops verifying immediately. Idempotent. */
-    fun GoRevoke(deviceId: String)
+    fun revoke(deviceId: String)
 
     /** Every currently paired device. */
-    fun GoListPaired(): List<Device>
+    fun listPaired(): List<Device>
 
     companion object {
         /** Failed attempts against one PIN before it locks out. */

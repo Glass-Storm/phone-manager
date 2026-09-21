@@ -12,22 +12,22 @@ import kotlinx.coroutines.channels.Channel
  * evict AUDIO, which is never allowed. So each media kind gets its own bounded
  * channel with its own admission rule:
  *
- *  * [GoAudio] — SUSPEND. [GoAdmitAudio] parks until the buffer has room, so audio
+ *  * [audio] — SUSPEND. [admitAudio] parks until the buffer has room, so audio
  *    is NEVER dropped.
- *  * [GoVideo] — drop-oldest. [GoAdmitVideo] evicts the oldest queued frame when
+ *  * [video] — drop-oldest. [admitVideo] evicts the oldest queued frame when
  *    the buffer is full, so the live edge keeps flowing.
  */
 internal class RelayQueue(
     audioCapacity: Int,
     videoCapacity: Int,
 ) {
-    val GoAudio: Channel<ByteArray> = Channel(capacity = audioCapacity)
+    val audio: Channel<ByteArray> = Channel(capacity = audioCapacity)
 
-    val GoVideo: Channel<ByteArray> = Channel(capacity = videoCapacity)
+    val video: Channel<ByteArray> = Channel(capacity = videoCapacity)
 
     /** Park until [pcm] fits. Audio is the irreplaceable half: it is never dropped. */
-    suspend fun GoAdmitAudio(pcm: ByteArray) {
-        GoAudio.send(pcm)
+    suspend fun admitAudio(pcm: ByteArray) {
+        audio.send(pcm)
     }
 
     /**
@@ -44,16 +44,16 @@ internal class RelayQueue(
      * queue's drop-oldest policy, not an "admitted" verdict — callers that count
      * frames count them as OFFERED, never as admitted.
      */
-    fun GoAdmitVideo(nal: ByteArray): Boolean {
-        if (GoVideo.trySend(nal).isSuccess) return false
-        if (GoVideo.tryReceive().isFailure) return false
-        GoVideo.trySend(nal)
+    fun admitVideo(nal: ByteArray): Boolean {
+        if (video.trySend(nal).isSuccess) return false
+        if (video.tryReceive().isFailure) return false
+        video.trySend(nal)
         return true
     }
 
     /** Close both sides so a pump's `for (x in channel)` finishes after draining. */
-    fun GoClose() {
-        GoAudio.close()
-        GoVideo.close()
+    fun close() {
+        audio.close()
+        video.close()
     }
 }

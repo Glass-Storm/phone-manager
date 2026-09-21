@@ -21,32 +21,32 @@ import com.glassstorm.phonemanager.service.security.TokenVerifier
  * `AuthInterceptor` needs); only the leaf ports are fakes, exactly as an Android
  * composition would swap in real adapters.
  */
-fun GoHubContext(): Context {
-    val GoCtx = Context()
+fun hubContext(): Context {
+    val ctx = Context()
     // ONE pairing instance, registered twice: the service surface and the
     // interceptor's token verifier must observe the same pairing state.
-    val GoPairing = PairingServiceImpl(GoCtx)
-    Register<DeviceRepository>(GoCtx, MemoryDeviceRepository())
-    Register<PairingService>(GoCtx, GoPairing)
-    Register<TokenVerifier>(GoCtx, GoPairing)
-    Register<StreamService>(GoCtx, StreamServiceImpl(GoCtx))
-    Register<SttPort>(GoCtx, GoNoopSttPort())
-    Register<FrameSink>(GoCtx, GoNoopFrameSink())
-    return GoCtx
+    val pairing = PairingServiceImpl(ctx)
+    Register<DeviceRepository>(ctx, MemoryDeviceRepository())
+    Register<PairingService>(ctx, pairing)
+    Register<TokenVerifier>(ctx, pairing)
+    Register<StreamService>(ctx, StreamServiceImpl(ctx))
+    Register<SttPort>(ctx, NoopSttPort())
+    Register<FrameSink>(ctx, NoopFrameSink())
+    return ctx
 }
 
-private class GoNoopSttPort : SttPort {
-    override suspend fun GoTranscribe(
+private class NoopSttPort : SttPort {
+    override suspend fun transcribe(
         sessionId: String,
         audioPcm16: ByteArray,
         sampleRateHz: Int,
     ): String? = null
 
-    override suspend fun GoClose(sessionId: String) = Unit
+    override suspend fun close(sessionId: String) = Unit
 }
 
-private class GoNoopFrameSink : FrameSink {
-    override fun GoAcceptVideo(
+private class NoopFrameSink : FrameSink {
+    override fun acceptVideo(
         sessionId: String,
         h264Nal: ByteArray,
     ) = Unit

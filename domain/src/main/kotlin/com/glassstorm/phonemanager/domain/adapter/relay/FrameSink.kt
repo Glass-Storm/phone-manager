@@ -12,7 +12,7 @@ package com.glassstorm.phonemanager.domain.adapter.relay
  */
 interface FrameSink {
     /** Accept one opaque H.264 NAL for [sessionId], byte-for-byte unchanged. */
-    fun GoAcceptVideo(
+    fun acceptVideo(
         sessionId: String,
         h264Nal: ByteArray,
     )

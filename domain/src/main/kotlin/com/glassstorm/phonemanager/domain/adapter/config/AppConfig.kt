@@ -20,28 +20,28 @@ import com.glassstorm.phonemanager.domain.dto.SttEngine
  */
 interface AppConfig {
     /** The configured speech engine, defaulting to [SttEngine.MOCK]. */
-    fun GoSttEngine(): SttEngine
+    fun sttEngine(): SttEngine
 
     /** Persist the chosen speech engine. */
-    fun GoSetSttEngine(kind: SttEngine)
+    fun setSttEngine(kind: SttEngine)
 
     /** The stored Speechmatics API key, or `""` when unset. NEVER log this. */
-    fun GoApiKey(): String
+    fun apiKey(): String
 
     /** Store [apiKey] trimmed; a blank value removes it rather than storing `""`. */
-    fun GoSetApiKey(apiKey: String?)
+    fun setApiKey(apiKey: String?)
 
     /** The configured Speechmatics region, or [GoDefaultRegion] when unset. */
-    fun GoRegion(): String
+    fun region(): String
 
     /** Persist [region] when it is supported; an unsupported value is ignored. */
-    fun GoSetRegion(region: String?)
+    fun setRegion(region: String?)
 
     /** The configured hotspot mode, defaulting to [HotspotMode.MANUAL]. */
-    fun GoHotspotMode(): HotspotMode
+    fun hotspotMode(): HotspotMode
 
     /** Persist the chosen hotspot mode. */
-    fun GoSetHotspotMode(mode: HotspotMode)
+    fun setHotspotMode(mode: HotspotMode)
 
     companion object {
         /** The region used when nothing else is configured. */

@@ -21,13 +21,13 @@ interface HotspotController {
      *         off, OEM refusal, timeout). The implementation MUST leave its state
      *         machine in `ERROR` — never `ACTIVE` — in that case.
      */
-    fun GoStartHotspot(): HotspotInfo
+    fun startHotspot(): HotspotInfo
 
     /** Tear the access point down. Idempotent: calling it when already stopped is a no-op. */
-    fun GoStopHotspot()
+    fun stopHotspot()
 
     /** True only while the access point is fully up. */
-    fun GoIsActive(): Boolean
+    fun isActive(): Boolean
 
     /**
      * Detect an already-active tether/access-point interface (e.g. the user enabled the
@@ -36,5 +36,5 @@ interface HotspotController {
      * Returns `null` when no tether interface is present. This is the PRIMARY
      * documented development path.
      */
-    fun GoDetectManualTether(): HotspotInfo?
+    fun detectManualTether(): HotspotInfo?
 }

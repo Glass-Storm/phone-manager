@@ -37,114 +37,114 @@ import java.security.SecureRandom
  *
  * ## Concurrency
  *
- * [GoPair] is the ONE unauthenticated RPC, and grpc-kotlin dispatches calls
+ * [pair] is the ONE unauthenticated RPC, and grpc-kotlin dispatches calls
  * concurrently on the server executor, so several `Pair` calls can be in flight at
- * once. All window state is therefore guarded: [GoOpenWindow], [GoStopWindow] and
- * [GoPair] are `@Synchronized` on this instance. That makes the single-use
+ * once. All window state is therefore guarded: [openWindow], [stopWindow] and
+ * [pair] are `@Synchronized` on this instance. That makes the single-use
  * check-and-consume and the failed-attempt increment each atomic. Without it two
  * callers holding the correct PIN could both pass the "not consumed" check and
  * mint two tokens from one single-use PIN, and concurrent bad PINs could lose
  * increments and let a brute-force slip past [PairingService.GoMaxPinAttempts].
  *
- * @param GoClock now-provider, injectable so TTL/expiry are deterministic in tests.
+ * @param clock now-provider, injectable so TTL/expiry are deterministic in tests.
  */
 class PairingServiceImpl(
-    private val GoCtx: Context,
-    private val GoClock: () -> Long = { System.currentTimeMillis() },
+    private val ctx: Context,
+    private val clock: () -> Long = { System.currentTimeMillis() },
 ) : PairingService,
     TokenVerifier {
-    private val GoRandom = SecureRandom()
+    private val random = SecureRandom()
 
-    private var GoWindow: Pairing? = null
-    private var GoWindowConsumed: Boolean = false
-    private var GoFailedAttempts: Int = 0
+    private var window: Pairing? = null
+    private var windowConsumed: Boolean = false
+    private var failedAttempts: Int = 0
 
-    private fun GoRepo(): DeviceRepository = FromContext<DeviceRepository>(GoCtx)
+    private fun repo(): DeviceRepository = FromContext<DeviceRepository>(ctx)
 
     @Synchronized
-    override fun GoOpenWindow(ttlMs: Long): Pairing {
-        val GoFresh = Pairing(GoPin = TokenCodec.GoNewPin(), GoExpiresAtMs = GoClock() + ttlMs)
-        GoWindow = GoFresh
-        GoWindowConsumed = false
-        GoFailedAttempts = 0
-        return GoFresh
+    override fun openWindow(ttlMs: Long): Pairing {
+        val fresh = Pairing(pin = TokenCodec.newPin(), expiresAtMs = clock() + ttlMs)
+        window = fresh
+        windowConsumed = false
+        failedAttempts = 0
+        return fresh
     }
 
     @Synchronized
-    override fun GoStopWindow() {
-        GoWindow = null
-        GoWindowConsumed = false
-        GoFailedAttempts = 0
+    override fun stopWindow() {
+        window = null
+        windowConsumed = false
+        failedAttempts = 0
     }
 
     @Synchronized
-    override fun GoPair(
+    override fun pair(
         pin: String,
         deviceName: String,
         role: String,
     ): PairOutcome {
-        if (pin.isBlank()) return GoReject(PairOutcome.GoReasonPinMissing)
-        if (deviceName.isBlank()) return GoReject(PairOutcome.GoReasonNameMissing)
+        if (pin.isBlank()) return reject(PairOutcome.GoReasonPinMissing)
+        if (deviceName.isBlank()) return reject(PairOutcome.GoReasonNameMissing)
 
-        val GoCurrent = GoWindow ?: return GoReject(PairOutcome.GoReasonNoWindow)
-        if (GoClock() > GoCurrent.GoExpiresAtMs) return GoReject(PairOutcome.GoReasonPinExpired)
-        if (GoWindowConsumed) return GoReject(PairOutcome.GoReasonPinConsumed)
-        if (GoFailedAttempts >= PairingService.GoMaxPinAttempts) {
-            return GoReject(PairOutcome.GoReasonPinLocked)
+        val current = window ?: return reject(PairOutcome.GoReasonNoWindow)
+        if (clock() > current.expiresAtMs) return reject(PairOutcome.GoReasonPinExpired)
+        if (windowConsumed) return reject(PairOutcome.GoReasonPinConsumed)
+        if (failedAttempts >= PairingService.GoMaxPinAttempts) {
+            return reject(PairOutcome.GoReasonPinLocked)
         }
 
         // Constant-time PIN check — never `String.equals` on a secret.
-        if (!TokenCodec.GoConstantTimeEquals(GoCurrent.GoPin, pin)) {
-            GoFailedAttempts += 1
-            return GoReject(PairOutcome.GoReasonPinInvalid)
+        if (!TokenCodec.constantTimeEquals(current.pin, pin)) {
+            failedAttempts += 1
+            return reject(PairOutcome.GoReasonPinInvalid)
         }
 
         // Success: single-use burn first, so a crash mid-issue cannot replay the PIN.
-        GoWindowConsumed = true
-        GoFailedAttempts = 0
+        windowConsumed = true
+        failedAttempts = 0
 
-        val GoSalt = TokenCodec.GoNewSalt()
-        val GoToken = TokenCodec.GoDeriveToken(pin, GoSalt, TokenCodec.GoDefaultIterations)
-        val GoDeviceId = GoNewDeviceId()
-        GoRepo().GoUpsert(
+        val salt = TokenCodec.newSalt()
+        val token = TokenCodec.deriveToken(pin, salt, TokenCodec.GoDefaultIterations)
+        val deviceId = newDeviceId()
+        repo().upsert(
             Device(
-                GoDeviceId = GoDeviceId,
-                GoDeviceName = deviceName,
-                GoRole = role,
-                GoTokenHash = TokenCodec.GoHashToken(GoToken),
-                GoPairedAtMs = GoClock(),
-                GoLastSeenMs = null,
+                deviceId = deviceId,
+                deviceName = deviceName,
+                role = role,
+                tokenHash = TokenCodec.hashToken(token),
+                pairedAtMs = clock(),
+                lastSeenMs = null,
             ),
         )
-        return PairOutcome.GoOk(GoDeviceId = GoDeviceId, GoToken = GoToken)
+        return PairOutcome.Ok(deviceId = deviceId, token = token)
     }
 
-    override fun GoVerifyToken(token: String): Device? {
-        val GoHash = TokenCodec.GoHashToken(token)
-        val GoDevice = GoRepo().GoGetByTokenHash(GoHash) ?: return null
+    override fun verifyToken(token: String): Device? {
+        val hash = TokenCodec.hashToken(token)
+        val device = repo().getByTokenHash(hash) ?: return null
         // Verified tokens double as proof of liveness.
-        GoRepo().GoTouch(GoDevice.GoDeviceId, GoClock())
-        return GoDevice
+        repo().touch(device.deviceId, clock())
+        return device
     }
 
-    override fun GoTouchLastSeen(
+    override fun touchLastSeen(
         deviceId: String,
         seenAtMs: Long,
     ) {
-        GoRepo().GoTouch(deviceId, seenAtMs)
+        repo().touch(deviceId, seenAtMs)
     }
 
-    override fun GoRevoke(deviceId: String) {
+    override fun revoke(deviceId: String) {
         // Deleting the row removes the token hash, so the token stops verifying.
-        GoRepo().GoDelete(deviceId)
+        repo().delete(deviceId)
     }
 
-    override fun GoListPaired(): List<Device> = GoRepo().GoList()
+    override fun listPaired(): List<Device> = repo().list()
 
-    private fun GoReject(reason: String): PairOutcome = PairOutcome.GoRejected(GoReason = reason)
+    private fun reject(reason: String): PairOutcome = PairOutcome.Rejected(reason = reason)
 
-    private fun GoNewDeviceId(): String {
-        val GoBytes = ByteArray(16).also { GoRandom.nextBytes(it) }
-        return GoBytes.joinToString("") { "%02x".format(it) }
+    private fun newDeviceId(): String {
+        val bytes = ByteArray(16).also { random.nextBytes(it) }
+        return bytes.joinToString("") { "%02x".format(it) }
     }
 }

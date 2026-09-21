@@ -28,29 +28,29 @@ val GO_ROUTES: List<String> =
 /**
  * The app shell: one [NavHost] over the five routes the hub exposes.
  *
- * [GoContext] is the composition root's registry, handed down so each screen can
+ * [context] is the composition root's registry, handed down so each screen can
  * build its ViewModel against the domain ports. The default is an EMPTY registry
  * on purpose: the shell must still render (screens degrade to an "unavailable"
  * line) when a port is missing, which is exactly the state the shell test composes.
  */
 @Composable
 fun AppShell(
-    GoStartRoute: String = GoRouteDashboard,
-    GoContext: Context = Context(),
+    startRoute: String = GoRouteDashboard,
+    context: Context = Context(),
 ) {
-    val GoNavController = rememberNavController()
+    val navController = rememberNavController()
 
-    Scaffold(modifier = Modifier.fillMaxSize()) { GoInsets ->
+    Scaffold(modifier = Modifier.fillMaxSize()) { insets ->
         NavHost(
-            navController = GoNavController,
-            startDestination = GoStartRoute,
+            navController = navController,
+            startDestination = startRoute,
             modifier = Modifier.fillMaxSize(),
         ) {
-            composable(GoRouteDashboard) { DashboardScreen(GoContext, Modifier.padding(GoInsets)) }
-            composable(GoRoutePairing) { PairingScreen(GoContext, Modifier.padding(GoInsets)) }
-            composable(GoRouteStream) { StreamScreen(GoContext, Modifier.padding(GoInsets)) }
-            composable(GoRouteDevices) { DevicesScreen(GoContext, Modifier.padding(GoInsets)) }
-            composable(GoRouteSettings) { SettingsScreen(GoContext, Modifier.padding(GoInsets)) }
+            composable(GoRouteDashboard) { DashboardScreen(context, Modifier.padding(insets)) }
+            composable(GoRoutePairing) { PairingScreen(context, Modifier.padding(insets)) }
+            composable(GoRouteStream) { StreamScreen(context, Modifier.padding(insets)) }
+            composable(GoRouteDevices) { DevicesScreen(context, Modifier.padding(insets)) }
+            composable(GoRouteSettings) { SettingsScreen(context, Modifier.padding(insets)) }
         }
     }
 }

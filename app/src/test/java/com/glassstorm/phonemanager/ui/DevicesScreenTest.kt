@@ -33,80 +33,80 @@ class DevicesScreenTest {
 
     @Test
     fun `renders the unavailable state when the repository port is absent`() {
-        composeRule.GoSetDevicesContent(Context())
+        composeRule.setDevicesContent(Context())
 
-        composeRule.GoAssertText("Devices")
-        composeRule.GoAssertText("Device store not available")
+        composeRule.assertText("Devices")
+        composeRule.assertText("Device store not available")
     }
 
     @Test
     fun `an empty store shows the no-devices line`() {
-        val GoCtx = Context().also { Register<DeviceRepository>(it, FakeDeviceRepository()) }
+        val ctx = Context().also { Register<DeviceRepository>(it, FakeDeviceRepository()) }
 
-        composeRule.GoSetDevicesContent(GoCtx)
+        composeRule.setDevicesContent(ctx)
 
-        composeRule.GoAssertText("No paired devices")
+        composeRule.assertText("No paired devices")
     }
 
     @Test
     fun `a seeded device list renders names roles and last-seen`() {
-        val GoRepo =
+        val repo =
             FakeDeviceRepository().also {
-                it.GoSeedDevice("d-1", "Glass One", role = "GLASS", lastSeenMs = 1_700_000_000_000L)
-                it.GoSeedDevice("d-2", "Ubuntu Daemon", role = "DAEMON")
+                it.seedDevice("d-1", "Glass One", role = "GLASS", lastSeenMs = 1_700_000_000_000L)
+                it.seedDevice("d-2", "Ubuntu Daemon", role = "DAEMON")
             }
-        val GoCtx = Context().also { Register<DeviceRepository>(it, GoRepo) }
+        val ctx = Context().also { Register<DeviceRepository>(it, repo) }
 
-        composeRule.GoSetDevicesContent(GoCtx)
+        composeRule.setDevicesContent(ctx)
 
-        composeRule.GoAssertText("Glass One")
-        composeRule.GoAssertText("Role: GLASS")
-        composeRule.GoAssertText("Ubuntu Daemon")
-        composeRule.GoAssertText("Role: DAEMON")
-        composeRule.GoAssertText("Last seen: 2023-11-14T22:13:20Z")
+        composeRule.assertText("Glass One")
+        composeRule.assertText("Role: GLASS")
+        composeRule.assertText("Ubuntu Daemon")
+        composeRule.assertText("Role: DAEMON")
+        composeRule.assertText("Last seen: 2023-11-14T22:13:20Z")
     }
 
     @Test
     fun `a device never seen since pairing shows the never-seen line`() {
-        val GoRepo =
+        val repo =
             FakeDeviceRepository().also {
-                it.GoSeedDevice("d-1", "Glass One", lastSeenMs = null)
+                it.seedDevice("d-1", "Glass One", lastSeenMs = null)
             }
-        val GoCtx = Context().also { Register<DeviceRepository>(it, GoRepo) }
+        val ctx = Context().also { Register<DeviceRepository>(it, repo) }
 
-        composeRule.GoSetDevicesContent(GoCtx)
+        composeRule.setDevicesContent(ctx)
 
-        composeRule.GoAssertText("Last seen: never")
+        composeRule.assertText("Last seen: never")
     }
 
     @Test
     fun `revoking a device removes its row from the list`() {
-        val GoRepo =
+        val repo =
             FakeDeviceRepository().also {
-                it.GoSeedDevice("d-1", "Glass One", role = "GLASS")
-                it.GoSeedDevice("d-2", "Ubuntu Daemon", role = "DAEMON")
+                it.seedDevice("d-1", "Glass One", role = "GLASS")
+                it.seedDevice("d-2", "Ubuntu Daemon", role = "DAEMON")
             }
-        val GoCtx = Context().also { Register<DeviceRepository>(it, GoRepo) }
+        val ctx = Context().also { Register<DeviceRepository>(it, repo) }
 
-        composeRule.GoSetDevicesContent(GoCtx)
-        composeRule.GoAssertText("Glass One")
+        composeRule.setDevicesContent(ctx)
+        composeRule.assertText("Glass One")
 
-        composeRule.GoClick("Revoke Glass One")
+        composeRule.click("Revoke Glass One")
 
         composeRule.onNodeWithText("Glass One").assertDoesNotExist()
-        composeRule.GoAssertText("Ubuntu Daemon")
-        assertThat(GoRepo.GoDeletedIds).containsExactly("d-1")
+        composeRule.assertText("Ubuntu Daemon")
+        assertThat(repo.deletedIds).containsExactly("d-1")
     }
 
     @Test
     fun `revoking the last device falls back to the empty line`() {
-        val GoRepo = FakeDeviceRepository().also { it.GoSeedDevice("d-1", "Glass One") }
-        val GoCtx = Context().also { Register<DeviceRepository>(it, GoRepo) }
+        val repo = FakeDeviceRepository().also { it.seedDevice("d-1", "Glass One") }
+        val ctx = Context().also { Register<DeviceRepository>(it, repo) }
 
-        composeRule.GoSetDevicesContent(GoCtx)
-        composeRule.GoClick("Revoke Glass One")
+        composeRule.setDevicesContent(ctx)
+        composeRule.click("Revoke Glass One")
 
-        composeRule.GoAssertText("No paired devices")
+        composeRule.assertText("No paired devices")
         composeRule.onNodeWithText("Glass One").assertDoesNotExist()
     }
 
@@ -114,45 +114,45 @@ class DevicesScreenTest {
     fun `a failing repository renders unavailable instead of crashing`() {
         // The port exists but its list read throws, which is exactly what a broken
         // database would do: the screen must degrade, not take the shell down.
-        val GoCtx =
+        val ctx =
             Context().also {
-                Register<DeviceRepository>(it, FakeDeviceRepository(GoFailOnList = true))
+                Register<DeviceRepository>(it, FakeDeviceRepository(failOnList = true))
             }
 
-        composeRule.GoSetDevicesContent(GoCtx)
+        composeRule.setDevicesContent(ctx)
 
-        composeRule.GoAssertText("Device store not available")
+        composeRule.assertText("Device store not available")
     }
 
     @Test
     fun `revoking the same device twice is idempotent`() {
         // A double tap (or a revoke that races another) must not crash and must
         // leave the store in the same shape: the second delete is a harmless no-op.
-        val GoRepo = FakeDeviceRepository().also { it.GoSeedDevice("d-1", "Glass One") }
-        val GoCtx = Context().also { Register<DeviceRepository>(it, GoRepo) }
-        val GoViewModel = DevicesViewModel(GoCtx)
+        val repo = FakeDeviceRepository().also { it.seedDevice("d-1", "Glass One") }
+        val ctx = Context().also { Register<DeviceRepository>(it, repo) }
+        val viewModel = DevicesViewModel(ctx)
 
-        GoViewModel.GoOnRevoke("d-1")
-        GoViewModel.GoOnRevoke("d-1")
+        viewModel.onRevoke("d-1")
+        viewModel.onRevoke("d-1")
 
-        assertThat(GoViewModel.GoUiState.value.GoAvailable).isTrue()
-        assertThat(GoViewModel.GoUiState.value.GoDevices).isEmpty()
-        assertThat(GoRepo.GoDeletedIds).containsExactly("d-1", "d-1")
+        assertThat(viewModel.uiState.value.available).isTrue()
+        assertThat(viewModel.uiState.value.devices).isEmpty()
+        assertThat(repo.deletedIds).containsExactly("d-1", "d-1")
     }
 
-    private fun ComposeContentTestRule.GoSetDevicesContent(GoCtx: Context) {
+    private fun ComposeContentTestRule.setDevicesContent(ctx: Context) {
         setContent {
             AppTheme {
-                DevicesScreen(GoContext = GoCtx)
+                DevicesScreen(context = ctx)
             }
         }
     }
 
-    private fun ComposeContentTestRule.GoAssertText(text: String) {
+    private fun ComposeContentTestRule.assertText(text: String) {
         onNodeWithText(text).performScrollTo().assertIsDisplayed()
     }
 
-    private fun ComposeContentTestRule.GoClick(text: String) {
+    private fun ComposeContentTestRule.click(text: String) {
         onNodeWithText(text).performScrollTo().performClick()
         waitForIdle()
     }

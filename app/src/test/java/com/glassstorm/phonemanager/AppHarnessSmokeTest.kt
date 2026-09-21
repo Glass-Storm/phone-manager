@@ -12,7 +12,7 @@ import org.robolectric.RobolectricTestRunner
 class AppHarnessSmokeTest {
     @Test
     fun `robolectric provides an application context`() {
-        val GoContext = ApplicationProvider.getApplicationContext<Context>()
-        assertNotNull(GoContext)
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        assertNotNull(context)
     }
 }

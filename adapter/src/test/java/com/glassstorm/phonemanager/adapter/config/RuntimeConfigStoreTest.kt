@@ -16,169 +16,169 @@ import org.robolectric.RobolectricTestRunner
  */
 @RunWith(RobolectricTestRunner::class)
 class RuntimeConfigStoreTest {
-    private lateinit var GoContext: Context
-    private lateinit var GoStore: RuntimeConfigStore
+    private lateinit var context: Context
+    private lateinit var store: RuntimeConfigStore
 
     @Before
     fun setUp() {
-        GoContext = ApplicationProvider.getApplicationContext()
+        context = ApplicationProvider.getApplicationContext()
         // Each test starts from empty prefs, independent of the others.
-        GoContext
+        context
             .getSharedPreferences(RuntimeConfigStore.GO_PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
             .clear()
             .commit()
-        GoStore = RuntimeConfigStore(GoContext)
+        store = RuntimeConfigStore(context)
     }
 
     @Test
     fun `a fresh install defaults to the offline mock engine`() {
-        assertThat(GoStore.GoSttAdapterKind()).isEqualTo(SttAdapterKind.MOCK)
+        assertThat(store.sttAdapterKind()).isEqualTo(SttAdapterKind.MOCK)
     }
 
     @Test
     fun `the adapter choice round-trips`() {
-        GoStore.GoSetSttAdapterKind(SttAdapterKind.SPEECHMATICS)
-        assertThat(GoStore.GoSttAdapterKind()).isEqualTo(SttAdapterKind.SPEECHMATICS)
+        store.setSttAdapterKind(SttAdapterKind.SPEECHMATICS)
+        assertThat(store.sttAdapterKind()).isEqualTo(SttAdapterKind.SPEECHMATICS)
 
-        GoStore.GoSetSttAdapterKind(SttAdapterKind.MOCK)
-        assertThat(GoStore.GoSttAdapterKind()).isEqualTo(SttAdapterKind.MOCK)
+        store.setSttAdapterKind(SttAdapterKind.MOCK)
+        assertThat(store.sttAdapterKind()).isEqualTo(SttAdapterKind.MOCK)
     }
 
     @Test
     fun `an unknown persisted adapter value falls back to mock`() {
-        GoContext
+        context
             .getSharedPreferences(RuntimeConfigStore.GO_PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
             .putString(RuntimeConfigStore.GO_KEY_STT_ADAPTER, "not-an-engine")
             .commit()
 
-        assertThat(RuntimeConfigStore(GoContext).GoSttAdapterKind()).isEqualTo(SttAdapterKind.MOCK)
+        assertThat(RuntimeConfigStore(context).sttAdapterKind()).isEqualTo(SttAdapterKind.MOCK)
     }
 
     @Test
     fun `a fresh install has no api key`() {
-        assertThat(GoStore.GoApiKey()).isEmpty()
-        assertThat(GoStore.GoHasApiKey()).isFalse()
+        assertThat(store.apiKey()).isEmpty()
+        assertThat(store.hasApiKey()).isFalse()
     }
 
     @Test
     fun `the api key round-trips trimmed`() {
-        GoStore.GoSetApiKey("  abc-123  ")
+        store.setApiKey("  abc-123  ")
 
-        assertThat(GoStore.GoApiKey()).isEqualTo("abc-123")
-        assertThat(GoStore.GoHasApiKey()).isTrue()
+        assertThat(store.apiKey()).isEqualTo("abc-123")
+        assertThat(store.hasApiKey()).isTrue()
     }
 
     @Test
     fun `setting a blank api key clears it`() {
-        GoStore.GoSetApiKey("abc-123")
+        store.setApiKey("abc-123")
 
-        GoStore.GoSetApiKey("   ")
+        store.setApiKey("   ")
 
-        assertThat(GoStore.GoApiKey()).isEmpty()
-        assertThat(GoStore.GoHasApiKey()).isFalse()
+        assertThat(store.apiKey()).isEmpty()
+        assertThat(store.hasApiKey()).isFalse()
     }
 
     @Test
     fun `the placeholder value does not count as an api key`() {
-        GoStore.GoSetApiKey(RuntimeConfigStore.GO_PLACEHOLDER_API_KEY)
+        store.setApiKey(RuntimeConfigStore.GO_PLACEHOLDER_API_KEY)
 
-        assertThat(GoStore.GoHasApiKey()).isFalse()
+        assertThat(store.hasApiKey()).isFalse()
     }
 
     @Test
     fun `a fresh install defaults to the us region`() {
-        assertThat(GoStore.GoRegion()).isEqualTo("us")
+        assertThat(store.region()).isEqualTo("us")
     }
 
     @Test
     fun `the region round-trips lowercased`() {
-        GoStore.GoSetRegion("EU")
+        store.setRegion("EU")
 
-        assertThat(GoStore.GoRegion()).isEqualTo("eu")
+        assertThat(store.region()).isEqualTo("eu")
     }
 
     @Test
     fun `an unsupported region is ignored`() {
-        GoStore.GoSetRegion("eu")
-        GoStore.GoSetRegion("mars")
+        store.setRegion("eu")
+        store.setRegion("mars")
 
-        assertThat(GoStore.GoRegion()).isEqualTo("eu")
+        assertThat(store.region()).isEqualTo("eu")
     }
 
     @Test
     fun `values persist inside app-private storage`() {
-        GoStore.GoSetSttAdapterKind(SttAdapterKind.SPEECHMATICS)
-        GoStore.GoSetApiKey("abc-123")
-        GoStore.GoSetRegion("au")
+        store.setSttAdapterKind(SttAdapterKind.SPEECHMATICS)
+        store.setApiKey("abc-123")
+        store.setRegion("au")
 
         // A brand-new store object reads the same app-private file (the composition
         // root creates one per process, not one per call).
-        val GoReopened = RuntimeConfigStore(GoContext)
+        val reopened = RuntimeConfigStore(context)
 
-        assertThat(GoReopened.GoSttAdapterKind()).isEqualTo(SttAdapterKind.SPEECHMATICS)
-        assertThat(GoReopened.GoApiKey()).isEqualTo("abc-123")
-        assertThat(GoReopened.GoRegion()).isEqualTo("au")
+        assertThat(reopened.sttAdapterKind()).isEqualTo(SttAdapterKind.SPEECHMATICS)
+        assertThat(reopened.apiKey()).isEqualTo("abc-123")
+        assertThat(reopened.region()).isEqualTo("au")
     }
 
     @Test
     fun `the domain port maps the stored adapter kind to the domain engine`() {
         // Given the adapter-local spelling is what is persisted
-        GoStore.GoSetSttAdapterKind(SttAdapterKind.SPEECHMATICS)
+        store.setSttAdapterKind(SttAdapterKind.SPEECHMATICS)
 
         // When the domain port is read
-        val GoPort: com.glassstorm.phonemanager.domain.adapter.config.AppConfig = GoStore
+        val port: com.glassstorm.phonemanager.domain.adapter.config.AppConfig = store
 
         // Then the domain vocabulary is returned, not the adapter enum
-        assertThat(GoPort.GoSttEngine())
+        assertThat(port.sttEngine())
             .isEqualTo(com.glassstorm.phonemanager.domain.dto.SttEngine.SPEECHMATICS)
     }
 
     @Test
     fun `a fresh install defaults the domain port to mock and manual hotspot`() {
-        val GoPort: com.glassstorm.phonemanager.domain.adapter.config.AppConfig = GoStore
+        val port: com.glassstorm.phonemanager.domain.adapter.config.AppConfig = store
 
-        assertThat(GoPort.GoSttEngine())
+        assertThat(port.sttEngine())
             .isEqualTo(com.glassstorm.phonemanager.domain.dto.SttEngine.MOCK)
-        assertThat(GoPort.GoHotspotMode())
+        assertThat(port.hotspotMode())
             .isEqualTo(com.glassstorm.phonemanager.domain.dto.HotspotMode.MANUAL)
     }
 
     @Test
     fun `the hotspot mode round-trips through the domain port`() {
-        val GoPort: com.glassstorm.phonemanager.domain.adapter.config.AppConfig = GoStore
+        val port: com.glassstorm.phonemanager.domain.adapter.config.AppConfig = store
 
-        GoPort.GoSetHotspotMode(com.glassstorm.phonemanager.domain.dto.HotspotMode.AUTO)
-        assertThat(GoPort.GoHotspotMode())
+        port.setHotspotMode(com.glassstorm.phonemanager.domain.dto.HotspotMode.AUTO)
+        assertThat(port.hotspotMode())
             .isEqualTo(com.glassstorm.phonemanager.domain.dto.HotspotMode.AUTO)
 
-        GoPort.GoSetHotspotMode(com.glassstorm.phonemanager.domain.dto.HotspotMode.MANUAL)
-        assertThat(GoPort.GoHotspotMode())
+        port.setHotspotMode(com.glassstorm.phonemanager.domain.dto.HotspotMode.MANUAL)
+        assertThat(port.hotspotMode())
             .isEqualTo(com.glassstorm.phonemanager.domain.dto.HotspotMode.MANUAL)
     }
 
     @Test
     fun `an unknown persisted hotspot mode falls back to manual`() {
-        GoContext
+        context
             .getSharedPreferences(RuntimeConfigStore.GO_PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
             .putString(RuntimeConfigStore.GO_KEY_HOTSPOT_MODE, "not-a-mode")
             .commit()
 
-        assertThat(RuntimeConfigStore(GoContext).GoHotspotMode())
+        assertThat(RuntimeConfigStore(context).hotspotMode())
             .isEqualTo(com.glassstorm.phonemanager.domain.dto.HotspotMode.MANUAL)
     }
 
     @Test
     fun `the api key is never returned as part of the domain port's string form`() {
         // Given a stored key
-        GoStore.GoSetApiKey("secret-key-value")
+        store.setApiKey("secret-key-value")
 
         // When the store is stringified (the shape a log line would take)
-        val GoText = GoStore.toString()
+        val text = store.toString()
 
         // Then the key does not appear: persistence is secret-safe by construction
-        assertThat(GoText).doesNotContain("secret-key-value")
+        assertThat(text).doesNotContain("secret-key-value")
     }
 }

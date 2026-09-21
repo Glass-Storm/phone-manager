@@ -20,46 +20,46 @@ class ProtoContractTest {
     @Test
     fun `StreamFrame result payload round trips through serialization`() {
         // Given a frame carrying a diarized result
-        val GoResult =
+        val result =
             StreamResult
                 .newBuilder()
                 .setText("hello world")
                 .setSpeakerLabel("spk-1")
                 .setPtsMs(42L)
                 .build()
-        val GoFrame = StreamFrame.newBuilder().setResult(GoResult).build()
+        val frame = StreamFrame.newBuilder().setResult(result).build()
 
         // When it is serialized and parsed back
-        val GoParsed = StreamFrame.parseFrom(GoFrame.toByteArray())
+        val parsed = StreamFrame.parseFrom(frame.toByteArray())
 
         // Then the oneof variant and every field survive the round trip
-        assertThat(GoParsed.getPayloadCase()).isEqualTo(StreamFrame.PayloadCase.RESULT)
-        assertThat(GoParsed.getResult().getText()).isEqualTo("hello world")
-        assertThat(GoParsed.getResult().getSpeakerLabel()).isEqualTo("spk-1")
-        assertThat(GoParsed.getResult().getPtsMs()).isEqualTo(42L)
+        assertThat(parsed.getPayloadCase()).isEqualTo(StreamFrame.PayloadCase.RESULT)
+        assertThat(parsed.getResult().getText()).isEqualTo("hello world")
+        assertThat(parsed.getResult().getSpeakerLabel()).isEqualTo("spk-1")
+        assertThat(parsed.getResult().getPtsMs()).isEqualTo(42L)
     }
 
     @Test
     fun `StreamFrame transcript payload round trips through serialization`() {
         // Given a frame carrying a transcript string
-        val GoFrame = StreamFrame.newBuilder().setTranscript("partial transcript").build()
+        val frame = StreamFrame.newBuilder().setTranscript("partial transcript").build()
 
         // When it is serialized and parsed back
-        val GoParsed = StreamFrame.parseFrom(GoFrame.toByteArray())
+        val parsed = StreamFrame.parseFrom(frame.toByteArray())
 
         // Then the transcript variant is preserved
-        assertThat(GoParsed.getPayloadCase()).isEqualTo(StreamFrame.PayloadCase.TRANSCRIPT)
-        assertThat(GoParsed.getTranscript()).isEqualTo("partial transcript")
+        assertThat(parsed.getPayloadCase()).isEqualTo(StreamFrame.PayloadCase.TRANSCRIPT)
+        assertThat(parsed.getTranscript()).isEqualTo("partial transcript")
     }
 
     @Test
     fun `StreamFrame carries an opaque audio payload accessor`() {
         // Given the generated class
-        val GoMethodNames = StreamFrame::class.java.methods.map { it.name.lowercase() }
+        val methodNames = StreamFrame::class.java.methods.map { it.name.lowercase() }
 
         // When/Then an audio PCM16 accessor was generated (name derived by protoc;
         // matched loosely because the field mixes digits and underscores)
-        assertThat(GoMethodNames.any { it.contains("audiopcm") }).isTrue()
+        assertThat(methodNames.any { it.contains("audiopcm") }).isTrue()
         assertThat(StreamFrame.getDefaultInstance().getPayloadCase())
             .isEqualTo(StreamFrame.PayloadCase.PAYLOAD_NOT_SET)
     }
@@ -67,7 +67,7 @@ class ProtoContractTest {
     @Test
     fun `PairRequest round trips with its role enum`() {
         // Given a pairing request from a glasses peer
-        val GoRequest =
+        val request =
             PairRequest
                 .newBuilder()
                 .setPin("123456")
@@ -76,12 +76,12 @@ class ProtoContractTest {
                 .build()
 
         // When serialized and parsed back
-        val GoParsed = PairRequest.parseFrom(GoRequest.toByteArray())
+        val parsed = PairRequest.parseFrom(request.toByteArray())
 
         // Then the fields and the enum survive
-        assertThat(GoParsed.getPin()).isEqualTo("123456")
-        assertThat(GoParsed.getDeviceName()).isEqualTo("glass-1")
-        assertThat(GoParsed.getRole()).isEqualTo(DeviceRole.DEVICE_ROLE_GLASS)
+        assertThat(parsed.getPin()).isEqualTo("123456")
+        assertThat(parsed.getDeviceName()).isEqualTo("glass-1")
+        assertThat(parsed.getRole()).isEqualTo(DeviceRole.DEVICE_ROLE_GLASS)
     }
 
     @Test
@@ -95,19 +95,19 @@ class ProtoContractTest {
     @Test
     fun `generated grpc service descriptors are present with the frozen method shapes`() {
         // Given the generated stubs
-        val GoPairing = PairingServiceGrpc.getServiceDescriptor()
-        val GoStream = StreamServiceGrpc.getServiceDescriptor()
+        val pairing = PairingServiceGrpc.getServiceDescriptor()
+        val stream = StreamServiceGrpc.getServiceDescriptor()
 
         // Then the service names match the proto package
-        assertThat(GoPairing.getName()).isEqualTo("ecosys.v1.PairingService")
-        assertThat(GoStream.getName()).isEqualTo("ecosys.v1.StreamService")
+        assertThat(pairing.getName()).isEqualTo("ecosys.v1.PairingService")
+        assertThat(stream.getName()).isEqualTo("ecosys.v1.StreamService")
 
         // And the method shapes are exactly Pair + Heartbeat, and one bidi OpenStream
-        assertThat(GoPairing.getMethods().map { it.getBareMethodName() })
+        assertThat(pairing.getMethods().map { it.getBareMethodName() })
             .containsExactly("Pair", "Heartbeat")
-        val GoOpenStream = GoStream.getMethods().single()
-        assertThat(GoOpenStream.getType()).isEqualTo(MethodDescriptor.MethodType.BIDI_STREAMING)
-        assertThat(GoPairing.getMethods().associate { it.getBareMethodName() to it.getType() })
+        val openStream = stream.getMethods().single()
+        assertThat(openStream.getType()).isEqualTo(MethodDescriptor.MethodType.BIDI_STREAMING)
+        assertThat(pairing.getMethods().associate { it.getBareMethodName() to it.getType() })
             .containsExactly("Pair", MethodDescriptor.MethodType.UNARY, "Heartbeat", MethodDescriptor.MethodType.UNARY)
     }
 

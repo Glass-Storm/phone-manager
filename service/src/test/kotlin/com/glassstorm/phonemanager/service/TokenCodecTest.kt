@@ -14,56 +14,56 @@ class TokenCodecTest {
     @Test
     fun `same pin with different random salts derives different tokens`() {
         // Given two independent per-pairing salts
-        val GoSaltA = TokenCodec.GoNewSalt()
-        val GoSaltB = TokenCodec.GoNewSalt()
+        val saltA = TokenCodec.newSalt()
+        val saltB = TokenCodec.newSalt()
 
         // When the same PIN is derived against each
-        val GoTokenA = TokenCodec.GoDeriveToken("123456", GoSaltA, TokenCodec.GoDefaultIterations)
-        val GoTokenB = TokenCodec.GoDeriveToken("123456", GoSaltB, TokenCodec.GoDefaultIterations)
+        val tokenA = TokenCodec.deriveToken("123456", saltA, TokenCodec.GoDefaultIterations)
+        val tokenB = TokenCodec.deriveToken("123456", saltB, TokenCodec.GoDefaultIterations)
 
         // Then the tokens differ (the salt is actually mixed in) and both differ from the PIN
-        assertThat(GoTokenA).isNotEqualTo(GoTokenB)
-        assertThat(GoTokenA).doesNotContain("123456")
-        assertThat(GoTokenB).doesNotContain("123456")
+        assertThat(tokenA).isNotEqualTo(tokenB)
+        assertThat(tokenA).doesNotContain("123456")
+        assertThat(tokenB).doesNotContain("123456")
     }
 
     @Test
     fun `derivation is deterministic for the same pin salt and iteration count`() {
         // Given fixed KDF inputs
-        val GoSalt = ByteArray(TokenCodec.GoSaltBytes) { it.toByte() }
+        val salt = ByteArray(TokenCodec.GoSaltBytes) { it.toByte() }
 
         // When derived twice
-        val GoFirst = TokenCodec.GoDeriveToken("654321", GoSalt, TokenCodec.GoDefaultIterations)
-        val GoSecond = TokenCodec.GoDeriveToken("654321", GoSalt, TokenCodec.GoDefaultIterations)
+        val first = TokenCodec.deriveToken("654321", salt, TokenCodec.GoDefaultIterations)
+        val second = TokenCodec.deriveToken("654321", salt, TokenCodec.GoDefaultIterations)
 
         // Then the derivation is reproducible
-        assertThat(GoFirst).isEqualTo(GoSecond)
+        assertThat(first).isEqualTo(second)
     }
 
     @Test
     fun `derived token is 256 bits of base64url material`() {
         // Given the codec contract
         // When a token is derived
-        val GoToken = TokenCodec.GoDeriveToken("000000", GoNewFixedSalt(), TokenCodec.GoDefaultIterations)
+        val token = TokenCodec.deriveToken("000000", newFixedSalt(), TokenCodec.GoDefaultIterations)
 
         // Then it is exactly 32 bytes, unpadded base64url (43 chars)
         assertThat(TokenCodec.GoTokenBits).isEqualTo(256)
-        assertThat(GoToken.length).isEqualTo(43)
-        assertThat(GoToken).matches("[A-Za-z0-9_-]+")
+        assertThat(token.length).isEqualTo(43)
+        assertThat(token).matches("[A-Za-z0-9_-]+")
     }
 
     @Test
     fun `hash round trip is stable and never returns the token itself`() {
         // Given a derived token
-        val GoToken = TokenCodec.GoDeriveToken("111111", TokenCodec.GoNewSalt(), TokenCodec.GoDefaultIterations)
+        val token = TokenCodec.deriveToken("111111", TokenCodec.newSalt(), TokenCodec.GoDefaultIterations)
 
         // When it is hashed for persistence, twice
-        val GoHash = TokenCodec.GoHashToken(GoToken)
+        val hash = TokenCodec.hashToken(token)
 
         // Then the hash is stable and distinct from the secret
-        assertThat(TokenCodec.GoHashToken(GoToken)).isEqualTo(GoHash)
-        assertThat(GoHash).isNotEqualTo(GoToken)
-        assertThat(GoHash.length).isEqualTo(43)
+        assertThat(TokenCodec.hashToken(token)).isEqualTo(hash)
+        assertThat(hash).isNotEqualTo(token)
+        assertThat(hash.length).isEqualTo(43)
     }
 
     @Test
@@ -71,59 +71,59 @@ class TokenCodecTest {
         // Given two equal secrets
         // When compared
         // Then equality is accepted
-        assertThat(TokenCodec.GoConstantTimeEquals("abcdef", "abcdef")).isTrue()
+        assertThat(TokenCodec.constantTimeEquals("abcdef", "abcdef")).isTrue()
 
         // And a single-character change is rejected
-        assertThat(TokenCodec.GoConstantTimeEquals("abcdef", "abcdeg")).isFalse()
+        assertThat(TokenCodec.constantTimeEquals("abcdef", "abcdeg")).isFalse()
 
         // And a length change is rejected
-        assertThat(TokenCodec.GoConstantTimeEquals("abcdef", "abcde")).isFalse()
+        assertThat(TokenCodec.constantTimeEquals("abcdef", "abcde")).isFalse()
     }
 
     @Test
     fun `new salt is the declared size and varies between calls`() {
         // Given the codec
         // When two salts are drawn
-        val GoSaltA = TokenCodec.GoNewSalt()
-        val GoSaltB = TokenCodec.GoNewSalt()
+        val saltA = TokenCodec.newSalt()
+        val saltB = TokenCodec.newSalt()
 
         // Then they are the declared size and independent
-        assertThat(GoSaltA.size).isEqualTo(TokenCodec.GoSaltBytes)
-        assertThat(GoSaltB.size).isEqualTo(TokenCodec.GoSaltBytes)
-        assertThat(GoSaltA).isNotEqualTo(GoSaltB)
+        assertThat(saltA.size).isEqualTo(TokenCodec.GoSaltBytes)
+        assertThat(saltB.size).isEqualTo(TokenCodec.GoSaltBytes)
+        assertThat(saltA).isNotEqualTo(saltB)
     }
 
     @Test
     fun `new pin is always exactly six digits`() {
         // Given/When 500 PINs are drawn
-        val GoPins = (1..500).map { TokenCodec.GoNewPin() }
+        val pins = (1..500).map { TokenCodec.newPin() }
 
         // Then every one is six digits with no sign, space or truncation
-        GoPins.forEach { GoPin ->
-            assertThat(GoPin.length).isEqualTo(6)
-            assertThat(GoPin).matches("[0-9]{6}")
+        pins.forEach { pin ->
+            assertThat(pin.length).isEqualTo(6)
+            assertThat(pin).matches("[0-9]{6}")
         }
     }
 
     @Test
     fun `new pin is uniform rather than stuck on a constant`() {
         // Given/When 500 PINs are drawn from the CSPRNG
-        val GoDistinct = (1..500).map { TokenCodec.GoNewPin() }.toSet()
+        val distinct = (1..500).map { TokenCodec.newPin() }.toSet()
 
         // Then a SecureRandom bound draw spreads over the space (a fixed value or a
         // tiny biased set would collapse this count)
-        assertThat(GoDistinct.size).isAtLeast(480)
+        assertThat(distinct.size).isAtLeast(480)
     }
 
     @Test
     fun `iteration counts below the security floor are rejected`() {
         // Given a salt and a sub-floor iteration count
-        val GoSalt = GoNewFixedSalt()
+        val salt = newFixedSalt()
 
         // When/Then the KDF refuses to run weaker than the documented floor
         assertThat(TokenCodec.GoMinIterations).isAtLeast(100_000)
         assertThrows(IllegalArgumentException::class.java) {
-            TokenCodec.GoDeriveToken("123456", GoSalt, TokenCodec.GoMinIterations - 1)
+            TokenCodec.deriveToken("123456", salt, TokenCodec.GoMinIterations - 1)
         }
     }
 
@@ -132,9 +132,9 @@ class TokenCodecTest {
         // Given a one-byte salt
         // When/Then derivation refuses it
         assertThrows(IllegalArgumentException::class.java) {
-            TokenCodec.GoDeriveToken("123456", ByteArray(1), TokenCodec.GoDefaultIterations)
+            TokenCodec.deriveToken("123456", ByteArray(1), TokenCodec.GoDefaultIterations)
         }
     }
 
-    private fun GoNewFixedSalt(): ByteArray = ByteArray(TokenCodec.GoSaltBytes) { (it * 7).toByte() }
+    private fun newFixedSalt(): ByteArray = ByteArray(TokenCodec.GoSaltBytes) { (it * 7).toByte() }
 }

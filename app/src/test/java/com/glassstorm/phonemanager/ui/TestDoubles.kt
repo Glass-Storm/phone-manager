@@ -31,366 +31,366 @@ import kotlinx.coroutines.flow.emptyFlow
  * strongest possible check that the screens never reach past the interface.
  */
 
-/** [HubServer] fake: `GoStart` always binds [GoBoundPortValue] and flips running. */
+/** [HubServer] fake: `start` always binds [boundPortValue] and flips running. */
 class FakeHubServer(
-    private val GoBoundPortValue: Int = 40404,
+    private val boundPortValue: Int = 40404,
 ) : HubServer {
-    var GoStartCalls: Int = 0
+    var startCalls: Int = 0
         private set
 
-    private var GoRunning: Boolean = false
+    private var running: Boolean = false
 
-    override fun GoStart(port: Int) {
-        GoStartCalls += 1
-        GoRunning = true
+    override fun start(port: Int) {
+        startCalls += 1
+        running = true
     }
 
-    override fun GoStop() {
-        GoRunning = false
+    override fun stop() {
+        running = false
     }
 
-    override fun GoIsRunning(): Boolean = GoRunning
+    override fun isRunning(): Boolean = running
 
-    override fun GoBoundPort(): Int = if (GoRunning) GoBoundPortValue else 0
+    override fun boundPort(): Int = if (running) boundPortValue else 0
 }
 
 /**
  * [HotspotController] fake.
  *
- * [GoFailWith] makes `GoStartHotspot` throw the real typed exception, so the
+ * [failWith] makes `startHotspot` throw the real typed exception, so the
  * "could not start" path is exercised exactly as production would raise it.
  */
 class FakeHotspotController(
-    private val GoInfo: HotspotInfo =
+    private val info: HotspotInfo =
         HotspotInfo(
-            GoSsid = "EcoSys-Phone",
-            GoPassphrase = "hunter2-phone",
-            GoGatewayIp = "192.168.43.1",
+            ssid = "EcoSys-Phone",
+            passphrase = "hunter2-phone",
+            gatewayIp = "192.168.43.1",
         ),
-    private val GoFailWith: HotspotFailure? = null,
+    private val failWith: HotspotFailure? = null,
 ) : HotspotController {
-    private var GoActive: Boolean = false
+    private var active: Boolean = false
 
-    var GoStartCalls: Int = 0
+    var startCalls: Int = 0
         private set
 
-    override fun GoStartHotspot(): HotspotInfo {
-        GoStartCalls += 1
-        GoFailWith?.let { throw HotspotUnavailableException(it) }
-        GoActive = true
-        return GoInfo
+    override fun startHotspot(): HotspotInfo {
+        startCalls += 1
+        failWith?.let { throw HotspotUnavailableException(it) }
+        active = true
+        return info
     }
 
-    override fun GoStopHotspot() {
-        GoActive = false
+    override fun stopHotspot() {
+        active = false
     }
 
-    override fun GoIsActive(): Boolean = GoActive
+    override fun isActive(): Boolean = active
 
-    override fun GoDetectManualTether(): HotspotInfo? = if (GoActive) GoInfo else null
+    override fun detectManualTether(): HotspotInfo? = if (active) info else null
 }
 
 /**
  * [PairingService] fake with the same one-window-at-a-time semantics as the real
- * service: [GoOpenWindow] REPLACES the previous window and returns the next PIN in
- * [GoPinSequence], so a UI that rendered a stale PIN would fail the two-open test.
+ * service: [openWindow] REPLACES the previous window and returns the next PIN in
+ * [pinSequence], so a UI that rendered a stale PIN would fail the two-open test.
  */
 class FakePairingService(
-    private val GoPinSequence: List<String> = listOf("428193", "999999"),
-    private val GoClock: () -> Long = { 1_000_000L },
-    GoSeed: List<Device> = emptyList(),
+    private val pinSequence: List<String> = listOf("428193", "999999"),
+    private val clock: () -> Long = { 1_000_000L },
+    seed: List<Device> = emptyList(),
 ) : PairingService {
-    private val GoRows: MutableMap<String, Device> = linkedMapOf()
+    private val rows: MutableMap<String, Device> = linkedMapOf()
 
-    private var GoWindow: Pairing? = null
+    private var window: Pairing? = null
 
-    var GoOpenCalls: Int = 0
+    var openCalls: Int = 0
         private set
 
     init {
-        GoSeed.forEach { GoRows[it.GoDeviceId] = it }
+        seed.forEach { rows[it.deviceId] = it }
     }
 
-    fun GoSeedDevice(
+    fun seedDevice(
         deviceId: String,
         deviceName: String,
         role: String = "GLASS",
     ) {
-        GoRows[deviceId] =
+        rows[deviceId] =
             Device(
-                GoDeviceId = deviceId,
-                GoDeviceName = deviceName,
-                GoRole = role,
-                GoTokenHash = "hash-$deviceId",
-                GoPairedAtMs = GoClock(),
-                GoLastSeenMs = null,
+                deviceId = deviceId,
+                deviceName = deviceName,
+                role = role,
+                tokenHash = "hash-$deviceId",
+                pairedAtMs = clock(),
+                lastSeenMs = null,
             )
     }
 
-    override fun GoOpenWindow(ttlMs: Long): Pairing {
-        val GoIndex = GoOpenCalls.coerceAtMost(GoPinSequence.lastIndex)
-        GoOpenCalls += 1
-        val GoFresh =
+    override fun openWindow(ttlMs: Long): Pairing {
+        val index = openCalls.coerceAtMost(pinSequence.lastIndex)
+        openCalls += 1
+        val fresh =
             Pairing(
-                GoPin = GoPinSequence[GoIndex],
-                GoExpiresAtMs = GoClock() + ttlMs,
+                pin = pinSequence[index],
+                expiresAtMs = clock() + ttlMs,
             )
-        GoWindow = GoFresh
-        return GoFresh
+        window = fresh
+        return fresh
     }
 
-    override fun GoStopWindow() {
-        GoWindow = null
+    override fun stopWindow() {
+        window = null
     }
 
-    override fun GoPair(
+    override fun pair(
         pin: String,
         deviceName: String,
         role: String,
-    ): PairOutcome = PairOutcome.GoRejected(GoReason = PairOutcome.GoReasonPinInvalid)
+    ): PairOutcome = PairOutcome.Rejected(reason = PairOutcome.GoReasonPinInvalid)
 
-    override fun GoVerifyToken(token: String): Device? = null
+    override fun verifyToken(token: String): Device? = null
 
-    override fun GoTouchLastSeen(
+    override fun touchLastSeen(
         deviceId: String,
         seenAtMs: Long,
     ) = Unit
 
-    override fun GoRevoke(deviceId: String) {
-        GoRows.remove(deviceId)
+    override fun revoke(deviceId: String) {
+        rows.remove(deviceId)
     }
 
-    override fun GoListPaired(): List<Device> = GoRows.values.toList()
+    override fun listPaired(): List<Device> = rows.values.toList()
 }
 
 /**
  * [StreamService] fake.
  *
  * It implements the DOMAIN port exactly like `StreamServiceImpl` would, and mints
- * a DISTINCT session id per [GoOpenSession] so a screen rendering a stale session
- * cannot pass. Counters come from [GoNextStats], which the test pushes through
- * [GoReportStats] to simulate new frames arriving on the peer between polls — the
+ * a DISTINCT session id per [openSession] so a screen rendering a stale session
+ * cannot pass. Counters come from [NextStats], which the test pushes through
+ * [reportStats] to simulate new frames arriving on the peer between polls — the
  * screen has no other way to learn them, so a refresh loop that never runs leaves
  * the counters at zero and fails the test.
  *
  * Results are published on a [MutableSharedFlow] with `replay = 1`: the fake's
- * `GoResults` is collected by the ViewModel while the session is live, and the
+ * `results` is collected by the ViewModel while the session is live, and the
  * latest utterance is what the screen renders with its speaker label.
  */
 class FakeStreamService(
-    private val GoSessionIds: List<String> = listOf("s-1", "s-2", "s-3"),
+    private val sessionIds: List<String> = listOf("s-1", "s-2", "s-3"),
 ) : StreamService {
-    private val GoResultsFlow = MutableSharedFlow<RelayResult>(replay = 1)
+    private val resultsFlow = MutableSharedFlow<RelayResult>(replay = 1)
 
-    private var GoStatsValue =
+    private var statsValue =
         RelayStats(
-            GoAudioFrames = 0L,
-            GoVideoFrames = 0L,
-            GoVideoDropped = 0L,
-            GoTranscripts = 0L,
-            GoLiveSessions = 0,
+            audioFrames = 0L,
+            videoFrames = 0L,
+            videoDropped = 0L,
+            transcripts = 0L,
+            liveSessions = 0,
         )
 
-    private var GoOpenCalls: Int = 0
-    private var GoClosed: MutableList<String> = mutableListOf()
+    private var openCalls: Int = 0
+    private var closed: MutableList<String> = mutableListOf()
 
     /** How many sessions the fake currently believes are live. */
-    var GoLiveSessions: Int = 0
+    var liveSessions: Int = 0
         private set
 
-    fun GoOpenCount(): Int = GoOpenCalls
+    fun openCount(): Int = openCalls
 
-    fun GoClosedIds(): List<String> = GoClosed.toList()
+    fun closedIds(): List<String> = closed.toList()
 
-    /** Replaces the snapshot [GoStats] returns, as if the peer had pushed more media. */
-    fun GoReportStats(
-        GoAudioFrames: Long,
-        GoVideoFrames: Long,
-        GoVideoDropped: Long,
-        GoTranscripts: Long,
+    /** Replaces the snapshot [stats] returns, as if the peer had pushed more media. */
+    fun reportStats(
+        audioFrames: Long,
+        videoFrames: Long,
+        videoDropped: Long,
+        transcripts: Long,
     ) {
-        GoStatsValue =
+        statsValue =
             RelayStats(
-                GoAudioFrames = GoAudioFrames,
-                GoVideoFrames = GoVideoFrames,
-                GoVideoDropped = GoVideoDropped,
-                GoTranscripts = GoTranscripts,
-                GoLiveSessions = GoLiveSessions,
+                audioFrames = audioFrames,
+                videoFrames = videoFrames,
+                videoDropped = videoDropped,
+                transcripts = transcripts,
+                liveSessions = liveSessions,
             )
     }
 
     /** Publish a recognized utterance, as the STT engine would mid-stream. */
-    fun GoEmitTranscript(
-        GoText: String,
-        GoSpeakerLabel: String = "Speaker 1",
+    fun emitTranscript(
+        text: String,
+        speakerLabel: String = "Speaker 1",
     ) {
-        GoResultsFlow.tryEmit(
-            RelayResult(GoText = GoText, GoSpeakerLabel = GoSpeakerLabel, GoPtsMs = 0L),
+        resultsFlow.tryEmit(
+            RelayResult(text = text, speakerLabel = speakerLabel, ptsMs = 0L),
         )
     }
 
-    override fun GoOpenSession(deviceId: String): RelaySession {
-        val GoIndex = GoOpenCalls.coerceAtMost(GoSessionIds.lastIndex)
-        GoOpenCalls += 1
-        GoLiveSessions += 1
-        return RelaySession(GoSessionId = GoSessionIds[GoIndex], GoDeviceId = deviceId)
+    override fun openSession(deviceId: String): RelaySession {
+        val index = openCalls.coerceAtMost(sessionIds.lastIndex)
+        openCalls += 1
+        liveSessions += 1
+        return RelaySession(sessionId = sessionIds[index], deviceId = deviceId)
     }
 
-    override suspend fun GoPushAudio(
+    override suspend fun pushAudio(
         sessionId: String,
         audioPcm16: ByteArray,
         sampleRateHz: Int,
     ) = Unit
 
-    override fun GoPushVideo(
+    override fun pushVideo(
         sessionId: String,
         h264Nal: ByteArray,
     ) = Unit
 
-    override fun GoResults(sessionId: String): Flow<RelayResult> = if (GoLiveSessions > 0) GoResultsFlow else emptyFlow()
+    override fun results(sessionId: String): Flow<RelayResult> = if (liveSessions > 0) resultsFlow else emptyFlow()
 
-    override suspend fun GoCloseSession(sessionId: String) {
-        GoClosed.add(sessionId)
-        GoLiveSessions = (GoLiveSessions - 1).coerceAtLeast(0)
+    override suspend fun closeSession(sessionId: String) {
+        closed.add(sessionId)
+        liveSessions = (liveSessions - 1).coerceAtLeast(0)
     }
 
-    override fun GoStats(): RelayStats = GoStatsValue.copy(GoLiveSessions = GoLiveSessions)
+    override fun stats(): RelayStats = statsValue.copy(liveSessions = liveSessions)
 }
 
 /**
  * [DeviceRepository] fake for the Devices screen, implementing the DOMAIN port.
  *
- * [GoFailOnList] lets a test drive the "repository unavailable" path: the screen
+ * [failOnList] lets a test drive the "repository unavailable" path: the screen
  * must degrade to an unavailable state rather than crash when the store throws.
- * Deletes are tracked in [GoDeletedIds] so a revoke can be proven independently of
+ * Deletes are tracked in [deletedIds] so a revoke can be proven independently of
  * the list mutation it causes.
  */
 class FakeDeviceRepository(
-    GoSeed: List<Device> = emptyList(),
-    private val GoFailOnList: Boolean = false,
+    seed: List<Device> = emptyList(),
+    private val failOnList: Boolean = false,
 ) : DeviceRepository {
-    private val GoRows: MutableMap<String, Device> = linkedMapOf()
+    private val rows: MutableMap<String, Device> = linkedMapOf()
 
-    val GoDeletedIds: MutableList<String> = mutableListOf()
+    val deletedIds: MutableList<String> = mutableListOf()
 
     init {
-        GoSeed.forEach { GoRows[it.GoDeviceId] = it }
+        seed.forEach { rows[it.deviceId] = it }
     }
 
-    fun GoSeedDevice(
+    fun seedDevice(
         deviceId: String,
         deviceName: String,
         role: String = "GLASS",
         lastSeenMs: Long? = null,
     ) {
-        GoRows[deviceId] =
+        rows[deviceId] =
             Device(
-                GoDeviceId = deviceId,
-                GoDeviceName = deviceName,
-                GoRole = role,
-                GoTokenHash = "hash-$deviceId",
-                GoPairedAtMs = 1_000L,
-                GoLastSeenMs = lastSeenMs,
+                deviceId = deviceId,
+                deviceName = deviceName,
+                role = role,
+                tokenHash = "hash-$deviceId",
+                pairedAtMs = 1_000L,
+                lastSeenMs = lastSeenMs,
             )
     }
 
-    override fun GoUpsert(device: Device) {
-        GoRows[device.GoDeviceId] = device
+    override fun upsert(device: Device) {
+        rows[device.deviceId] = device
     }
 
-    override fun GoGet(deviceId: String): Device? = GoRows[deviceId]
+    override fun get(deviceId: String): Device? = rows[deviceId]
 
-    override fun GoGetByTokenHash(tokenHash: String): Device? = GoRows.values.firstOrNull { it.GoTokenHash == tokenHash }
+    override fun getByTokenHash(tokenHash: String): Device? = rows.values.firstOrNull { it.tokenHash == tokenHash }
 
-    override fun GoList(): List<Device> {
-        if (GoFailOnList) throw IllegalStateException("device store unavailable")
-        return GoRows.values.toList()
+    override fun list(): List<Device> {
+        if (failOnList) throw IllegalStateException("device store unavailable")
+        return rows.values.toList()
     }
 
-    override fun GoTouch(
+    override fun touch(
         deviceId: String,
         seenAtMs: Long,
     ) {
-        GoRows[deviceId]?.let { GoRows[deviceId] = it.copy(GoLastSeenMs = seenAtMs) }
+        rows[deviceId]?.let { rows[deviceId] = it.copy(lastSeenMs = seenAtMs) }
     }
 
-    override fun GoDelete(deviceId: String) {
-        GoDeletedIds.add(deviceId)
-        GoRows.remove(deviceId)
+    override fun delete(deviceId: String) {
+        deletedIds.add(deviceId)
+        rows.remove(deviceId)
     }
 }
 
 /**
  * [AppConfig] fake implementing the DOMAIN port only.
  *
- * [GoStoredKey] is what a real store would hold; the screen must never render it in
+ * [storedKey] is what a real store would hold; the screen must never render it in
  * cleartext by default, so the value is a recognizable sentinel the test can search
  * for in the semantics tree.
  */
 class FakeAppConfig(
-    GoStoredKey: String = "",
-    GoEngine: SttEngine = SttEngine.MOCK,
-    GoRegionValue: String = AppConfig.GoDefaultRegion,
-    GoMode: HotspotMode = HotspotMode.MANUAL,
+    storedKey: String = "",
+    engine: SttEngine = SttEngine.MOCK,
+    regionValue: String = AppConfig.GoDefaultRegion,
+    mode: HotspotMode = HotspotMode.MANUAL,
 ) : AppConfig {
-    private var GoKeyValue: String = GoStoredKey
-    private var GoEngineValue: SttEngine = GoEngine
-    private var GoRegionValue: String = GoRegionValue
-    private var GoModeValue: HotspotMode = GoMode
+    private var keyValue: String = storedKey
+    private var engineValue: SttEngine = engine
+    private var regionValue: String = regionValue
+    private var modeValue: HotspotMode = mode
 
-    var GoSetSttAdapterCalls: Int = 0
+    var setSttAdapterCalls: Int = 0
         private set
 
-    var GoSetRegionCalls: Int = 0
+    var setRegionCalls: Int = 0
         private set
 
-    var GoSetHotspotModeCalls: Int = 0
+    var setHotspotModeCalls: Int = 0
         private set
 
-    override fun GoSttEngine(): SttEngine = GoEngineValue
+    override fun sttEngine(): SttEngine = engineValue
 
-    override fun GoSetSttEngine(kind: SttEngine) {
-        GoSetSttAdapterCalls += 1
-        GoEngineValue = kind
+    override fun setSttEngine(kind: SttEngine) {
+        setSttAdapterCalls += 1
+        engineValue = kind
     }
 
-    override fun GoApiKey(): String = GoKeyValue
+    override fun apiKey(): String = keyValue
 
-    override fun GoSetApiKey(apiKey: String?) {
-        GoKeyValue = apiKey?.trim().orEmpty()
+    override fun setApiKey(apiKey: String?) {
+        keyValue = apiKey?.trim().orEmpty()
     }
 
-    override fun GoRegion(): String = GoRegionValue
+    override fun region(): String = regionValue
 
-    override fun GoSetRegion(region: String?) {
-        GoSetRegionCalls += 1
+    override fun setRegion(region: String?) {
+        setRegionCalls += 1
         region?.trim()?.lowercase()?.takeIf { it.isNotEmpty() }?.let {
-            if (it in setOf("global", "eu", "us", "au")) GoRegionValue = it
+            if (it in setOf("global", "eu", "us", "au")) regionValue = it
         }
     }
 
-    override fun GoHotspotMode(): HotspotMode = GoModeValue
+    override fun hotspotMode(): HotspotMode = modeValue
 
-    override fun GoSetHotspotMode(mode: HotspotMode) {
-        GoSetHotspotModeCalls += 1
-        GoModeValue = mode
+    override fun setHotspotMode(mode: HotspotMode) {
+        setHotspotModeCalls += 1
+        modeValue = mode
     }
 }
 
 /** [BatteryExemption] fake: the state is settable and every request is counted. */
 class FakeBatteryExemption(
-    private var GoExempt: Boolean = false,
+    private var exempt: Boolean = false,
 ) : BatteryExemption {
-    var GoRequestCalls: Int = 0
+    var requestCalls: Int = 0
         private set
 
-    fun GoSetExempt(exempt: Boolean) {
-        GoExempt = exempt
+    fun setExempt(exempt: Boolean) {
+        this.exempt = exempt
     }
 
-    override fun GoIsExempt(): Boolean = GoExempt
+    override fun isExempt(): Boolean = exempt
 
-    override fun GoRequestExemption() {
-        GoRequestCalls += 1
+    override fun requestExemption() {
+        requestCalls += 1
     }
 }

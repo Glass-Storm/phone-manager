@@ -15,24 +15,24 @@ import com.glassstorm.phonemanager.domain.dto.Device
  * The hub persists only the pairing-token HASH; the token itself never reaches disk.
  */
 class SqliteDeviceRepository(
-    private val GoContext: Context,
-    private val GoDatabaseName: String = DEFAULT_DATABASE_NAME,
-) : SQLiteOpenHelper(GoContext, GoDatabaseName, null, SCHEMA_VERSION),
+    private val context: Context,
+    private val databaseName: String = DEFAULT_DATABASE_NAME,
+) : SQLiteOpenHelper(context, databaseName, null, SCHEMA_VERSION),
     DeviceRepository {
     override fun getWritableDatabase(): SQLiteDatabase {
-        GoEnsureDatabaseDirectory()
+        ensureDatabaseDirectory()
         return super.getWritableDatabase()
     }
 
     override fun getReadableDatabase(): SQLiteDatabase {
-        GoEnsureDatabaseDirectory()
+        ensureDatabaseDirectory()
         return super.getReadableDatabase()
     }
 
     // Robolectric's Context.getDatabasePath() does not mkdirs, so the database file's
     // parent directory must exist before SQLiteDatabase opens it.
-    private fun GoEnsureDatabaseDirectory() {
-        GoContext.getDatabasePath(GoDatabaseName).parentFile?.mkdirs()
+    private fun ensureDatabaseDirectory() {
+        context.getDatabasePath(databaseName).parentFile?.mkdirs()
     }
 
     override fun onCreate(db: SQLiteDatabase) {
@@ -50,20 +50,20 @@ class SqliteDeviceRepository(
         onCreate(db)
     }
 
-    override fun GoUpsert(device: Device) {
+    override fun upsert(device: Device) {
         writableDatabase.insertWithOnConflict(
             TABLE_PAIRED_DEVICE,
             null,
-            GoDeviceValues(device),
+            deviceValues(device),
             SQLiteDatabase.CONFLICT_REPLACE,
         )
     }
 
-    override fun GoGet(deviceId: String): Device? = GoQueryDevice("$COLUMN_DEVICE_ID = ?", arrayOf(deviceId))
+    override fun get(deviceId: String): Device? = queryDevice("$COLUMN_DEVICE_ID = ?", arrayOf(deviceId))
 
-    override fun GoGetByTokenHash(tokenHash: String): Device? = GoQueryDevice("$COLUMN_TOKEN_HASH = ?", arrayOf(tokenHash))
+    override fun getByTokenHash(tokenHash: String): Device? = queryDevice("$COLUMN_TOKEN_HASH = ?", arrayOf(tokenHash))
 
-    override fun GoList(): List<Device> =
+    override fun list(): List<Device> =
         readableDatabase
             .query(
                 TABLE_PAIRED_DEVICE,
@@ -75,11 +75,11 @@ class SqliteDeviceRepository(
                 "$COLUMN_PAIRED_AT_MS ASC, $COLUMN_DEVICE_ID ASC",
             ).use { cursor ->
                 buildList {
-                    while (cursor.moveToNext()) add(GoReadDevice(cursor))
+                    while (cursor.moveToNext()) add(readDevice(cursor))
                 }
             }
 
-    override fun GoTouch(
+    override fun touch(
         deviceId: String,
         seenAtMs: Long,
     ) {
@@ -91,11 +91,11 @@ class SqliteDeviceRepository(
         )
     }
 
-    override fun GoDelete(deviceId: String) {
+    override fun delete(deviceId: String) {
         writableDatabase.delete(TABLE_PAIRED_DEVICE, "$COLUMN_DEVICE_ID = ?", arrayOf(deviceId))
     }
 
-    private fun GoQueryDevice(
+    private fun queryDevice(
         selection: String,
         selectionArgs: Array<String>,
     ): Device? =
@@ -110,29 +110,29 @@ class SqliteDeviceRepository(
                 null,
             ).use { cursor ->
                 if (!cursor.moveToFirst()) return@use null
-                GoReadDevice(cursor)
+                readDevice(cursor)
             }
 
-    private fun GoReadDevice(cursor: Cursor): Device {
-        val GoLastSeenIndex = cursor.getColumnIndexOrThrow(COLUMN_LAST_SEEN_MS)
+    private fun readDevice(cursor: Cursor): Device {
+        val lastSeenIndex = cursor.getColumnIndexOrThrow(COLUMN_LAST_SEEN_MS)
         return Device(
-            GoDeviceId = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_DEVICE_ID)),
-            GoDeviceName = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_DEVICE_NAME)),
-            GoRole = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_ROLE)),
-            GoTokenHash = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_TOKEN_HASH)),
-            GoPairedAtMs = cursor.getLong(cursor.getColumnIndexOrThrow(COLUMN_PAIRED_AT_MS)),
-            GoLastSeenMs = if (cursor.isNull(GoLastSeenIndex)) null else cursor.getLong(GoLastSeenIndex),
+            deviceId = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_DEVICE_ID)),
+            deviceName = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_DEVICE_NAME)),
+            role = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_ROLE)),
+            tokenHash = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_TOKEN_HASH)),
+            pairedAtMs = cursor.getLong(cursor.getColumnIndexOrThrow(COLUMN_PAIRED_AT_MS)),
+            lastSeenMs = if (cursor.isNull(lastSeenIndex)) null else cursor.getLong(lastSeenIndex),
         )
     }
 
-    private fun GoDeviceValues(device: Device): ContentValues =
+    private fun deviceValues(device: Device): ContentValues =
         ContentValues().apply {
-            put(COLUMN_DEVICE_ID, device.GoDeviceId)
-            put(COLUMN_DEVICE_NAME, device.GoDeviceName)
-            put(COLUMN_ROLE, device.GoRole)
-            put(COLUMN_TOKEN_HASH, device.GoTokenHash)
-            put(COLUMN_PAIRED_AT_MS, device.GoPairedAtMs)
-            device.GoLastSeenMs?.let { put(COLUMN_LAST_SEEN_MS, it) } ?: putNull(COLUMN_LAST_SEEN_MS)
+            put(COLUMN_DEVICE_ID, device.deviceId)
+            put(COLUMN_DEVICE_NAME, device.deviceName)
+            put(COLUMN_ROLE, device.role)
+            put(COLUMN_TOKEN_HASH, device.tokenHash)
+            put(COLUMN_PAIRED_AT_MS, device.pairedAtMs)
+            device.lastSeenMs?.let { put(COLUMN_LAST_SEEN_MS, it) } ?: putNull(COLUMN_LAST_SEEN_MS)
         }
 
     private companion object {

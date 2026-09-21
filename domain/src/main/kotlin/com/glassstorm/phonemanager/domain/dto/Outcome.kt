@@ -5,19 +5,19 @@ package com.glassstorm.phonemanager.domain.dto
  *
  * A rejection is a normal outcome (a wrong/expired/replayed PIN is the expected
  * behaviour of an untrusted peer), so [PairOutcome] is a value, never an
- * exception. [GoOk] carries the issued secret material; [GoRejected] carries a
- * reason from the `GoReason*` vocabulary that callers switch on exhaustively.
+ * exception. [Ok] carries the issued secret material; [Rejected] carries a
+ * reason from the `reason*` vocabulary that callers switch on exhaustively.
  */
 sealed interface PairOutcome {
-    /** A device was paired: [GoDeviceId] plus the one-time-visible [GoToken]. */
-    data class GoOk(
-        val GoDeviceId: String,
-        val GoToken: String,
+    /** A device was paired: [deviceId] plus the one-time-visible [token]. */
+    data class Ok(
+        val deviceId: String,
+        val token: String,
     ) : PairOutcome
 
-    /** The attempt was refused for [GoReason]. Nothing was persisted, no token exists. */
-    data class GoRejected(
-        val GoReason: String,
+    /** The attempt was refused for [reason]. Nothing was persisted, no token exists. */
+    data class Rejected(
+        val reason: String,
     ) : PairOutcome
 
     companion object {

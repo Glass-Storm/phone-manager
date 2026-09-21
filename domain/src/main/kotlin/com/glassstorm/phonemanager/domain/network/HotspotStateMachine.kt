@@ -34,27 +34,27 @@ sealed interface HotspotFailure {
 
     /** The platform reported a start failure (OEM refusal, channel unavailable, ...). */
     data class StartFailed(
-        val GoReason: String,
+        val reason: String,
     ) : HotspotFailure
 
     /** The event is not valid for the current state. */
     data class IllegalTransition(
-        val GoFrom: HotspotState,
-        val GoEvent: HotspotEvent,
+        val from: HotspotState,
+        val event: HotspotEvent,
     ) : HotspotFailure
 }
 
 /** Outcome of feeding one event into the machine. */
 sealed interface HotspotTransition {
-    /** The machine changed to (or idempotently remained in) [GoState]. */
+    /** The machine changed to (or idempotently remained in) [state]. */
     data class Moved(
-        val GoState: HotspotState,
+        val state: HotspotState,
     ) : HotspotTransition
 
-    /** The event was refused; the machine stayed in [GoState] and [GoFailure] says why. */
+    /** The event was refused; the machine stayed in [state] and [failure] says why. */
     data class Rejected(
-        val GoState: HotspotState,
-        val GoFailure: HotspotFailure,
+        val state: HotspotState,
+        val failure: HotspotFailure,
     ) : HotspotTransition
 }
 
@@ -67,7 +67,7 @@ sealed interface HotspotTransition {
  * fall-through.
  */
 class HotspotStateMachine {
-    var GoState: HotspotState = HotspotState.IDLE
+    var state: HotspotState = HotspotState.IDLE
         private set
 
     /**
@@ -76,88 +76,88 @@ class HotspotStateMachine {
      * [failure] is only consulted for [HotspotEvent.START_FAILED]; when omitted a
      * generic [HotspotFailure.StartFailed] is recorded.
      */
-    fun GoAccept(
+    fun accept(
         event: HotspotEvent,
         failure: HotspotFailure? = null,
     ): HotspotTransition =
-        when (GoState) {
-            HotspotState.IDLE -> GoFromIdle(event, failure)
-            HotspotState.STARTING -> GoFromStarting(event, failure)
-            HotspotState.ACTIVE -> GoFromActive(event, failure)
-            HotspotState.STOPPING -> GoFromStopping(event, failure)
-            HotspotState.ERROR -> GoFromError(event, failure)
+        when (state) {
+            HotspotState.IDLE -> fromIdle(event, failure)
+            HotspotState.STARTING -> fromStarting(event, failure)
+            HotspotState.ACTIVE -> fromActive(event, failure)
+            HotspotState.STOPPING -> fromStopping(event, failure)
+            HotspotState.ERROR -> fromError(event, failure)
         }
 
-    private fun GoFromIdle(
+    private fun fromIdle(
         event: HotspotEvent,
         failure: HotspotFailure?,
     ): HotspotTransition =
         when (event) {
-            HotspotEvent.START_REQUESTED -> GoMoveTo(HotspotState.STARTING)
-            HotspotEvent.STOP_REQUESTED -> GoMoveTo(HotspotState.IDLE)
+            HotspotEvent.START_REQUESTED -> moveTo(HotspotState.STARTING)
+            HotspotEvent.STOP_REQUESTED -> moveTo(HotspotState.IDLE)
             HotspotEvent.STARTED, HotspotEvent.STOPPED, HotspotEvent.START_FAILED ->
-                GoReject(event, failure)
+                reject(event, failure)
         }
 
-    private fun GoFromStarting(
+    private fun fromStarting(
         event: HotspotEvent,
         failure: HotspotFailure?,
     ): HotspotTransition =
         when (event) {
-            HotspotEvent.STARTED -> GoMoveTo(HotspotState.ACTIVE)
+            HotspotEvent.STARTED -> moveTo(HotspotState.ACTIVE)
             HotspotEvent.START_FAILED -> {
-                val GoFailure = failure ?: HotspotFailure.StartFailed("start failed")
-                GoState = HotspotState.ERROR
-                HotspotTransition.Rejected(HotspotState.ERROR, GoFailure)
+                val failure = failure ?: HotspotFailure.StartFailed("start failed")
+                state = HotspotState.ERROR
+                HotspotTransition.Rejected(HotspotState.ERROR, failure)
             }
-            HotspotEvent.STOP_REQUESTED -> GoMoveTo(HotspotState.STOPPING)
-            HotspotEvent.START_REQUESTED, HotspotEvent.STOPPED -> GoReject(event, failure)
+            HotspotEvent.STOP_REQUESTED -> moveTo(HotspotState.STOPPING)
+            HotspotEvent.START_REQUESTED, HotspotEvent.STOPPED -> reject(event, failure)
         }
 
-    private fun GoFromActive(
+    private fun fromActive(
         event: HotspotEvent,
         failure: HotspotFailure?,
     ): HotspotTransition =
         when (event) {
-            HotspotEvent.STOP_REQUESTED -> GoMoveTo(HotspotState.STOPPING)
+            HotspotEvent.STOP_REQUESTED -> moveTo(HotspotState.STOPPING)
             HotspotEvent.START_REQUESTED, HotspotEvent.STARTED,
             HotspotEvent.START_FAILED, HotspotEvent.STOPPED,
-            -> GoReject(event, failure)
+            -> reject(event, failure)
         }
 
-    private fun GoFromStopping(
+    private fun fromStopping(
         event: HotspotEvent,
         failure: HotspotFailure?,
     ): HotspotTransition =
         when (event) {
-            HotspotEvent.STOPPED -> GoMoveTo(HotspotState.IDLE)
-            HotspotEvent.STOP_REQUESTED -> GoMoveTo(HotspotState.STOPPING)
+            HotspotEvent.STOPPED -> moveTo(HotspotState.IDLE)
+            HotspotEvent.STOP_REQUESTED -> moveTo(HotspotState.STOPPING)
             HotspotEvent.START_REQUESTED, HotspotEvent.STARTED, HotspotEvent.START_FAILED ->
-                GoReject(event, failure)
+                reject(event, failure)
         }
 
-    private fun GoFromError(
+    private fun fromError(
         event: HotspotEvent,
         failure: HotspotFailure?,
     ): HotspotTransition =
         when (event) {
-            HotspotEvent.START_REQUESTED -> GoMoveTo(HotspotState.STARTING)
-            HotspotEvent.STOP_REQUESTED -> GoMoveTo(HotspotState.IDLE)
+            HotspotEvent.START_REQUESTED -> moveTo(HotspotState.STARTING)
+            HotspotEvent.STOP_REQUESTED -> moveTo(HotspotState.IDLE)
             HotspotEvent.STARTED, HotspotEvent.STOPPED, HotspotEvent.START_FAILED ->
-                GoReject(event, failure)
+                reject(event, failure)
         }
 
-    private fun GoMoveTo(next: HotspotState): HotspotTransition {
-        GoState = next
+    private fun moveTo(next: HotspotState): HotspotTransition {
+        state = next
         return HotspotTransition.Moved(next)
     }
 
-    private fun GoReject(
+    private fun reject(
         event: HotspotEvent,
         failure: HotspotFailure?,
     ): HotspotTransition {
-        val GoFailure = failure ?: HotspotFailure.IllegalTransition(GoState, event)
-        return HotspotTransition.Rejected(GoState, GoFailure)
+        val failure = failure ?: HotspotFailure.IllegalTransition(state, event)
+        return HotspotTransition.Rejected(state, failure)
     }
 }
 
@@ -165,8 +165,8 @@ class HotspotStateMachine {
  * Raised by a [com.glassstorm.phonemanager.domain.adapter.network.HotspotController]
  * when the access point cannot be started.
  *
- * [GoFailure] carries the typed cause so callers can branch on it exhaustively.
+ * [failure] carries the typed cause so callers can branch on it exhaustively.
  */
 class HotspotUnavailableException(
-    val GoFailure: HotspotFailure,
-) : Exception("hotspot unavailable: $GoFailure")
+    val failure: HotspotFailure,
+) : Exception("hotspot unavailable: $failure")

@@ -30,7 +30,7 @@ class PairingScreenTest {
 
     @Test
     fun `renders the unavailable state when the pairing port is absent`() {
-        composeRule.GoSetPairingContent(Context())
+        composeRule.setPairingContent(Context())
 
         composeRule.onNodeWithText("Pairing").assertIsDisplayed()
         composeRule.onNodeWithText("Pairing service not available").assertIsDisplayed()
@@ -38,21 +38,21 @@ class PairingScreenTest {
 
     @Test
     fun `no pin is shown until the window is opened`() {
-        val GoPairing = FakePairingService(GoPinSequence = listOf("428193"))
-        val GoCtx = Context().also { Register<PairingService>(it, GoPairing) }
+        val pairing = FakePairingService(pinSequence = listOf("428193"))
+        val ctx = Context().also { Register<PairingService>(it, pairing) }
 
-        composeRule.GoSetPairingContent(GoCtx)
+        composeRule.setPairingContent(ctx)
 
         composeRule.onNodeWithText("No pairing window open").assertIsDisplayed()
-        assertThat(GoPairing.GoOpenCalls).isEqualTo(0)
+        assertThat(pairing.openCalls).isEqualTo(0)
     }
 
     @Test
     fun `the pin renders after the window opens`() {
-        val GoPairing = FakePairingService(GoPinSequence = listOf("428193"))
-        val GoCtx = Context().also { Register<PairingService>(it, GoPairing) }
+        val pairing = FakePairingService(pinSequence = listOf("428193"))
+        val ctx = Context().also { Register<PairingService>(it, pairing) }
 
-        composeRule.GoSetPairingContent(GoCtx)
+        composeRule.setPairingContent(ctx)
         composeRule.onNodeWithText("Open pairing window").performClick()
         composeRule.waitForIdle()
 
@@ -64,32 +64,32 @@ class PairingScreenTest {
     fun `opening the window twice does not leave two live pins`() {
         // The fake replaces its window and returns a DIFFERENT pin the second time,
         // exactly like the real service. Two live PINs would therefore be visible.
-        val GoPairing = FakePairingService(GoPinSequence = listOf("428193", "999999"))
-        val GoCtx = Context().also { Register<PairingService>(it, GoPairing) }
+        val pairing = FakePairingService(pinSequence = listOf("428193", "999999"))
+        val ctx = Context().also { Register<PairingService>(it, pairing) }
 
-        composeRule.GoSetPairingContent(GoCtx)
+        composeRule.setPairingContent(ctx)
         composeRule.onNodeWithText("Open pairing window").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithText("Reopen pairing window").performClick()
         composeRule.waitForIdle()
 
-        val GoPinNodes = composeRule.onAllNodesWithText("428193").fetchSemanticsNodes()
-        assertThat(GoPinNodes).isEmpty()
+        val pinNodes = composeRule.onAllNodesWithText("428193").fetchSemanticsNodes()
+        assertThat(pinNodes).isEmpty()
         composeRule.onNodeWithText("999999").assertIsDisplayed()
-        assertThat(GoPairing.GoOpenCalls).isEqualTo(2)
-        assertThat(composeRule.GoCountSixDigitPinNodes()).isEqualTo(1)
+        assertThat(pairing.openCalls).isEqualTo(2)
+        assertThat(composeRule.countSixDigitPinNodes()).isEqualTo(1)
     }
 
     @Test
     fun `a revoked device disappears from the paired list`() {
-        val GoPairing =
+        val pairing =
             FakePairingService().also {
-                it.GoSeedDevice(deviceId = "d-1", deviceName = "Glass One")
-                it.GoSeedDevice(deviceId = "d-2", deviceName = "Ubuntu Daemon", role = "DAEMON")
+                it.seedDevice(deviceId = "d-1", deviceName = "Glass One")
+                it.seedDevice(deviceId = "d-2", deviceName = "Ubuntu Daemon", role = "DAEMON")
             }
-        val GoCtx = Context().also { Register<PairingService>(it, GoPairing) }
+        val ctx = Context().also { Register<PairingService>(it, pairing) }
 
-        composeRule.GoSetPairingContent(GoCtx)
+        composeRule.setPairingContent(ctx)
         composeRule.onNodeWithText("Glass One").assertIsDisplayed()
         composeRule.onNodeWithText("Ubuntu Daemon").assertIsDisplayed()
 
@@ -102,10 +102,10 @@ class PairingScreenTest {
 
     @Test
     fun `closing the window hides the pin again`() {
-        val GoPairing = FakePairingService(GoPinSequence = listOf("428193"))
-        val GoCtx = Context().also { Register<PairingService>(it, GoPairing) }
+        val pairing = FakePairingService(pinSequence = listOf("428193"))
+        val ctx = Context().also { Register<PairingService>(it, pairing) }
 
-        composeRule.GoSetPairingContent(GoCtx)
+        composeRule.setPairingContent(ctx)
         composeRule.onNodeWithText("Open pairing window").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithText("428193").assertIsDisplayed()
@@ -117,18 +117,18 @@ class PairingScreenTest {
         composeRule.onNodeWithText("No pairing window open").assertIsDisplayed()
     }
 
-    private fun androidx.compose.ui.test.junit4.ComposeContentTestRule.GoSetPairingContent(GoCtx: Context) {
+    private fun androidx.compose.ui.test.junit4.ComposeContentTestRule.setPairingContent(ctx: Context) {
         setContent {
             AppTheme {
-                PairingScreen(GoContext = GoCtx)
+                PairingScreen(context = ctx)
             }
         }
     }
 
-    private fun androidx.compose.ui.test.junit4.ComposeContentTestRule.GoCountSixDigitPinNodes(): Int =
+    private fun androidx.compose.ui.test.junit4.ComposeContentTestRule.countSixDigitPinNodes(): Int =
         onAllNodes(
-            SemanticsMatcher("is a 6-digit PIN") { GoNode ->
-                GoNode.config
+            SemanticsMatcher("is a 6-digit PIN") { node ->
+                node.config
                     .getOrNull(SemanticsProperties.Text)
                     ?.any { it.text.matches(Regex("\\d{6}")) } == true
             },

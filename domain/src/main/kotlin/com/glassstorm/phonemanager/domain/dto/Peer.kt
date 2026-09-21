@@ -3,17 +3,17 @@ package com.glassstorm.phonemanager.domain.dto
 /**
  * A reachable hub endpoint on the local network.
  *
- * Pure data; no Android types. [GoSource] records HOW the address was found so
+ * Pure data; no Android types. [source] records HOW the address was found so
  * callers can tell a real mDNS discovery apart from the direct-IP gateway
  * fallback — the fallback is a first-class, expected outcome in the manual-tether
  * development flow, not an error.
  *
- * `GoSource` is one of [GoSourceMdns] or [GoSourceGateway].
+ * `source` is one of [GoSourceMdns] or [GoSourceGateway].
  */
 data class PeerAddress(
-    val GoHost: String,
-    val GoPort: Int,
-    val GoSource: String,
+    val host: String,
+    val port: Int,
+    val source: String,
 ) {
     companion object {
         /** The peer answered a real `_ecosys._tcp` mDNS resolution. */

@@ -18,7 +18,7 @@ import kotlinx.coroutines.flow.asStateFlow
  *
  * ## One live PIN
  *
- * `PairingService.GoOpenWindow` replaces any existing window, so the UI stores
+ * `PairingService.openWindow` replaces any existing window, so the UI stores
  * the LATEST returned PIN instead of accumulating windows. Reopening therefore
  * swaps the PIN rather than leaving two valid ones on screen.
  *
@@ -26,60 +26,60 @@ import kotlinx.coroutines.flow.asStateFlow
  * and the UI state updates on the frame the user acted.
  */
 class PairingViewModel(
-    private val GoContext: Context,
-    private val GoNowMs: () -> Long = { System.currentTimeMillis() },
+    private val context: Context,
+    private val nowMs: () -> Long = { System.currentTimeMillis() },
 ) : ViewModel() {
-    private val GoPairing: PairingService? = FromContextOrNull<PairingService>(GoContext)
+    private val pairing: PairingService? = FromContextOrNull<PairingService>(context)
 
-    private val GoState = MutableStateFlow(PairingUiState(GoAvailable = GoPairing != null))
+    private val state = MutableStateFlow(PairingUiState(available = pairing != null))
 
-    val GoUiState: StateFlow<PairingUiState> = GoState.asStateFlow()
+    val uiState: StateFlow<PairingUiState> = state.asStateFlow()
 
     init {
-        GoRefresh()
+        refresh()
     }
 
     /** Open (or replace) the single pairing window and show its PIN. */
-    fun GoOnOpenWindow() {
-        val GoService = GoPairing ?: return
+    fun onOpenWindow() {
+        val service = pairing ?: return
         // Replacing the previous window is the service's contract; storing only the
         // newest PIN is what guarantees a single live window in the UI.
-        val GoWindow = GoService.GoOpenWindow(GoWindowTtlMs)
-        GoState.value =
-            GoState.value.copy(
-                GoPin = GoWindow.GoPin,
-                GoExpiresInSeconds = GoWindow.GoRemainingSeconds(),
+        val window = service.openWindow(GoWindowTtlMs)
+        state.value =
+            state.value.copy(
+                pin = window.pin,
+                expiresInSeconds = window.remainingSeconds(),
             )
-        GoRefresh()
+        refresh()
     }
 
     /** Close the window immediately; the PIN stops being valid. */
-    fun GoOnCloseWindow() {
-        GoPairing?.GoStopWindow()
-        GoState.value = GoState.value.copy(GoPin = null, GoExpiresInSeconds = 0)
-        GoRefresh()
+    fun onCloseWindow() {
+        pairing?.stopWindow()
+        state.value = state.value.copy(pin = null, expiresInSeconds = 0)
+        refresh()
     }
 
     /** Revoke [deviceId]; its token stops verifying and it leaves the list. */
-    fun GoOnRevoke(deviceId: String) {
-        GoPairing?.GoRevoke(deviceId)
-        GoRefresh()
+    fun onRevoke(deviceId: String) {
+        pairing?.revoke(deviceId)
+        refresh()
     }
 
-    fun GoOnRefresh() {
-        GoRefresh()
+    fun onRefresh() {
+        refresh()
     }
 
-    private fun GoRefresh() {
-        GoState.value =
-            GoState.value.copy(
-                GoAvailable = GoPairing != null,
-                GoDevices = GoPairing?.GoListPaired() ?: emptyList(),
+    private fun refresh() {
+        state.value =
+            state.value.copy(
+                available = pairing != null,
+                devices = pairing?.listPaired() ?: emptyList(),
             )
     }
 
-    private fun com.glassstorm.phonemanager.domain.dto.Pairing.GoRemainingSeconds(): Long =
-        ((GoExpiresAtMs - GoNowMs()) / 1_000L).coerceAtLeast(0L)
+    private fun com.glassstorm.phonemanager.domain.dto.Pairing.remainingSeconds(): Long =
+        ((expiresAtMs - nowMs()) / 1_000L).coerceAtLeast(0L)
 
     companion object {
         /** How long a pairing window stays open. Two minutes is the v1 default. */

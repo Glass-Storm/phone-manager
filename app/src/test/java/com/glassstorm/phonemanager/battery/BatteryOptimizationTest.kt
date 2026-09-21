@@ -18,56 +18,56 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [29])
 class BatteryOptimizationTest {
-    private val GoContext: Context = ApplicationProvider.getApplicationContext()
+    private val context: Context = ApplicationProvider.getApplicationContext()
 
-    private fun GoShadowPower(): Pair<PowerManager, org.robolectric.shadows.ShadowPowerManager> {
-        val GoPower = GoContext.getSystemService(Context.POWER_SERVICE) as PowerManager
-        return GoPower to shadowOf(GoPower)
+    private fun shadowPower(): Pair<PowerManager, org.robolectric.shadows.ShadowPowerManager> {
+        val power = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+        return power to shadowOf(power)
     }
 
     @Test
     fun `a non-exempt app reports not exempt`() {
         // Given the app is not on the exemption list
-        val (_, GoShadowPower) = GoShadowPower()
-        GoShadowPower.setIgnoringBatteryOptimizations(GoContext.packageName, false)
+        val (_, shadowPower) = shadowPower()
+        shadowPower.setIgnoringBatteryOptimizations(context.packageName, false)
 
         // When exemption is asked for
         // Then it is false
-        assertThat(BatteryOptimization.GoIsExempt(GoContext)).isFalse()
+        assertThat(BatteryOptimization.isExempt(context)).isFalse()
     }
 
     @Test
     fun `an exempt app reports exempt`() {
         // Given the platform lists this package as exempt
-        val (_, GoShadowPower) = GoShadowPower()
-        GoShadowPower.setIgnoringBatteryOptimizations(GoContext.packageName, true)
+        val (_, shadowPower) = shadowPower()
+        shadowPower.setIgnoringBatteryOptimizations(context.packageName, true)
 
         // When exemption is asked for
         // Then it is true
-        assertThat(BatteryOptimization.GoIsExempt(GoContext)).isTrue()
+        assertThat(BatteryOptimization.isExempt(context)).isTrue()
     }
 
     @Test
     fun `the request intent carries the platform action`() {
         // Given a built exemption intent
-        val GoIntent = BatteryOptimization.GoRequestIntent(GoContext)
+        val intent = BatteryOptimization.requestIntent(context)
 
         // When the action is inspected
         // Then it is exactly the platform's ignore-battery-optimizations action
-        assertThat(GoIntent.action)
+        assertThat(intent.action)
             .isEqualTo(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
     }
 
     @Test
     fun `the request intent targets this package through a package uri`() {
         // Given a built exemption intent
-        val GoIntent = BatteryOptimization.GoRequestIntent(GoContext)
+        val intent = BatteryOptimization.requestIntent(context)
 
         // When its data URI is inspected
         // Then the scheme is package and the opaque part is this applicationId, so
         // the system activity knows which app the request is about
-        assertThat(GoIntent.data?.scheme).isEqualTo("package")
-        assertThat(GoIntent.data?.schemeSpecificPart).isEqualTo(GoContext.packageName)
-        assertThat(GoIntent.data.toString()).isEqualTo("package:${GoContext.packageName}")
+        assertThat(intent.data?.scheme).isEqualTo("package")
+        assertThat(intent.data?.schemeSpecificPart).isEqualTo(context.packageName)
+        assertThat(intent.data.toString()).isEqualTo("package:${context.packageName}")
     }
 }

@@ -22,32 +22,32 @@ import io.grpc.StatusException
  * the interceptor deliberately leaves open.
  */
 class PairingGrpcService(
-    GoCtx: Context,
+    ctx: Context,
 ) : PairingServiceGrpcKt.PairingServiceCoroutineImplBase() {
-    private val GoPairing: PairingService = FromContext<PairingService>(GoCtx)
+    private val pairing: PairingService = FromContext<PairingService>(ctx)
 
     /** The one unauthenticated RPC: redeem the open-window PIN for a token. */
     override suspend fun pair(request: PairRequest): PairResponse {
-        val GoOutcome =
-            GoPairing.GoPair(
+        val outcome =
+            pairing.pair(
                 pin = request.pin,
                 deviceName = request.deviceName,
                 role = request.role.name,
             )
-        return when (GoOutcome) {
-            is PairOutcome.GoOk ->
+        return when (outcome) {
+            is PairOutcome.Ok ->
                 PairResponse
                     .newBuilder()
                     .setOk(true)
-                    .setToken(GoOutcome.GoToken)
-                    .setDeviceId(GoOutcome.GoDeviceId)
+                    .setToken(outcome.token)
+                    .setDeviceId(outcome.deviceId)
                     .build()
 
-            is PairOutcome.GoRejected ->
+            is PairOutcome.Rejected ->
                 PairResponse
                     .newBuilder()
                     .setOk(false)
-                    .setRejectReason(GoOutcome.GoReason)
+                    .setRejectReason(outcome.reason)
                     .build()
         }
     }
@@ -59,10 +59,10 @@ class PairingGrpcService(
      * filling in a different `device_id`.
      */
     override suspend fun heartbeat(request: HeartbeatRequest): HeartbeatResponse {
-        val GoDeviceId =
-            AuthInterceptor.GoDeviceIdKey.get()
+        val deviceId =
+            AuthInterceptor.deviceIdKey.get()
                 ?: throw StatusException(Status.UNAUTHENTICATED.withDescription("missing bearer token"))
-        GoPairing.GoTouchLastSeen(GoDeviceId, System.currentTimeMillis())
+        pairing.touchLastSeen(deviceId, System.currentTimeMillis())
         return HeartbeatResponse
             .newBuilder()
             .setOk(true)

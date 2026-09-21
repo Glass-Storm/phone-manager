@@ -11,27 +11,27 @@ import com.glassstorm.phonemanager.domain.dto.Device
  * composition root can be exercised on a plain JVM.
  */
 class MemoryDeviceRepository : DeviceRepository {
-    private val GoRows: MutableMap<String, Device> = LinkedHashMap()
+    private val rows: MutableMap<String, Device> = LinkedHashMap()
 
-    override fun GoUpsert(device: Device) {
-        GoRows[device.GoDeviceId] = device
+    override fun upsert(device: Device) {
+        rows[device.deviceId] = device
     }
 
-    override fun GoGet(deviceId: String): Device? = GoRows[deviceId]
+    override fun get(deviceId: String): Device? = rows[deviceId]
 
-    override fun GoGetByTokenHash(tokenHash: String): Device? = GoRows.values.firstOrNull { it.GoTokenHash == tokenHash }
+    override fun getByTokenHash(tokenHash: String): Device? = rows.values.firstOrNull { it.tokenHash == tokenHash }
 
-    override fun GoList(): List<Device> = GoRows.values.toList()
+    override fun list(): List<Device> = rows.values.toList()
 
-    override fun GoTouch(
+    override fun touch(
         deviceId: String,
         seenAtMs: Long,
     ) {
-        val GoExisting = GoRows[deviceId] ?: return
-        GoRows[deviceId] = GoExisting.copy(GoLastSeenMs = seenAtMs)
+        val existing = rows[deviceId] ?: return
+        rows[deviceId] = existing.copy(lastSeenMs = seenAtMs)
     }
 
-    override fun GoDelete(deviceId: String) {
-        GoRows.remove(deviceId)
+    override fun delete(deviceId: String) {
+        rows.remove(deviceId)
     }
 }

@@ -24,7 +24,7 @@ import android.os.Build
  * `POST_NOTIFICATIONS` is required from API 33 to post the foreground-service
  * notification. Below 33 it is granted at install time, so it is deliberately NOT
  * part of the required set there — demanding it on API 29 would make
- * [GoMissing] report a permission the platform never gates.
+ * [missing] report a permission the platform never gates.
  *
  * Pure decision logic: no UI, no side effects. T17's Settings screen surfaces the
  * request flow; this file provides only the matrix and the checker.
@@ -33,11 +33,11 @@ object HubPermissions {
     /**
      * The Wi-Fi permission that gates LocalOnlyHotspot/NSD at [goSdkInt].
      *
-     * Split out from [GoRequiredFor] because it is the ONLY permission that gates
+     * Split out from [requiredFor] because it is the ONLY permission that gates
      * the access point: a missing notification grant must not stop the hotspot,
      * and a missing Wi-Fi grant must not stop the plain-socket listener.
      */
-    fun GoHotspotPermission(goSdkInt: Int): String =
+    fun hotspotPermission(goSdkInt: Int): String =
         if (goSdkInt >= Build.VERSION_CODES.TIRAMISU) {
             // API 33+: the Wi-Fi-specific permission, declared neverForLocation.
             Manifest.permission.NEARBY_WIFI_DEVICES
@@ -52,9 +52,9 @@ object HubPermissions {
      *
      * @param goSdkInt the device's API level; injected so the branch is testable.
      */
-    fun GoRequiredFor(goSdkInt: Int): List<String> =
+    fun requiredFor(goSdkInt: Int): List<String> =
         buildList {
-            add(GoHotspotPermission(goSdkInt))
+            add(hotspotPermission(goSdkInt))
             if (goSdkInt >= Build.VERSION_CODES.TIRAMISU) {
                 // Only from API 33 is the notification a runtime grant; below it the
                 // platform grants POST_NOTIFICATIONS at install time.
@@ -68,26 +68,26 @@ object HubPermissions {
      * Returned as a name rather than a boolean so the caller can report exactly
      * which grant is blocking the access point.
      */
-    fun GoBlockingHotspotPermission(goContext: Context): String? {
-        val GoPermission = GoHotspotPermission(Build.VERSION.SDK_INT)
-        return if (goContext.checkSelfPermission(GoPermission) == PackageManager.PERMISSION_GRANTED) {
+    fun blockingHotspotPermission(goContext: Context): String? {
+        val permission = hotspotPermission(Build.VERSION.SDK_INT)
+        return if (goContext.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED) {
             null
         } else {
-            GoPermission
+            permission
         }
     }
 
     /**
-     * The subset of [GoRequiredFor] that [goContext] has NOT been granted.
+     * The subset of [requiredFor] that [goContext] has NOT been granted.
      *
      * An empty list means the hub may start. A non-empty list names exactly which
      * grants are missing, so the caller never has to guess.
      */
-    fun GoMissing(goContext: Context): List<String> =
-        GoRequiredFor(Build.VERSION.SDK_INT).filter { GoPermission ->
-            goContext.checkSelfPermission(GoPermission) != PackageManager.PERMISSION_GRANTED
+    fun missing(goContext: Context): List<String> =
+        requiredFor(Build.VERSION.SDK_INT).filter { permission ->
+            goContext.checkSelfPermission(permission) != PackageManager.PERMISSION_GRANTED
         }
 
     /** True when every required permission is already granted. */
-    fun GoHasAll(goContext: Context): Boolean = GoMissing(goContext).isEmpty()
+    fun hasAll(goContext: Context): Boolean = missing(goContext).isEmpty()
 }

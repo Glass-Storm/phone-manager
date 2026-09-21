@@ -19,51 +19,51 @@ import org.junit.Test
  * reset on window replacement, touch-on-verify, and the hash-only persistence
  * invariant — are asserted where they actually live.
  *
- * The clock is injected ([GoNowMs]) so TTL/expiry are exact and deterministic:
+ * The clock is injected ([nowMs]) so TTL/expiry are exact and deterministic:
  * no `sleep`, no wall clock, no flake.
  */
 class PairingLifecycleTest {
-    private lateinit var GoCtx: Context
-    private lateinit var GoRepo: FakeDeviceRepository
-    private lateinit var GoPairing: PairingServiceImpl
-    private var GoNowMs: Long = 1_000_000L
+    private lateinit var ctx: Context
+    private lateinit var repo: FakeDeviceRepository
+    private lateinit var pairing: PairingServiceImpl
+    private var nowMs: Long = 1_000_000L
 
     @Before
-    fun GoBuildService() {
+    fun buildService() {
         // Given a Context wired with a domain-port fake only (never an :adapter type)
-        GoCtx = Context()
-        GoRepo = FakeDeviceRepository()
-        Register<DeviceRepository>(GoCtx, GoRepo)
-        GoPairing = PairingServiceImpl(GoCtx, GoClock = { GoNowMs })
-        GoNowMs = 1_000_000L
+        ctx = Context()
+        repo = FakeDeviceRepository()
+        Register<DeviceRepository>(ctx, repo)
+        pairing = PairingServiceImpl(ctx, clock = { nowMs })
+        nowMs = 1_000_000L
     }
 
     /** Asserts [outcome] is a rejection and returns its reason string. */
-    private fun GoReason(outcome: PairOutcome): String {
-        assertThat(outcome).isInstanceOf(PairOutcome.GoRejected::class.java)
-        return (outcome as PairOutcome.GoRejected).GoReason
+    private fun reason(outcome: PairOutcome): String {
+        assertThat(outcome).isInstanceOf(PairOutcome.Rejected::class.java)
+        return (outcome as PairOutcome.Rejected).reason
     }
 
     /** Asserts [outcome] paired successfully and returns (deviceId, token). */
-    private fun GoPairedOnce(outcome: PairOutcome): Pair<String, String> {
-        assertThat(outcome).isInstanceOf(PairOutcome.GoOk::class.java)
-        val GoOk = outcome as PairOutcome.GoOk
-        return GoOk.GoDeviceId to GoOk.GoToken
+    private fun pairedOnce(outcome: PairOutcome): Pair<String, String> {
+        assertThat(outcome).isInstanceOf(PairOutcome.Ok::class.java)
+        val ok = outcome as PairOutcome.Ok
+        return ok.deviceId to ok.token
     }
 
-    private fun GoOpenWindow(ttlMs: Long = 120_000L): Pairing = GoPairing.GoOpenWindow(ttlMs)
+    private fun openWindow(ttlMs: Long = 120_000L): Pairing = pairing.openWindow(ttlMs)
 
     // ---------------------------------------------------------------- case 1: open
 
     @Test
     fun `open window returns a six digit pin with a future expiry`() {
         // When a 120s window is opened at t0
-        val GoWindow = GoOpenWindow(120_000L)
+        val window = openWindow(120_000L)
 
         // Then the PIN is exactly 6 digits and the expiry is t0 + ttl
-        assertThat(GoWindow.GoPin).matches("\\d{6}")
-        assertThat(GoWindow.GoExpiresAtMs).isEqualTo(GoNowMs + 120_000L)
-        assertThat(GoWindow.GoExpiresAtMs).isGreaterThan(GoNowMs)
+        assertThat(window.pin).matches("\\d{6}")
+        assertThat(window.expiresAtMs).isEqualTo(nowMs + 120_000L)
+        assertThat(window.expiresAtMs).isGreaterThan(nowMs)
     }
 
     // ---------------------------------------------------------- case 2: single-use
@@ -71,20 +71,20 @@ class PairingLifecycleTest {
     @Test
     fun `a consumed pin is rejected and never issues a second token`() {
         // Given a window whose PIN was redeemed once
-        val GoWindow = GoOpenWindow()
-        val (GoDeviceId, GoToken) = GoPairedOnce(GoPairing.GoPair(GoWindow.GoPin, "phone-a", "phone"))
-        assertThat(GoRepo.GoList()).hasSize(1)
+        val window = openWindow()
+        val (deviceId, token) = pairedOnce(pairing.pair(window.pin, "phone-a", "phone"))
+        assertThat(repo.list()).hasSize(1)
 
         // When the SAME PIN is presented again
-        val GoSecond = GoPairing.GoPair(GoWindow.GoPin, "phone-b", "phone")
+        val second = pairing.pair(window.pin, "phone-b", "phone")
 
         // Then it is rejected as consumed, with no second device and no second token
-        assertThat(GoReason(GoSecond)).isEqualTo(PairOutcome.GoReasonPinConsumed)
-        assertThat(GoRepo.GoList()).hasSize(1)
-        assertThat(GoRepo.GoGet(GoDeviceId)!!.GoTokenHash)
+        assertThat(reason(second)).isEqualTo(PairOutcome.GoReasonPinConsumed)
+        assertThat(repo.list()).hasSize(1)
+        assertThat(repo.get(deviceId)!!.tokenHash)
             .isEqualTo(
                 com.glassstorm.phonemanager.service.security.TokenCodec
-                    .GoHashToken(GoToken),
+                    .hashToken(token),
             )
     }
 
@@ -93,15 +93,15 @@ class PairingLifecycleTest {
     @Test
     fun `pairing past the expiry is rejected as expired`() {
         // Given an open window
-        val GoWindow = GoOpenWindow(60_000L)
+        val window = openWindow(60_000L)
 
         // When the clock passes the expiry
-        GoNowMs = GoWindow.GoExpiresAtMs + 1
+        nowMs = window.expiresAtMs + 1
 
         // Then the correct PIN is refused as expired and nothing is persisted
-        assertThat(GoReason(GoPairing.GoPair(GoWindow.GoPin, "phone-a", "phone")))
+        assertThat(reason(pairing.pair(window.pin, "phone-a", "phone")))
             .isEqualTo(PairOutcome.GoReasonPinExpired)
-        assertThat(GoRepo.GoList()).isEmpty()
+        assertThat(repo.list()).isEmpty()
     }
 
     // --------------------------------------------------------- case 4: attempt cap
@@ -109,19 +109,19 @@ class PairingLifecycleTest {
     @Test
     fun `five failed attempts lock the pin even for the correct pin`() {
         // Given an open window and exactly GoMaxPinAttempts wrong attempts
-        val GoWindow = GoOpenWindow()
+        val window = openWindow()
         assertThat(PairingService.GoMaxPinAttempts).isEqualTo(5)
         repeat(PairingService.GoMaxPinAttempts) {
-            assertThat(GoReason(GoPairing.GoPair("000000".GoAsPinOtherThan(GoWindow), "phone", "phone")))
+            assertThat(reason(pairing.pair("000000".asPinOtherThan(window), "phone", "phone")))
                 .isEqualTo(PairOutcome.GoReasonPinInvalid)
         }
 
         // When the CORRECT pin is finally presented
-        val GoOutcome = GoPairing.GoPair(GoWindow.GoPin, "phone", "phone")
+        val outcome = pairing.pair(window.pin, "phone", "phone")
 
         // Then it is LOCKED (not merely rejected as invalid) and no token is minted
-        assertThat(GoReason(GoOutcome)).isEqualTo(PairOutcome.GoReasonPinLocked)
-        assertThat(GoRepo.GoList()).isEmpty()
+        assertThat(reason(outcome)).isEqualTo(PairOutcome.GoReasonPinLocked)
+        assertThat(repo.list()).isEmpty()
     }
 
     // ------------------------------------------------- case 5: wrong pin persists nothing
@@ -129,15 +129,15 @@ class PairingLifecycleTest {
     @Test
     fun `a wrong pin is invalid and persists no device`() {
         // Given an open window
-        val GoWindow = GoOpenWindow()
+        val window = openWindow()
 
         // When a wrong PIN is presented
-        val GoWrong = GoWindow.GoPin.GoAsPinOtherThan(GoWindow)
+        val wrong = window.pin.asPinOtherThan(window)
 
         // Then it is rejected as invalid and the repository stays empty
-        assertThat(GoReason(GoPairing.GoPair(GoWrong, "phone", "phone")))
+        assertThat(reason(pairing.pair(wrong, "phone", "phone")))
             .isEqualTo(PairOutcome.GoReasonPinInvalid)
-        assertThat(GoRepo.GoList()).isEmpty()
+        assertThat(repo.list()).isEmpty()
     }
 
     // ------------------------------------------------------- case 6: malformed input
@@ -146,20 +146,20 @@ class PairingLifecycleTest {
     fun `no window blank pin and blank name each map to their own reason`() {
         // Given NO window is open
         // Then a well-formed attempt reports no window
-        assertThat(GoReason(GoPairing.GoPair("123456", "phone", "phone")))
+        assertThat(reason(pairing.pair("123456", "phone", "phone")))
             .isEqualTo(PairOutcome.GoReasonNoWindow)
 
         // Given a window IS open
-        GoOpenWindow()
+        openWindow()
 
         // Then a blank pin and a blank name are refused before any window logic
-        assertThat(GoReason(GoPairing.GoPair("", "phone", "phone")))
+        assertThat(reason(pairing.pair("", "phone", "phone")))
             .isEqualTo(PairOutcome.GoReasonPinMissing)
-        assertThat(GoReason(GoPairing.GoPair("   ", "phone", "phone")))
+        assertThat(reason(pairing.pair("   ", "phone", "phone")))
             .isEqualTo(PairOutcome.GoReasonPinMissing)
-        assertThat(GoReason(GoPairing.GoPair("123456", "", "phone")))
+        assertThat(reason(pairing.pair("123456", "", "phone")))
             .isEqualTo(PairOutcome.GoReasonNameMissing)
-        assertThat(GoRepo.GoList()).isEmpty()
+        assertThat(repo.list()).isEmpty()
     }
 
     // ---------------------------------------------------------- case 7: revocation
@@ -167,16 +167,16 @@ class PairingLifecycleTest {
     @Test
     fun `revoke invalidates the token immediately`() {
         // Given a paired device
-        val GoWindow = GoOpenWindow()
-        val (GoDeviceId, GoToken) = GoPairedOnce(GoPairing.GoPair(GoWindow.GoPin, "phone-a", "phone"))
-        assertThat(GoPairing.GoVerifyToken(GoToken)).isNotNull()
+        val window = openWindow()
+        val (deviceId, token) = pairedOnce(pairing.pair(window.pin, "phone-a", "phone"))
+        assertThat(pairing.verifyToken(token)).isNotNull()
 
         // When it is revoked
-        GoPairing.GoRevoke(GoDeviceId)
+        pairing.revoke(deviceId)
 
         // Then the token no longer resolves and the listing is empty
-        assertThat(GoPairing.GoVerifyToken(GoToken)).isNull()
-        assertThat(GoPairing.GoListPaired()).isEmpty()
+        assertThat(pairing.verifyToken(token)).isNull()
+        assertThat(pairing.listPaired()).isEmpty()
     }
 
     // ------------------------------------------------- case 8: list + stop resets cap
@@ -184,33 +184,33 @@ class PairingLifecycleTest {
     @Test
     fun `list reflects exactly the paired devices and stop window resets the counter`() {
         // Given two devices paired through two windows
-        val GoFirst = GoOpenWindow()
-        val (GoIdA, _) = GoPairedOnce(GoPairing.GoPair(GoFirst.GoPin, "phone-a", "phone"))
-        val GoSecond = GoOpenWindow()
-        val (GoIdB, _) = GoPairedOnce(GoPairing.GoPair(GoSecond.GoPin, "tablet-b", "tablet"))
+        val first = openWindow()
+        val (idA, _) = pairedOnce(pairing.pair(first.pin, "phone-a", "phone"))
+        val second = openWindow()
+        val (idB, _) = pairedOnce(pairing.pair(second.pin, "tablet-b", "tablet"))
 
         // Then the listing contains exactly those two devices
-        assertThat(GoPairing.GoListPaired().map { it.GoDeviceId })
-            .containsExactly(GoIdA, GoIdB)
-        assertThat(GoPairing.GoListPaired().map { it.GoDeviceName })
+        assertThat(pairing.listPaired().map { it.deviceId })
+            .containsExactly(idA, idB)
+        assertThat(pairing.listPaired().map { it.deviceName })
             .containsExactly("phone-a", "tablet-b")
 
         // When a third window accrues a near-cap attempt count and is then stopped
-        val GoThird = GoOpenWindow()
+        val third = openWindow()
         repeat(4) {
-            assertThat(GoReason(GoPairing.GoPair("000000".GoAsPinOtherThan(GoThird), "phone", "phone")))
+            assertThat(reason(pairing.pair("000000".asPinOtherThan(third), "phone", "phone")))
                 .isEqualTo(PairOutcome.GoReasonPinInvalid)
         }
-        GoPairing.GoStopWindow()
+        pairing.stopWindow()
 
         // Then the stopped window reports no-window
-        assertThat(GoReason(GoPairing.GoPair(GoThird.GoPin, "phone", "phone")))
+        assertThat(reason(pairing.pair(third.pin, "phone", "phone")))
             .isEqualTo(PairOutcome.GoReasonNoWindow)
 
         // And a fresh window pairs cleanly with the CORRECT pin — the counter reset
-        val GoFourth = GoOpenWindow()
-        val (GoIdC, _) = GoPairedOnce(GoPairing.GoPair(GoFourth.GoPin, "phone-c", "phone"))
-        assertThat(GoPairing.GoListPaired().map { it.GoDeviceId }).containsExactly(GoIdA, GoIdB, GoIdC)
+        val fourth = openWindow()
+        val (idC, _) = pairedOnce(pairing.pair(fourth.pin, "phone-c", "phone"))
+        assertThat(pairing.listPaired().map { it.deviceId }).containsExactly(idA, idB, idC)
     }
 
     // ------------------------------------------------ case 9: only the hash is stored
@@ -218,18 +218,18 @@ class PairingLifecycleTest {
     @Test
     fun `only the token hash is persisted while the plaintext still verifies`() {
         // Given a paired device
-        val GoWindow = GoOpenWindow()
-        val (GoDeviceId, GoToken) = GoPairedOnce(GoPairing.GoPair(GoWindow.GoPin, "phone-a", "phone"))
+        val window = openWindow()
+        val (deviceId, token) = pairedOnce(pairing.pair(window.pin, "phone-a", "phone"))
 
         // Then the stored hash is NOT the token, and the plaintext still resolves
-        val GoStored = GoRepo.GoGet(GoDeviceId)!!
-        assertThat(GoStored.GoTokenHash).isNotEqualTo(GoToken)
-        assertThat(GoStored.GoTokenHash)
+        val stored = repo.get(deviceId)!!
+        assertThat(stored.tokenHash).isNotEqualTo(token)
+        assertThat(stored.tokenHash)
             .isEqualTo(
                 com.glassstorm.phonemanager.service.security.TokenCodec
-                    .GoHashToken(GoToken),
+                    .hashToken(token),
             )
-        assertThat(GoPairing.GoVerifyToken(GoToken)?.GoDeviceId).isEqualTo(GoDeviceId)
+        assertThat(pairing.verifyToken(token)?.deviceId).isEqualTo(deviceId)
     }
 
     // ---------------------------------------------------- case 10: touch on verify
@@ -237,22 +237,22 @@ class PairingLifecycleTest {
     @Test
     fun `verifying a token bumps the last seen instant`() {
         // Given a paired device whose last-seen is still null
-        val GoWindow = GoOpenWindow()
-        val (GoDeviceId, GoToken) = GoPairedOnce(GoPairing.GoPair(GoWindow.GoPin, "phone-a", "phone"))
-        assertThat(GoRepo.GoGet(GoDeviceId)!!.GoLastSeenMs).isNull()
+        val window = openWindow()
+        val (deviceId, token) = pairedOnce(pairing.pair(window.pin, "phone-a", "phone"))
+        assertThat(repo.get(deviceId)!!.lastSeenMs).isNull()
 
         // When the token is verified at a later instant
-        GoNowMs = 2_000_000L
-        val GoResolved = GoPairing.GoVerifyToken(GoToken)
+        nowMs = 2_000_000L
+        val resolved = pairing.verifyToken(token)
 
         // Then the resolved device is right and the stored last-seen advanced
-        assertThat(GoResolved?.GoDeviceId).isEqualTo(GoDeviceId)
-        assertThat(GoRepo.GoGet(GoDeviceId)!!.GoLastSeenMs).isEqualTo(2_000_000L)
+        assertThat(resolved?.deviceId).isEqualTo(deviceId)
+        assertThat(repo.get(deviceId)!!.lastSeenMs).isEqualTo(2_000_000L)
     }
 
     /** Returns a 6-digit PIN string that is guaranteed different from the window's. */
-    private fun String.GoAsPinOtherThan(window: Pairing): String {
-        val GoCandidate = if (this == window.GoPin) "000000" else this
-        return if (GoCandidate == window.GoPin) "111111" else GoCandidate
+    private fun String.asPinOtherThan(window: Pairing): String {
+        val candidate = if (this == window.pin) "000000" else this
+        return if (candidate == window.pin) "111111" else candidate
     }
 }

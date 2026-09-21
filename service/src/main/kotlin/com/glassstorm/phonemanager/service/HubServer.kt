@@ -13,34 +13,34 @@ import java.util.concurrent.TimeUnit
  * netty-shaded builder (T7), and tests supply an in-process builder. This file
  * depends only on `grpc-api`, which is already on the compile classpath.
  *
- * @param GoNewBuilder builds an unstarted gRPC server for the two hub services
- *        plus the auth interceptor, already bound to [GoStart]'s port. The port
+ * @param newBuilder builds an unstarted gRPC server for the two hub services
+ *        plus the auth interceptor, already bound to [start]'s port. The port
  *        is a factory argument because `ServerBuilder.forPort` is static and the
  *        concrete builder differs per transport (netty vs in-process).
  */
 class GrpcHubServer(
-    private val GoNewBuilder: (port: Int) -> ServerBuilder<*>,
+    private val newBuilder: (port: Int) -> ServerBuilder<*>,
 ) : HubServer {
-    private var GoServer: Server? = null
+    private var server: Server? = null
 
-    override fun GoStart(port: Int) {
-        if (GoIsRunning()) return
-        val GoBuilt = GoNewBuilder(port).build().start()
-        GoServer = GoBuilt
+    override fun start(port: Int) {
+        if (isRunning()) return
+        val built = newBuilder(port).build().start()
+        server = built
     }
 
-    override fun GoStop() {
-        val GoRunning = GoServer ?: return
-        GoServer = null
-        GoRunning.shutdown()
+    override fun stop() {
+        val running = server ?: return
+        server = null
+        running.shutdown()
         // Bounded drain so a stuck handler cannot hang the hub's teardown.
-        if (!GoRunning.awaitTermination(5, TimeUnit.SECONDS)) {
-            GoRunning.shutdownNow()
-            GoRunning.awaitTermination(5, TimeUnit.SECONDS)
+        if (!running.awaitTermination(5, TimeUnit.SECONDS)) {
+            running.shutdownNow()
+            running.awaitTermination(5, TimeUnit.SECONDS)
         }
     }
 
-    override fun GoIsRunning(): Boolean = GoServer?.isShutdown == false
+    override fun isRunning(): Boolean = server?.isShutdown == false
 
-    override fun GoBoundPort(): Int = GoServer?.port ?: 0
+    override fun boundPort(): Int = server?.port ?: 0
 }

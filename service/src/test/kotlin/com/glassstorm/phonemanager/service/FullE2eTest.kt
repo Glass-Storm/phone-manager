@@ -8,10 +8,10 @@ import com.glassstorm.phonemanager.domain.context.Register
 import com.glassstorm.phonemanager.domain.service.PairingService
 import com.glassstorm.phonemanager.domain.service.StreamService
 import com.glassstorm.phonemanager.service.security.AuthInterceptor
-import com.glassstorm.phonemanager.testkit.GoGoBinary
-import com.glassstorm.phonemanager.testkit.GoRepoRoot
-import com.glassstorm.phonemanager.testkit.GoRun
-import com.glassstorm.phonemanager.testkit.GoSyntheticVideoNal
+import com.glassstorm.phonemanager.testkit.goBinary
+import com.glassstorm.phonemanager.testkit.repoRoot
+import com.glassstorm.phonemanager.testkit.run
+import com.glassstorm.phonemanager.testkit.syntheticVideoNal
 import com.glassstorm.phonemanager.testkit.MockPeerDriver
 import com.glassstorm.phonemanager.testkit.MockPeerTranscript
 import com.google.common.truth.Truth.assertThat
@@ -44,81 +44,81 @@ import java.net.InetSocketAddress
  */
 class FullE2eTest {
     @get:Rule
-    val GoDeadline: Timeout = Timeout.seconds(300)
+    val deadline: Timeout = Timeout.seconds(300)
 
-    private lateinit var GoHub: GrpcHubServer
-    private lateinit var GoPairing: PairingServiceImpl
-    private lateinit var GoRepo: FakeDeviceRepository
-    private lateinit var GoStt: FakeSttPort
-    private lateinit var GoSink: FakeFrameSink
-    private lateinit var GoCtx: Context
-    private var GoDriver: MockPeerDriver? = null
-    private var GoPort: Int = 0
+    private lateinit var hub: GrpcHubServer
+    private lateinit var pairing: PairingServiceImpl
+    private lateinit var repo: FakeDeviceRepository
+    private lateinit var stt: FakeSttPort
+    private lateinit var sink: FakeFrameSink
+    private lateinit var ctx: Context
+    private var driver: MockPeerDriver? = null
+    private var port: Int = 0
 
     @Before
-    fun GoStartRealHub() {
-        val GoProbe = GoRun(listOf(GoGoBinary(), "version"), File(System.getProperty("user.dir")))
-        assertWithMessage("Go toolchain unavailable; T18 cannot run: ${GoProbe.stderr}")
-            .that(GoProbe.ok)
+    fun startRealHub() {
+        val probe = run(listOf(goBinary(), "version"), File(System.getProperty("user.dir")))
+        assertWithMessage("Go toolchain unavailable; T18 cannot run: ${probe.stderr}")
+            .that(probe.ok)
             .isTrue()
 
-        GoCtx = Context()
-        GoRepo = FakeDeviceRepository()
-        GoStt = FakeSttPort("full e2e utterance")
-        GoSink = FakeFrameSink()
-        GoPairing = PairingServiceImpl(GoCtx, GoClock = { System.currentTimeMillis() })
-        Register<DeviceRepository>(GoCtx, GoRepo)
-        Register<PairingService>(GoCtx, GoPairing)
-        Register<StreamService>(GoCtx, StreamServiceImpl(GoCtx))
-        Register<SttPort>(GoCtx, GoStt)
-        Register<FrameSink>(GoCtx, GoSink)
+        ctx = Context()
+        repo = FakeDeviceRepository()
+        stt = FakeSttPort("full e2e utterance")
+        sink = FakeFrameSink()
+        pairing = PairingServiceImpl(ctx, clock = { System.currentTimeMillis() })
+        Register<DeviceRepository>(ctx, repo)
+        Register<PairingService>(ctx, pairing)
+        Register<StreamService>(ctx, StreamServiceImpl(ctx))
+        Register<SttPort>(ctx, stt)
+        Register<FrameSink>(ctx, sink)
 
-        GoHub =
+        hub =
             GrpcHubServer { port ->
                 NettyServerBuilder
                     .forAddress(InetSocketAddress("127.0.0.1", port))
-                    .addService(PairingGrpcService(GoCtx))
-                    .addService(StreamGrpcService(GoCtx))
-                    .intercept(AuthInterceptor(GoPairing))
+                    .addService(PairingGrpcService(ctx))
+                    .addService(StreamGrpcService(ctx))
+                    .intercept(AuthInterceptor(pairing))
             }
-        GoHub.GoStart(0)
-        GoPort = GoHub.GoBoundPort()
-        assertThat(GoPort).isGreaterThan(0)
+        hub.start(0)
+        port = hub.boundPort()
+        assertThat(port).isGreaterThan(0)
     }
 
     @After
-    fun GoStopRealHub() {
-        GoDriver?.GoReap()
-        GoDriver = null
-        if (this::GoHub.isInitialized) GoHub.GoStop()
+    fun stopRealHub() {
+        driver?.reap()
+        driver = null
+        if (this::hub.isInitialized) hub.stop()
     }
 
     @Test
     fun `the full scenario produces the ordered transcript and byte exact video`() {
         // Given an open pairing window and a driver bound to the live hub
-        GoDriver =
+        driver =
             MockPeerDriver(
-                GoPort = GoPort,
-                GoOpenWindow = { GoPairing.GoOpenWindow(ttlMs = 120_000).GoPin },
-                GoRevokeAll = { GoPairing.GoListPaired().forEach { GoPairing.GoRevoke(it.GoDeviceId) } },
+                port = port,
+                openWindow = { pairing.openWindow(ttlMs = 120_000).pin },
+                revokeAll = { pairing.listPaired().forEach { pairing.revoke(it.deviceId) } },
             )
 
         // When the peer pairs, heartbeats and streams 10 audio + 10 video frames
-        val GoRun = GoDriver!!.GoPairHeartbeatStream(frames = 10)
-        println("[QA] mockpeer full stdout:\n${GoRun.stdout.trim()}")
-        assertWithMessage("mockpeer stderr: ${GoRun.stderr}")
-            .that(GoRun.exitCode)
+        val run = driver!!.pairHeartbeatStream(frames = 10)
+        println("[QA] mockpeer full stdout:\n${run.stdout.trim()}")
+        assertWithMessage("mockpeer stderr: ${run.stderr}")
+            .that(run.exitCode)
             .isEqualTo(0)
 
         // Then its RAW stdout carries the ordered pair/heartbeat/session lines
-        val GoLines =
-            GoRun.stdout
+        val lines =
+            run.stdout
                 .lines()
                 .map { it.trim() }
                 .filter { it.isNotEmpty() }
-        assertThat(GoLines).containsAtLeast("pair-ok", "heartbeat-ok").inOrder()
-        assertThat(GoRun.stdout).contains("session-ok frames=")
-        assertThat(GoDriver!!.GoFullLines(GoRun))
+        assertThat(lines).containsAtLeast("pair-ok", "heartbeat-ok").inOrder()
+        assertThat(run.stdout).contains("session-ok frames=")
+        assertThat(driver!!.fullLines(run))
             .containsExactly(
                 "pair-ok",
                 "heartbeat-ok",
@@ -127,43 +127,43 @@ class FullE2eTest {
 
         // And the video sink recorded the EXACT bytes the Go peer generated —
         // a real equality check per index, not a length check.
-        assertThat(GoSink.GoVideoNals).hasSize(10)
-        val GoBytesMatch =
-            GoSink.GoVideoNals.withIndex().all { (index, nal) ->
-                nal.contentEquals(GoSyntheticVideoNal(index))
+        assertThat(sink.videoNals).hasSize(10)
+        val bytesMatch =
+            sink.videoNals.withIndex().all { (index, nal) ->
+                nal.contentEquals(syntheticVideoNal(index))
             }
-        GoSink.GoVideoNals.forEachIndexed { index, nal ->
+        sink.videoNals.forEachIndexed { index, nal ->
             assertWithMessage("video NAL #$index was mutated in transit")
                 .that(nal)
-                .isEqualTo(GoSyntheticVideoNal(index))
+                .isEqualTo(syntheticVideoNal(index))
         }
-        assertThat(GoBytesMatch).isTrue()
+        assertThat(bytesMatch).isTrue()
 
         // And the audio really reached STT and produced transcripts on the wire
-        assertThat(GoStt.GoAudioFrameCount).isAtLeast(10)
-        assertThat(GoRun.stdout).contains("transcripts=")
+        assertThat(stt.audioFrameCount).isAtLeast(10)
+        assertThat(run.stdout).contains("transcripts=")
 
         // When the paired device is revoked and the SAME token is replayed
-        val GoRevoked = GoDriver!!.GoRevokedLeg()
+        val revoked = driver!!.revokedLeg()
 
         // Then the hub refuses it with the machine-checkable rejection
-        println("[QA] mockpeer revoked stdout: ${GoRevoked.stdout.trim()} (exit=${GoRevoked.exitCode})")
-        assertThat(GoRevoked.exitCode).isNotEqualTo(0)
-        assertThat(GoRevoked.stdout).contains("UNAUTHENTICATED")
-        val GoRevokedOk = GoRevoked.exitCode != 0 && GoRevoked.stdout.contains("UNAUTHENTICATED")
+        println("[QA] mockpeer revoked stdout: ${revoked.stdout.trim()} (exit=${revoked.exitCode})")
+        assertThat(revoked.exitCode).isNotEqualTo(0)
+        assertThat(revoked.stdout).contains("UNAUTHENTICATED")
+        val revokedOk = revoked.exitCode != 0 && revoked.stdout.contains("UNAUTHENTICATED")
 
         // And the ordered evidence transcript is emitted exactly once
-        val GoTranscript =
-            MockPeerTranscript.GoLines(
+        val transcript =
+            MockPeerTranscript.lines(
                 pairOk = true,
                 heartbeatOk = true,
                 frames = 20,
-                videoBytesMatch = GoBytesMatch,
-                revokedUnauthenticated = GoRevokedOk,
+                videoBytesMatch = bytesMatch,
+                revokedUnauthenticated = revokedOk,
             )
-        println("[QA] service evidence transcript: $GoTranscript")
-        MockPeerTranscript.GoWrite(GoEvidencePath(), "service-full-e2e (jvm harness)", GoTranscript)
-        assertThat(GoTranscript)
+        println("[QA] service evidence transcript: $transcript")
+        MockPeerTranscript.write(evidencePath(), "service-full-e2e (jvm harness)", transcript)
+        assertThat(transcript)
             .containsExactly(
                 "pair-ok",
                 "heartbeat-ok",
@@ -176,23 +176,23 @@ class FullE2eTest {
     @Test
     fun `a wrong pin still fails pairing with a reason and a non zero exit`() {
         // Given an open window whose PIN is NOT 000000
-        val GoWindow = GoPairing.GoOpenWindow(ttlMs = 120_000)
-        assertThat(GoWindow.GoPin).isNotEqualTo("000000")
-        val GoDriver =
+        val window = pairing.openWindow(ttlMs = 120_000)
+        assertThat(window.pin).isNotEqualTo("000000")
+        val driver =
             MockPeerDriver(
-                GoPort = GoPort,
-                GoOpenWindow = { GoWindow.GoPin },
-                GoRevokeAll = {},
+                port = port,
+                openWindow = { window.pin },
+                revokeAll = {},
             )
-        this.GoDriver = GoDriver
+        this.driver = driver
 
         // When the peer pairs with the wrong PIN
-        val GoRun =
-            GoRun(
-                listOf(GoGoBinary(), "run", "./tools/mockpeer") +
+        val run =
+            run(
+                listOf(goBinary(), "run", "./tools/mockpeer") +
                     listOf(
                         "--addr",
-                        "127.0.0.1:$GoPort",
+                        "127.0.0.1:$port",
                         "--pin",
                         "000000",
                         "--scenario",
@@ -200,17 +200,17 @@ class FullE2eTest {
                         "--timeout",
                         "30",
                     ),
-                GoRepoRoot(),
+                repoRoot(),
             )
-        GoRun.process?.let { GoDriver.GoRegisterForReaping(it) }
+        run.process?.let { driver.registerForReaping(it) }
 
         // Then the hub rejects with a machine-checkable reason, never a success
-        println("[QA] mockpeer wrong-pin stdout: ${GoRun.stdout.trim()} (exit=${GoRun.exitCode})")
-        assertThat(GoRun.exitCode).isNotEqualTo(0)
-        assertThat(GoRun.stdout).contains("pair-rejected reason=")
+        println("[QA] mockpeer wrong-pin stdout: ${run.stdout.trim()} (exit=${run.exitCode})")
+        assertThat(run.exitCode).isNotEqualTo(0)
+        assertThat(run.stdout).contains("pair-rejected reason=")
     }
 
-    private fun GoEvidencePath(): String = File(GoRepoRoot(), GO_EVIDENCE_RELATIVE).absolutePath
+    private fun evidencePath(): String = File(repoRoot(), GO_EVIDENCE_RELATIVE).absolutePath
 
     private companion object {
         const val GO_EVIDENCE_RELATIVE: String = ".omo/evidence/task-18-phone-manager-bootstrap.txt"

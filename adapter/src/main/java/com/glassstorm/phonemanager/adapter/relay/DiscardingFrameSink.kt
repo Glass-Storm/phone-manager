@@ -27,7 +27,7 @@ class DiscardingFrameSink : FrameSink {
      * decode. The relay's byte-exactness guarantee is what the E2E asserts at the
      * port boundary.
      */
-    override fun GoAcceptVideo(
+    override fun acceptVideo(
         sessionId: String,
         h264Nal: ByteArray,
     ) = Unit

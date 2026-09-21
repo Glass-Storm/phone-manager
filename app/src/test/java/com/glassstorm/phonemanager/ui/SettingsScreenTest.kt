@@ -42,241 +42,241 @@ class SettingsScreenTest {
 
     @Test
     fun `renders the unavailable state when the config port is absent`() {
-        composeRule.GoSetSettingsContent(Context())
+        composeRule.setSettingsContent(Context())
 
-        composeRule.GoAssertText("Settings")
-        composeRule.GoAssertText("Configuration not available")
+        composeRule.assertText("Settings")
+        composeRule.assertText("Configuration not available")
     }
 
     @Test
     fun `the configured engine and region render as the current selection`() {
-        val GoConfig =
+        val config =
             FakeAppConfig(
-                GoEngine = SttEngine.SPEECHMATICS,
-                GoRegionValue = "eu",
+                engine = SttEngine.SPEECHMATICS,
+                regionValue = "eu",
             )
-        val GoCtx = Context().also { Register<AppConfig>(it, GoConfig) }
+        val ctx = Context().also { Register<AppConfig>(it, config) }
 
-        composeRule.GoSetSettingsContent(GoCtx)
+        composeRule.setSettingsContent(ctx)
 
-        composeRule.GoAssertText("Speech engine")
-        composeRule.GoAssertText("Current engine: Speechmatics")
-        composeRule.GoAssertText("Current region: eu")
+        composeRule.assertText("Speech engine")
+        composeRule.assertText("Current engine: Speechmatics")
+        composeRule.assertText("Current region: eu")
     }
 
     @Test
     fun `selecting the cloud engine persists it through the port`() {
-        val GoConfig = FakeAppConfig(GoEngine = SttEngine.MOCK)
-        val GoCtx = Context().also { Register<AppConfig>(it, GoConfig) }
+        val config = FakeAppConfig(engine = SttEngine.MOCK)
+        val ctx = Context().also { Register<AppConfig>(it, config) }
 
-        composeRule.GoSetSettingsContent(GoCtx)
-        composeRule.GoAssertText("Current engine: Mock (offline)")
+        composeRule.setSettingsContent(ctx)
+        composeRule.assertText("Current engine: Mock (offline)")
 
-        composeRule.GoClick("Use Speechmatics")
+        composeRule.click("Use Speechmatics")
 
-        assertThat(GoConfig.GoSttEngine()).isEqualTo(SttEngine.SPEECHMATICS)
-        composeRule.GoAssertText("Current engine: Speechmatics")
+        assertThat(config.sttEngine()).isEqualTo(SttEngine.SPEECHMATICS)
+        composeRule.assertText("Current engine: Speechmatics")
     }
 
     @Test
     fun `selecting a region persists it through the port`() {
-        val GoConfig = FakeAppConfig(GoRegionValue = "us")
-        val GoCtx = Context().also { Register<AppConfig>(it, GoConfig) }
+        val config = FakeAppConfig(regionValue = "us")
+        val ctx = Context().also { Register<AppConfig>(it, config) }
 
-        composeRule.GoSetSettingsContent(GoCtx)
-        composeRule.GoAssertText("Current region: us")
+        composeRule.setSettingsContent(ctx)
+        composeRule.assertText("Current region: us")
 
-        composeRule.GoClick("Region au")
+        composeRule.click("Region au")
 
-        assertThat(GoConfig.GoRegion()).isEqualTo("au")
-        composeRule.GoAssertText("Current region: au")
+        assertThat(config.region()).isEqualTo("au")
+        composeRule.assertText("Current region: au")
     }
 
     @Test
     fun `selecting the automatic hotspot mode persists it through the port`() {
-        val GoConfig = FakeAppConfig(GoMode = HotspotMode.MANUAL)
-        val GoCtx = Context().also { Register<AppConfig>(it, GoConfig) }
+        val config = FakeAppConfig(mode = HotspotMode.MANUAL)
+        val ctx = Context().also { Register<AppConfig>(it, config) }
 
-        composeRule.GoSetSettingsContent(GoCtx)
-        composeRule.GoAssertText("Hotspot mode: Manual")
+        composeRule.setSettingsContent(ctx)
+        composeRule.assertText("Hotspot mode: Manual")
 
-        composeRule.GoClick("Hotspot mode Auto")
+        composeRule.click("Hotspot mode Auto")
 
-        assertThat(GoConfig.GoHotspotMode()).isEqualTo(HotspotMode.AUTO)
-        composeRule.GoAssertText("Hotspot mode: Auto")
+        assertThat(config.hotspotMode()).isEqualTo(HotspotMode.AUTO)
+        composeRule.assertText("Hotspot mode: Auto")
     }
 
     @Test
     fun `a stored api key is never rendered in cleartext by default`() {
         // Given a store holding a recognizable key
-        val GoConfig = FakeAppConfig(GoStoredKey = "sk-SECRET-SENTINEL-1234")
-        val GoCtx = Context().also { Register<AppConfig>(it, GoConfig) }
+        val config = FakeAppConfig(storedKey = "sk-SECRET-SENTINEL-1234")
+        val ctx = Context().also { Register<AppConfig>(it, config) }
 
-        composeRule.GoSetSettingsContent(GoCtx)
+        composeRule.setSettingsContent(ctx)
 
         // When the whole semantics tree is searched for the raw key
         // Then it is absent, and a masked password field is present instead
-        assertThat(composeRule.GoMaskedPasswordFieldCount()).isAtLeast(1)
-        assertThat(composeRule.GoCleartextKeyNodeCount("sk-SECRET-SENTINEL-1234")).isEqualTo(0)
-        composeRule.GoAssertText("API key configured: yes")
+        assertThat(composeRule.maskedPasswordFieldCount()).isAtLeast(1)
+        assertThat(composeRule.cleartextKeyNodeCount("sk-SECRET-SENTINEL-1234")).isEqualTo(0)
+        composeRule.assertText("API key configured: yes")
     }
 
     @Test
     fun `a fresh install with no key renders the not-configured state and stays masked`() {
-        val GoConfig = FakeAppConfig(GoStoredKey = "")
-        val GoCtx = Context().also { Register<AppConfig>(it, GoConfig) }
+        val config = FakeAppConfig(storedKey = "")
+        val ctx = Context().also { Register<AppConfig>(it, config) }
 
-        composeRule.GoSetSettingsContent(GoCtx)
+        composeRule.setSettingsContent(ctx)
 
-        composeRule.GoAssertText("API key configured: no")
+        composeRule.assertText("API key configured: no")
         // The input is still a masked password field even when empty, so the shape
         // never changes between configured and unconfigured states.
-        assertThat(composeRule.GoMaskedPasswordFieldCount()).isAtLeast(1)
-        assertThat(composeRule.GoCleartextKeyNodeCount("sk-SECRET-SENTINEL-1234")).isEqualTo(0)
+        assertThat(composeRule.maskedPasswordFieldCount()).isAtLeast(1)
+        assertThat(composeRule.cleartextKeyNodeCount("sk-SECRET-SENTINEL-1234")).isEqualTo(0)
     }
 
     @Test
     fun `an empty api key submission never crashes and keeps the unconfigured state`() {
-        val GoConfig = FakeAppConfig(GoStoredKey = "")
-        val GoCtx = Context().also { Register<AppConfig>(it, GoConfig) }
+        val config = FakeAppConfig(storedKey = "")
+        val ctx = Context().also { Register<AppConfig>(it, config) }
 
-        composeRule.GoSetSettingsContent(GoCtx)
-        composeRule.GoClick("Set API key")
+        composeRule.setSettingsContent(ctx)
+        composeRule.click("Set API key")
 
-        assertThat(GoConfig.GoApiKey()).isEmpty()
-        composeRule.GoAssertText("API key configured: no")
+        assertThat(config.apiKey()).isEmpty()
+        composeRule.assertText("API key configured: no")
     }
 
     @Test
     fun `a newly typed api key is persisted and reported as configured`() {
-        val GoConfig = FakeAppConfig(GoStoredKey = "")
-        val GoCtx = Context().also { Register<AppConfig>(it, GoConfig) }
+        val config = FakeAppConfig(storedKey = "")
+        val ctx = Context().also { Register<AppConfig>(it, config) }
 
-        composeRule.GoSetSettingsContent(GoCtx)
-        composeRule.GoTypeIntoField("sk-typed-777")
-        composeRule.GoClick("Set API key")
+        composeRule.setSettingsContent(ctx)
+        composeRule.typeIntoField("sk-typed-777")
+        composeRule.click("Set API key")
 
-        assertThat(GoConfig.GoApiKey()).isEqualTo("sk-typed-777")
-        composeRule.GoAssertText("API key configured: yes")
+        assertThat(config.apiKey()).isEqualTo("sk-typed-777")
+        composeRule.assertText("API key configured: yes")
         // The newly stored key is still not on screen in cleartext.
-        assertThat(composeRule.GoCleartextKeyNodeCount("sk-typed-777")).isEqualTo(0)
+        assertThat(composeRule.cleartextKeyNodeCount("sk-typed-777")).isEqualTo(0)
     }
 
     @Test
     fun `revealing the api key takes an explicit action`() {
-        val GoConfig = FakeAppConfig(GoStoredKey = "sk-SECRET-SENTINEL-1234")
-        val GoCtx = Context().also { Register<AppConfig>(it, GoConfig) }
+        val config = FakeAppConfig(storedKey = "sk-SECRET-SENTINEL-1234")
+        val ctx = Context().also { Register<AppConfig>(it, config) }
 
-        composeRule.GoSetSettingsContent(GoCtx)
-        composeRule.GoAssertText("Show API key")
+        composeRule.setSettingsContent(ctx)
+        composeRule.assertText("Show API key")
 
-        composeRule.GoClick("Show API key")
+        composeRule.click("Show API key")
 
         // Only after the explicit toggle may the cleartext be rendered.
-        assertThat(composeRule.GoCleartextKeyNodeCount("sk-SECRET-SENTINEL-1234")).isAtLeast(1)
-        composeRule.GoAssertText("Hide API key")
+        assertThat(composeRule.cleartextKeyNodeCount("sk-SECRET-SENTINEL-1234")).isAtLeast(1)
+        composeRule.assertText("Hide API key")
     }
 
     @Test
     fun `the exemption button reflects the current state and requests when pressed`() {
-        val GoConfig = FakeAppConfig()
-        val GoBattery = FakeBatteryExemption(GoExempt = false)
-        val GoCtx =
+        val config = FakeAppConfig()
+        val battery = FakeBatteryExemption(exempt = false)
+        val ctx =
             Context().also {
-                Register<AppConfig>(it, GoConfig)
-                Register<BatteryExemption>(it, GoBattery)
+                Register<AppConfig>(it, config)
+                Register<BatteryExemption>(it, battery)
             }
 
-        composeRule.GoSetSettingsContent(GoCtx)
-        composeRule.GoAssertText("Battery optimization: not exempt")
+        composeRule.setSettingsContent(ctx)
+        composeRule.assertText("Battery optimization: not exempt")
 
-        composeRule.GoClick("Request battery exemption")
+        composeRule.click("Request battery exemption")
 
-        assertThat(GoBattery.GoRequestCalls).isEqualTo(1)
+        assertThat(battery.requestCalls).isEqualTo(1)
     }
 
     @Test
     fun `an already exempt app renders the exempt state`() {
-        val GoCtx =
+        val ctx =
             Context().also {
                 Register<AppConfig>(it, FakeAppConfig())
-                Register<BatteryExemption>(it, FakeBatteryExemption(GoExempt = true))
+                Register<BatteryExemption>(it, FakeBatteryExemption(exempt = true))
             }
 
-        composeRule.GoSetSettingsContent(GoCtx)
+        composeRule.setSettingsContent(ctx)
 
-        composeRule.GoAssertText("Battery optimization: exempt")
+        composeRule.assertText("Battery optimization: exempt")
     }
 
     @Test
     fun `the protocol and the bound hub port are displayed`() {
-        val GoCtx =
+        val ctx =
             Context().also {
                 Register<AppConfig>(it, FakeAppConfig())
-                Register<HubServer>(it, FakeHubServer(GoBoundPortValue = 40404).also { it.GoStart(0) })
+                Register<HubServer>(it, FakeHubServer(boundPortValue = 40404).also { it.start(0) })
             }
 
-        composeRule.GoSetSettingsContent(GoCtx)
+        composeRule.setSettingsContent(ctx)
 
-        composeRule.GoAssertText("Protocol: ecosys.v1")
-        composeRule.GoAssertText("Hub port: 40404")
+        composeRule.assertText("Protocol: ecosys.v1")
+        composeRule.assertText("Hub port: 40404")
     }
 
     @Test
     fun `a stopped hub renders a zero port without crashing`() {
-        val GoCtx =
+        val ctx =
             Context().also {
                 Register<AppConfig>(it, FakeAppConfig())
-                Register<HubServer>(it, FakeHubServer(GoBoundPortValue = 40404))
+                Register<HubServer>(it, FakeHubServer(boundPortValue = 40404))
             }
 
-        composeRule.GoSetSettingsContent(GoCtx)
+        composeRule.setSettingsContent(ctx)
 
-        composeRule.GoAssertText("Hub port: 0")
+        composeRule.assertText("Hub port: 0")
     }
 
-    private fun ComposeContentTestRule.GoSetSettingsContent(GoCtx: Context) {
+    private fun ComposeContentTestRule.setSettingsContent(ctx: Context) {
         setContent {
             AppTheme {
-                SettingsScreen(GoContext = GoCtx)
+                SettingsScreen(context = ctx)
             }
         }
     }
 
-    private fun ComposeContentTestRule.GoAssertText(text: String) {
+    private fun ComposeContentTestRule.assertText(text: String) {
         onNodeWithText(text).performScrollTo().assertIsDisplayed()
     }
 
-    private fun ComposeContentTestRule.GoClick(text: String) {
+    private fun ComposeContentTestRule.click(text: String) {
         onNodeWithText(text).performScrollTo().performClick()
         waitForIdle()
     }
 
-    private fun ComposeContentTestRule.GoTypeIntoField(text: String) {
+    private fun ComposeContentTestRule.typeIntoField(text: String) {
         onNode(
-            SemanticsMatcher("is the api key input") { GoNode ->
-                GoNode.config.getOrNull(SemanticsProperties.Password) != null
+            SemanticsMatcher("is the api key input") { node ->
+                node.config.getOrNull(SemanticsProperties.Password) != null
             },
         ).performScrollTo().performTextInput(text)
         waitForIdle()
     }
 
     /** Nodes that are text INPUTS marked as password fields (the masked shape). */
-    private fun ComposeContentTestRule.GoMaskedPasswordFieldCount(): Int =
+    private fun ComposeContentTestRule.maskedPasswordFieldCount(): Int =
         onAllNodes(
-            SemanticsMatcher("is a password input") { GoNode ->
-                GoNode.config.getOrNull(SemanticsProperties.Password) != null
+            SemanticsMatcher("is a password input") { node ->
+                node.config.getOrNull(SemanticsProperties.Password) != null
             },
         ).fetchSemanticsNodes().size
 
     /** Nodes whose rendered text CONTAINS [key]: 0 means the key is not on screen. */
-    private fun ComposeContentTestRule.GoCleartextKeyNodeCount(key: String): Int =
+    private fun ComposeContentTestRule.cleartextKeyNodeCount(key: String): Int =
         onAllNodes(
-            SemanticsMatcher("renders the api key in cleartext") { GoNode ->
-                val GoText = GoNode.config.getOrNull(SemanticsProperties.Text)
-                val GoEditable = GoNode.config.getOrNull(SemanticsProperties.EditableText)
-                GoText?.any { it.text.contains(key) } == true ||
-                    GoEditable?.text?.contains(key) == true
+            SemanticsMatcher("renders the api key in cleartext") { node ->
+                val text = node.config.getOrNull(SemanticsProperties.Text)
+                val editable = node.config.getOrNull(SemanticsProperties.EditableText)
+                text?.any { it.text.contains(key) } == true ||
+                    editable?.text?.contains(key) == true
             },
         ).fetchSemanticsNodes().size
 }

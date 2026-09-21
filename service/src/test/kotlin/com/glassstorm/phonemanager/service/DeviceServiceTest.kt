@@ -17,124 +17,124 @@ import org.junit.Test
  */
 class DeviceServiceTest {
     /** Test-local fake of the domain port — deliberately NOT the `:adapter` class. */
-    private class GoFakeDeviceRepository : DeviceRepository {
-        private val GoRows: MutableMap<String, Device> = mutableMapOf()
+    private class FakeDeviceRepository : DeviceRepository {
+        private val rows: MutableMap<String, Device> = mutableMapOf()
 
-        override fun GoUpsert(device: Device) {
-            GoRows[device.GoDeviceId] = device
+        override fun upsert(device: Device) {
+            rows[device.deviceId] = device
         }
 
-        override fun GoGet(deviceId: String): Device? = GoRows[deviceId]
+        override fun get(deviceId: String): Device? = rows[deviceId]
 
-        override fun GoGetByTokenHash(tokenHash: String): Device? = GoRows.values.firstOrNull { it.GoTokenHash == tokenHash }
+        override fun getByTokenHash(tokenHash: String): Device? = rows.values.firstOrNull { it.tokenHash == tokenHash }
 
-        override fun GoList(): List<Device> = GoRows.values.sortedBy { it.GoDeviceId }
+        override fun list(): List<Device> = rows.values.sortedBy { it.deviceId }
 
-        override fun GoTouch(
+        override fun touch(
             deviceId: String,
             seenAtMs: Long,
         ) {
-            val GoExisting = GoRows[deviceId] ?: return
-            GoRows[deviceId] = GoExisting.copy(GoLastSeenMs = seenAtMs)
+            val existing = rows[deviceId] ?: return
+            rows[deviceId] = existing.copy(lastSeenMs = seenAtMs)
         }
 
-        override fun GoDelete(deviceId: String) {
-            GoRows.remove(deviceId)
+        override fun delete(deviceId: String) {
+            rows.remove(deviceId)
         }
     }
 
     @Test
     fun `service works with a fake adapter registered under the domain interface`() {
         // Given a Context holding a DeviceRepository under the domain port type
-        val GoCtx = Context()
-        Register<DeviceRepository>(GoCtx, GoFakeDeviceRepository())
-        val GoService = DeviceServiceImpl(GoCtx)
-        val GoDevice =
+        val ctx = Context()
+        Register<DeviceRepository>(ctx, FakeDeviceRepository())
+        val service = DeviceServiceImpl(ctx)
+        val device =
             Device(
-                GoDeviceId = "d-1",
-                GoDeviceName = "glass",
-                GoRole = "GLASS",
-                GoTokenHash = "hash-d-1",
-                GoPairedAtMs = 1_000L,
-                GoLastSeenMs = null,
+                deviceId = "d-1",
+                deviceName = "glass",
+                role = "GLASS",
+                tokenHash = "hash-d-1",
+                pairedAtMs = 1_000L,
+                lastSeenMs = null,
             )
 
         // When the service is used
-        GoService.GoRegisterDevice(GoDevice)
+        service.registerDevice(device)
 
         // Then it delegated to the registered interface implementation
-        assertThat(GoService.GoListDevices()).containsExactly(GoDevice)
-        assertThat(FromContext<DeviceRepository>(GoCtx).GoGet("d-1")).isEqualTo(GoDevice)
+        assertThat(service.listDevices()).containsExactly(device)
+        assertThat(FromContext<DeviceRepository>(ctx).get("d-1")).isEqualTo(device)
     }
 
     @Test
     fun `service resolves the interface type, so any implementation is interchangeable`() {
         // Given a Context holding only the interface binding
-        val GoCtx = Context()
-        Register<DeviceRepository>(GoCtx, GoFakeDeviceRepository())
-        val GoServiceA = DeviceServiceImpl(GoCtx)
-        val GoServiceB = DeviceServiceImpl(Context().also { Register<DeviceRepository>(it, GoFakeDeviceRepository()) })
+        val ctx = Context()
+        Register<DeviceRepository>(ctx, FakeDeviceRepository())
+        val serviceA = DeviceServiceImpl(ctx)
+        val serviceB = DeviceServiceImpl(Context().also { Register<DeviceRepository>(it, FakeDeviceRepository()) })
 
         // When each service registers a distinct device
-        GoServiceA.GoRegisterDevice(
+        serviceA.registerDevice(
             Device(
-                GoDeviceId = "a",
-                GoDeviceName = "A",
-                GoRole = "GLASS",
-                GoTokenHash = "hash-a",
-                GoPairedAtMs = 1_000L,
-                GoLastSeenMs = null,
+                deviceId = "a",
+                deviceName = "A",
+                role = "GLASS",
+                tokenHash = "hash-a",
+                pairedAtMs = 1_000L,
+                lastSeenMs = null,
             ),
         )
-        GoServiceB.GoRegisterDevice(
+        serviceB.registerDevice(
             Device(
-                GoDeviceId = "b",
-                GoDeviceName = "B",
-                GoRole = "DAEMON",
-                GoTokenHash = "hash-b",
-                GoPairedAtMs = 2_000L,
-                GoLastSeenMs = null,
+                deviceId = "b",
+                deviceName = "B",
+                role = "DAEMON",
+                tokenHash = "hash-b",
+                pairedAtMs = 2_000L,
+                lastSeenMs = null,
             ),
         )
 
         // Then their stores are independent, proving resolution is by interface binding
-        assertThat(GoServiceA.GoListDevices().map { it.GoDeviceId }).containsExactly("a")
-        assertThat(GoServiceB.GoListDevices().map { it.GoDeviceId }).containsExactly("b")
+        assertThat(serviceA.listDevices().map { it.deviceId }).containsExactly("a")
+        assertThat(serviceB.listDevices().map { it.deviceId }).containsExactly("b")
     }
 
     @Test
     fun `service throws when no collaborator is registered`() {
         // Given an empty Context
-        val GoCtx = Context()
-        val GoService = DeviceServiceImpl(GoCtx)
+        val ctx = Context()
+        val service = DeviceServiceImpl(ctx)
 
         // When/Then the missing binding surfaces as the typed absence error
         assertThrows(MissingFromContextException::class.java) {
-            GoService.GoListDevices()
+            service.listDevices()
         }
     }
 
     @Test
     fun `registry can hold the service itself under its domain interface`() {
         // Given a wired Context (the composition-root pattern)
-        val GoCtx = Context()
-        Register<DeviceRepository>(GoCtx, GoFakeDeviceRepository())
-        Register<DeviceService>(GoCtx, DeviceServiceImpl(GoCtx))
+        val ctx = Context()
+        Register<DeviceRepository>(ctx, FakeDeviceRepository())
+        Register<DeviceService>(ctx, DeviceServiceImpl(ctx))
 
         // When the app resolves the service by interface
-        val GoResolved = FromContext<DeviceService>(GoCtx)
-        GoResolved.GoRegisterDevice(
+        val resolved = FromContext<DeviceService>(ctx)
+        resolved.registerDevice(
             Device(
-                GoDeviceId = "x",
-                GoDeviceName = "X",
-                GoRole = "GLASS",
-                GoTokenHash = "hash-x",
-                GoPairedAtMs = 1_000L,
-                GoLastSeenMs = null,
+                deviceId = "x",
+                deviceName = "X",
+                role = "GLASS",
+                tokenHash = "hash-x",
+                pairedAtMs = 1_000L,
+                lastSeenMs = null,
             ),
         )
 
         // Then it is usable through the port
-        assertThat(GoResolved.GoListDevices().map { it.GoDeviceId }).containsExactly("x")
+        assertThat(resolved.listDevices().map { it.deviceId }).containsExactly("x")
     }
 }

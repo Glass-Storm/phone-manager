@@ -21,11 +21,11 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [29])
 class ManifestPermissionMatrixTest {
-    private val GoContext: Context = ApplicationProvider.getApplicationContext()
+    private val context: Context = ApplicationProvider.getApplicationContext()
 
-    private fun GoRequestedPermissions(): List<String> =
-        GoContext.packageManager
-            .getPackageInfo(GoContext.packageName, PackageManager.GET_PERMISSIONS)
+    private fun requestedPermissions(): List<String> =
+        context.packageManager
+            .getPackageInfo(context.packageName, PackageManager.GET_PERMISSIONS)
             .requestedPermissions
             ?.toList()
             ?: emptyList()
@@ -33,10 +33,10 @@ class ManifestPermissionMatrixTest {
     @Test
     fun `the packaged manifest declares every hub permission`() {
         // Given the merged manifest
-        val GoRequested = GoRequestedPermissions()
+        val requested = requestedPermissions()
 
         // Then every permission the hub's code paths rely on is declared
-        assertThat(GoRequested).containsAtLeast(
+        assertThat(requested).containsAtLeast(
             Manifest.permission.INTERNET,
             Manifest.permission.ACCESS_NETWORK_STATE,
             Manifest.permission.ACCESS_WIFI_STATE,
@@ -53,16 +53,16 @@ class ManifestPermissionMatrixTest {
     @Test
     fun `the hub service stays unexported and connected-device typed`() {
         // Given the merged manifest's service entry
-        val GoService =
-            GoContext.packageManager.getServiceInfo(
-                ComponentName(GoContext, HubForegroundService::class.java),
+        val service =
+            context.packageManager.getServiceInfo(
+                ComponentName(context, HubForegroundService::class.java),
                 0,
             )
 
         // Then it is not exported and declares the connectedDevice foreground type,
         // so only this app may start its hub and the OS accepts the type
-        assertThat(GoService.exported).isFalse()
-        assertThat(GoService.foregroundServiceType)
+        assertThat(service.exported).isFalse()
+        assertThat(service.foregroundServiceType)
             .isEqualTo(ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
     }
 }

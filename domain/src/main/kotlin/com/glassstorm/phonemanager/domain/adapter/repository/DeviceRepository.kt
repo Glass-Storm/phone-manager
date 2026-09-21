@@ -9,18 +9,18 @@ import com.glassstorm.phonemanager.domain.dto.Device
  * and resolved by `:service` through the Context registry.
  */
 interface DeviceRepository {
-    fun GoUpsert(device: Device)
+    fun upsert(device: Device)
 
-    fun GoGet(deviceId: String): Device?
+    fun get(deviceId: String): Device?
 
-    fun GoGetByTokenHash(tokenHash: String): Device?
+    fun getByTokenHash(tokenHash: String): Device?
 
-    fun GoList(): List<Device>
+    fun list(): List<Device>
 
-    fun GoTouch(
+    fun touch(
         deviceId: String,
         seenAtMs: Long,
     )
 
-    fun GoDelete(deviceId: String)
+    fun delete(deviceId: String)
 }

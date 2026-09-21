@@ -21,8 +21,8 @@ import kotlinx.coroutines.flow.asStateFlow
  *
  * ## The API key never reaches the screen in cleartext by default
  *
- * The stored key is loaded into [SettingsUiState.GoApiKeyDraft] so it can be
- * replaced, but [SettingsUiState.GoApiKeyVisible] is `false` until the user asks to
+ * The stored key is loaded into [SettingsUiState.apiKeyDraft] so it can be
+ * replaced, but [SettingsUiState.apiKeyVisible] is `false` until the user asks to
  * reveal it, and the screen renders the field through a password transformation in
  * that state. The key is therefore present for editing but unreadable on screen —
  * exactly the reference client's posture.
@@ -31,83 +31,83 @@ import kotlinx.coroutines.flow.asStateFlow
  * updates on the frame the user acted.
  */
 class SettingsViewModel(
-    private val GoContext: Context,
+    private val context: Context,
 ) : ViewModel() {
-    private val GoConfig: AppConfig? = FromContextOrNull<AppConfig>(GoContext)
-    private val GoHub: HubServer? = FromContextOrNull<HubServer>(GoContext)
-    private val GoBattery: BatteryExemption? = FromContextOrNull<BatteryExemption>(GoContext)
+    private val config: AppConfig? = FromContextOrNull<AppConfig>(context)
+    private val hub: HubServer? = FromContextOrNull<HubServer>(context)
+    private val battery: BatteryExemption? = FromContextOrNull<BatteryExemption>(context)
 
-    private val GoState = MutableStateFlow(SettingsUiState())
+    private val state = MutableStateFlow(SettingsUiState())
 
-    val GoUiState: StateFlow<SettingsUiState> = GoState.asStateFlow()
+    val uiState: StateFlow<SettingsUiState> = state.asStateFlow()
 
     init {
-        GoRefresh()
+        refresh()
     }
 
     /** Persist the chosen speech engine and re-render the selection. */
-    fun GoOnSelectEngine(kind: SttEngine) {
-        GoConfig?.GoSetSttEngine(kind)
-        GoRefresh()
+    fun onSelectEngine(kind: SttEngine) {
+        config?.setSttEngine(kind)
+        refresh()
     }
 
     /** Persist the chosen region. An unsupported value is ignored by the port. */
-    fun GoOnSelectRegion(region: String) {
-        GoConfig?.GoSetRegion(region)
-        GoRefresh()
+    fun onSelectRegion(region: String) {
+        config?.setRegion(region)
+        refresh()
     }
 
     /** Persist the chosen hotspot mode and re-render it. */
-    fun GoOnSelectHotspotMode(mode: HotspotMode) {
-        GoConfig?.GoSetHotspotMode(mode)
-        GoRefresh()
+    fun onSelectHotspotMode(mode: HotspotMode) {
+        config?.setHotspotMode(mode)
+        refresh()
     }
 
     /** Track the field's content without persisting it yet. */
-    fun GoOnApiKeyDraftChanged(draft: String) {
-        GoState.value = GoState.value.copy(GoApiKeyDraft = draft)
+    fun onApiKeyDraftChanged(draft: String) {
+        state.value = state.value.copy(apiKeyDraft = draft)
     }
 
     /** Persist the current draft; a blank draft clears the stored key. */
-    fun GoOnSaveApiKey() {
-        GoConfig?.GoSetApiKey(GoState.value.GoApiKeyDraft)
-        GoRefresh()
+    fun onSaveApiKey() {
+        config?.setApiKey(state.value.apiKeyDraft)
+        refresh()
     }
 
     /** Toggle whether the field renders the key in cleartext. Explicit, never default. */
-    fun GoOnToggleApiKeyVisibility() {
-        GoState.value = GoState.value.copy(GoApiKeyVisible = !GoState.value.GoApiKeyVisible)
+    fun onToggleApiKeyVisibility() {
+        state.value = state.value.copy(apiKeyVisible = !state.value.apiKeyVisible)
     }
 
     /** Ask the platform for the Doze exemption. */
-    fun GoOnRequestBatteryExemption() {
-        GoBattery?.GoRequestExemption()
-        GoRefresh()
+    fun onRequestBatteryExemption() {
+        battery?.requestExemption()
+        refresh()
     }
 
-    fun GoOnRefresh() {
-        GoRefresh()
+    fun onRefresh() {
+        refresh()
     }
 
-    private fun GoRefresh() {
-        val GoPort = GoConfig
-        if (GoPort == null) {
-            GoState.value = SettingsUiState(GoConfigAvailable = false)
+    private fun refresh() {
+        val port = config
+        if (port == null) {
+            state.value = SettingsUiState(configAvailable = false)
             return
         }
-        GoState.value =
+        state.value =
             SettingsUiState(
-                GoConfigAvailable = true,
-                GoSttEngine = GoPort.GoSttEngine().GoLabel(),
-                GoRegion = GoPort.GoRegion(),
-                GoHotspotMode = GoPort.GoHotspotMode().GoLabel(),
-                GoApiKeyConfigured = GoPort.GoApiKey().isNotEmpty(),
-                GoApiKeyDraft = GoPort.GoApiKey(),
-                GoApiKeyVisible = GoState.value.GoApiKeyVisible,
-                GoBatteryExempt = GoBattery?.GoIsExempt() ?: false,
-                GoBatteryAvailable = GoBattery != null,
-                GoProtocol = GO_PROTOCOL,
-                GoHubPort = GoHub?.GoBoundPort() ?: 0,
+                configAvailable = true,
+                sttEngine = port.sttEngine().label(),
+                region = port.region(),
+                hotspotMode = port.hotspotMode().label(),
+                apiKeyConfigured = port.apiKey().isNotEmpty(),
+                apiKeyDraft = port.apiKey(),
+                apiKeyVisible = state.value.apiKeyVisible,
+                batteryExempt = battery?.isExempt() ?: false,
+                batteryAvailable = battery != null,
+                protocol = GO_PROTOCOL,
+                hubPort = hub?.boundPort() ?: 0,
             )
     }
 
@@ -117,13 +117,13 @@ class SettingsViewModel(
     }
 }
 
-private fun SttEngine.GoLabel(): String =
+private fun SttEngine.label(): String =
     when (this) {
         SttEngine.MOCK -> "Mock (offline)"
         SttEngine.SPEECHMATICS -> "Speechmatics"
     }
 
-private fun HotspotMode.GoLabel(): String =
+private fun HotspotMode.label(): String =
     when (this) {
         HotspotMode.MANUAL -> "Manual"
         HotspotMode.AUTO -> "Auto"

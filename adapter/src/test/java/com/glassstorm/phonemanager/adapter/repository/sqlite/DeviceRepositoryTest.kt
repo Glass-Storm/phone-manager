@@ -19,24 +19,24 @@ import org.robolectric.RobolectricTestRunner
  */
 @RunWith(RobolectricTestRunner::class)
 class SqliteDeviceRepositoryTest {
-    private lateinit var GoContext: Context
-    private lateinit var GoDatabaseName: String
-    private lateinit var GoRepo: SqliteDeviceRepository
+    private lateinit var context: Context
+    private lateinit var databaseName: String
+    private lateinit var repo: SqliteDeviceRepository
 
     @Before
     fun setUp() {
-        GoContext = ApplicationProvider.getApplicationContext()
-        GoDatabaseName = "device-repo-test-${System.nanoTime()}.db"
-        GoRepo = SqliteDeviceRepository(GoContext, GoDatabaseName)
+        context = ApplicationProvider.getApplicationContext()
+        databaseName = "device-repo-test-${System.nanoTime()}.db"
+        repo = SqliteDeviceRepository(context, databaseName)
     }
 
     @After
     fun tearDown() {
-        GoRepo.close()
-        GoContext.deleteDatabase(GoDatabaseName)
+        repo.close()
+        context.deleteDatabase(databaseName)
     }
 
-    private fun GoPairedDevice(
+    private fun pairedDevice(
         id: String,
         name: String = "glass",
         role: String = "GLASS",
@@ -45,22 +45,22 @@ class SqliteDeviceRepositoryTest {
         lastSeenMs: Long? = null,
     ): Device =
         Device(
-            GoDeviceId = id,
-            GoDeviceName = name,
-            GoRole = role,
-            GoTokenHash = tokenHash,
-            GoPairedAtMs = pairedAtMs,
-            GoLastSeenMs = lastSeenMs,
+            deviceId = id,
+            deviceName = name,
+            role = role,
+            tokenHash = tokenHash,
+            pairedAtMs = pairedAtMs,
+            lastSeenMs = lastSeenMs,
         )
 
-    private fun GoRowCount(): Int =
-        GoRepo.readableDatabase.rawQuery("SELECT COUNT(*) FROM paired_device", null).use {
+    private fun rowCount(): Int =
+        repo.readableDatabase.rawQuery("SELECT COUNT(*) FROM paired_device", null).use {
             it.moveToFirst()
             it.getInt(0)
         }
 
-    private fun GoTableNames(): Set<String> =
-        GoRepo.readableDatabase
+    private fun tableNames(): Set<String> =
+        repo.readableDatabase
             .rawQuery("SELECT name FROM sqlite_master WHERE type = 'table'", null)
             .use { cursor ->
                 buildSet {
@@ -71,103 +71,103 @@ class SqliteDeviceRepositoryTest {
     @Test
     fun `insert then get then list then delete round-trips through the database`() {
         // Given a device written to a real database file
-        val GoDevice = GoPairedDevice(id = "d-1")
-        GoRepo.GoUpsert(GoDevice)
+        val device = pairedDevice(id = "d-1")
+        repo.upsert(device)
 
         // When read back by id and by list
         // Then both reflect the persisted row
-        assertThat(GoRepo.GoGet("d-1")).isEqualTo(GoDevice)
-        assertThat(GoRepo.GoList()).containsExactly(GoDevice)
-        assertThat(GoRowCount()).isEqualTo(1)
+        assertThat(repo.get("d-1")).isEqualTo(device)
+        assertThat(repo.list()).containsExactly(device)
+        assertThat(rowCount()).isEqualTo(1)
 
         // When the device is revoked
-        GoRepo.GoDelete("d-1")
+        repo.delete("d-1")
 
         // Then the row is gone from the database
-        assertThat(GoRepo.GoGet("d-1")).isNull()
-        assertThat(GoRepo.GoList()).isEmpty()
-        assertThat(GoRowCount()).isEqualTo(0)
+        assertThat(repo.get("d-1")).isNull()
+        assertThat(repo.list()).isEmpty()
+        assertThat(rowCount()).isEqualTo(0)
     }
 
     @Test
     fun `get by token hash round-trips and survives a null last-seen`() {
         // Given two paired devices with distinct token hashes, never seen
-        GoRepo.GoUpsert(GoPairedDevice(id = "d-1", tokenHash = "hash-one"))
-        GoRepo.GoUpsert(GoPairedDevice(id = "d-2", name = "daemon", role = "DAEMON", tokenHash = "hash-two"))
+        repo.upsert(pairedDevice(id = "d-1", tokenHash = "hash-one"))
+        repo.upsert(pairedDevice(id = "d-2", name = "daemon", role = "DAEMON", tokenHash = "hash-two"))
 
         // When looked up by the second hash
         // Then only that row returns, with its null last-seen preserved
-        assertThat(GoRepo.GoGetByTokenHash("hash-two")).isEqualTo(
-            GoPairedDevice(id = "d-2", name = "daemon", role = "DAEMON", tokenHash = "hash-two"),
+        assertThat(repo.getByTokenHash("hash-two")).isEqualTo(
+            pairedDevice(id = "d-2", name = "daemon", role = "DAEMON", tokenHash = "hash-two"),
         )
-        assertThat(GoRepo.GoGetByTokenHash("hash-two")?.GoLastSeenMs).isNull()
-        assertThat(GoRepo.GoGetByTokenHash("hash-absent")).isNull()
+        assertThat(repo.getByTokenHash("hash-two")?.lastSeenMs).isNull()
+        assertThat(repo.getByTokenHash("hash-absent")).isNull()
     }
 
     @Test
     fun `inserting a duplicate device id upserts and keeps a single row`() {
         // Given one stored device
-        GoRepo.GoUpsert(GoPairedDevice(id = "d-1", name = "old", tokenHash = "hash-old"))
-        assertThat(GoRowCount()).isEqualTo(1)
+        repo.upsert(pairedDevice(id = "d-1", name = "old", tokenHash = "hash-old"))
+        assertThat(rowCount()).isEqualTo(1)
 
         // When the same id is inserted again with new values
-        GoRepo.GoUpsert(GoPairedDevice(id = "d-1", name = "new", role = "DAEMON", tokenHash = "hash-new"))
+        repo.upsert(pairedDevice(id = "d-1", name = "new", role = "DAEMON", tokenHash = "hash-new"))
 
         // Then no duplicate row was created and every field was updated
-        assertThat(GoRowCount()).isEqualTo(1)
-        val GoUpdated = GoRepo.GoGet("d-1")
-        assertThat(GoUpdated?.GoDeviceName).isEqualTo("new")
-        assertThat(GoUpdated?.GoRole).isEqualTo("DAEMON")
-        assertThat(GoUpdated?.GoTokenHash).isEqualTo("hash-new")
+        assertThat(rowCount()).isEqualTo(1)
+        val updated = repo.get("d-1")
+        assertThat(updated?.deviceName).isEqualTo("new")
+        assertThat(updated?.role).isEqualTo("DAEMON")
+        assertThat(updated?.tokenHash).isEqualTo("hash-new")
     }
 
     @Test
     fun `touch updates last seen ms and leaves the rest intact`() {
         // Given a persisted device that has never been seen
-        GoRepo.GoUpsert(GoPairedDevice(id = "d-1"))
-        assertThat(GoRepo.GoGet("d-1")?.GoLastSeenMs).isNull()
+        repo.upsert(pairedDevice(id = "d-1"))
+        assertThat(repo.get("d-1")?.lastSeenMs).isNull()
 
         // When it heartbeats
-        GoRepo.GoTouch("d-1", 42_424L)
+        repo.touch("d-1", 42_424L)
 
         // Then only the last-seen instant moved in the database
-        val GoTouched = GoRepo.GoGet("d-1")!!
-        assertThat(GoTouched.GoLastSeenMs).isEqualTo(42_424L)
-        assertThat(GoTouched.GoDeviceName).isEqualTo("glass")
-        assertThat(GoTouched.GoPairedAtMs).isEqualTo(1_000L)
+        val touched = repo.get("d-1")!!
+        assertThat(touched.lastSeenMs).isEqualTo(42_424L)
+        assertThat(touched.deviceName).isEqualTo("glass")
+        assertThat(touched.pairedAtMs).isEqualTo(1_000L)
     }
 
     @Test
     fun `touch of an unknown device is a no-op`() {
         // Given an empty table
         // When a non-existent device is touched
-        GoRepo.GoTouch("missing", 1L)
+        repo.touch("missing", 1L)
 
         // Then nothing was created
-        assertThat(GoRowCount()).isEqualTo(0)
+        assertThat(rowCount()).isEqualTo(0)
     }
 
     @Test
     fun `onCreate provisions exactly one application table`() {
         // Given the helper opened the database for the first time
-        GoRepo.writableDatabase
+        repo.writableDatabase
 
         // Then paired_device exists and the schema carries no other app table
         // (android_metadata is the framework's own, not ours)
-        assertThat(GoTableNames()).contains("paired_device")
-        assertThat(GoTableNames().filterNot { it.startsWith("android_") })
+        assertThat(tableNames()).contains("paired_device")
+        assertThat(tableNames().filterNot { it.startsWith("android_") })
             .containsExactly("paired_device")
     }
 
     @Test
     fun `the sqlite adapter satisfies the domain port`() {
         // Given the adapter viewed through the domain interface
-        val GoPort: DeviceRepository = GoRepo
+        val port: DeviceRepository = repo
 
         // When used through the port
-        GoPort.GoUpsert(GoPairedDevice(id = "d-9", tokenHash = "hash-nine"))
+        port.upsert(pairedDevice(id = "d-9", tokenHash = "hash-nine"))
 
         // Then the persisted state is observable through the same port
-        assertThat(GoPort.GoGetByTokenHash("hash-nine")?.GoDeviceId).isEqualTo("d-9")
+        assertThat(port.getByTokenHash("hash-nine")?.deviceId).isEqualTo("d-9")
     }
 }

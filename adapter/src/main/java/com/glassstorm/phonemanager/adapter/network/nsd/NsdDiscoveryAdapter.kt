@@ -14,8 +14,8 @@ import com.glassstorm.phonemanager.domain.network.DiscoveryFailure
 import com.glassstorm.phonemanager.domain.network.DiscoverySelection
 import com.glassstorm.phonemanager.domain.network.DiscoveryState
 import com.glassstorm.phonemanager.domain.network.DiscoveryStateMachine
-import com.glassstorm.phonemanager.domain.network.GoNeedsMulticastLock
-import com.glassstorm.phonemanager.domain.network.GoUsesServiceInfoCallback
+import com.glassstorm.phonemanager.domain.network.needsMulticastLock
+import com.glassstorm.phonemanager.domain.network.usesServiceInfoCallback
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
@@ -29,174 +29,174 @@ import java.util.concurrent.atomic.AtomicReference
  *  - **API branching**: `resolveService` is used below API 35 and the deprecated
  *    path is handled explicitly; from API 35 `registerServiceInfoCallback` is used.
  *  - **Multicast lock**: held while advertising on platforms whose Wi-Fi stack
- *    filters multicast frames (see `GoNeedsMulticastLock`), released on teardown.
+ *    filters multicast frames (see `needsMulticastLock`), released on teardown.
  *  - **Direct-IP fallback**: an mDNS miss/timeout resolves to the configured
  *    gateway address instead of throwing. This is the primary path in the
  *    manual-tether development flow, so it is a normal outcome, not an error.
  */
 class NsdDiscoveryAdapter(
-    private val GoContext: Context,
-    private val GoGatewayFallback: PeerAddress?,
+    private val context: Context,
+    private val gatewayFallback: PeerAddress?,
 ) : Discovery {
-    private val GoNsd: NsdManager =
-        GoContext.getSystemService(Context.NSD_SERVICE) as NsdManager
+    private val nsd: NsdManager =
+        context.getSystemService(Context.NSD_SERVICE) as NsdManager
 
-    private val GoWifi: WifiManager =
-        GoContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+    private val wifi: WifiManager =
+        context.getSystemService(Context.WIFI_SERVICE) as WifiManager
 
-    private val GoMachine = DiscoveryStateMachine(GoGatewayFallback)
+    private val machine = DiscoveryStateMachine(gatewayFallback)
 
-    private var GoRegistrationListener: NsdManager.RegistrationListener? = null
+    private var registrationListener: NsdManager.RegistrationListener? = null
 
-    private var GoMulticastLock: WifiManager.MulticastLock? = null
+    private var multicastLock: WifiManager.MulticastLock? = null
 
-    val GoState: DiscoveryState
-        get() = GoMachine.GoState
+    val state: DiscoveryState
+        get() = machine.state
 
-    fun GoIsAdvertising(): Boolean = GoRegistrationListener != null
+    fun isAdvertising(): Boolean = registrationListener != null
 
-    override fun GoAdvertise(
+    override fun advertise(
         name: String,
         port: Int,
     ) {
-        if (GoRegistrationListener != null) return
+        if (registrationListener != null) return
 
-        val GoInfo =
+        val info =
             NsdServiceInfo().apply {
                 serviceName = name
                 serviceType = GoDefaultServiceType
                 this.port = port
             }
-        val GoListener = GoRegistrationListenerImpl()
-        GoRegistrationListener = GoListener
-        GoMachine.GoAccept(DiscoveryEvent.START_ADVERTISE)
+        val listener = RegistrationListenerImpl()
+        registrationListener = listener
+        machine.accept(DiscoveryEvent.START_ADVERTISE)
 
-        GoAcquireMulticastLock()
+        acquireMulticastLock()
 
         try {
-            GoNsd.registerService(GoInfo, NsdManager.PROTOCOL_DNS_SD, GoListener)
+            nsd.registerService(info, NsdManager.PROTOCOL_DNS_SD, listener)
         } catch (goFailure: RuntimeException) {
-            GoMachine.GoAccept(
+            machine.accept(
                 DiscoveryEvent.ADVERTISE_FAILED,
                 DiscoveryFailure.AdvertiseFailed(
                     goFailure.message ?: "registerService threw",
                 ),
             )
-            GoRegistrationListener = null
-            GoReleaseMulticastLock()
+            registrationListener = null
+            releaseMulticastLock()
         }
     }
 
-    override fun GoStopAdvertise() {
-        val GoListener =
-            GoRegistrationListener ?: run {
-                GoReleaseMulticastLock()
-                GoMachine.GoAccept(DiscoveryEvent.STOP_REQUESTED)
+    override fun stopAdvertise() {
+        val listener =
+            registrationListener ?: run {
+                releaseMulticastLock()
+                machine.accept(DiscoveryEvent.STOP_REQUESTED)
                 return
             }
-        GoRegistrationListener = null
+        registrationListener = null
         try {
-            GoNsd.unregisterService(GoListener)
+            nsd.unregisterService(listener)
         } catch (goFailure: RuntimeException) {
-            GoRegistrationListener = GoListener
+            registrationListener = listener
             throw goFailure
         }
-        GoReleaseMulticastLock()
-        GoMachine.GoAccept(DiscoveryEvent.STOP_REQUESTED)
+        releaseMulticastLock()
+        machine.accept(DiscoveryEvent.STOP_REQUESTED)
     }
 
-    override fun GoResolveFirst(timeoutMs: Long): PeerAddress? {
-        val GoDeadlineNanos = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMs)
-        val GoLatch = CountDownLatch(1)
-        val GoResolved = AtomicReference<PeerAddress?>(null)
+    override fun resolveFirst(timeoutMs: Long): PeerAddress? {
+        val deadlineNanos = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMs)
+        val latch = CountDownLatch(1)
+        val resolved = AtomicReference<PeerAddress?>(null)
 
-        GoMachine.GoAccept(DiscoveryEvent.START_RESOLVE)
+        machine.accept(DiscoveryEvent.START_RESOLVE)
 
-        val GoDiscoveryListener = GoDiscoveryListenerImpl(GoLatch, GoResolved)
-        val GoDiscovery =
+        val discoveryListener = DiscoveryListenerImpl(latch, resolved)
+        val discovery =
             try {
-                GoNsd.discoverServices(GoDefaultServiceType, NsdManager.PROTOCOL_DNS_SD, GoDiscoveryListener)
+                nsd.discoverServices(GoDefaultServiceType, NsdManager.PROTOCOL_DNS_SD, discoveryListener)
                 true
             } catch (goFailure: RuntimeException) {
                 false
             }
 
-        val GoRemainingMs = TimeUnit.NANOSECONDS.toMillis(GoDeadlineNanos - System.nanoTime())
-        val GoAnswered =
-            GoRemainingMs > 0 &&
-                GoLatch.await(GoRemainingMs, TimeUnit.MILLISECONDS)
+        val remainingMs = TimeUnit.NANOSECONDS.toMillis(deadlineNanos - System.nanoTime())
+        val answered =
+            remainingMs > 0 &&
+                latch.await(remainingMs, TimeUnit.MILLISECONDS)
 
-        if (GoDiscovery) {
-            runCatching { GoNsd.stopServiceDiscovery(GoDiscoveryListener) }
+        if (discovery) {
+            runCatching { nsd.stopServiceDiscovery(discoveryListener) }
         }
 
-        if (GoAnswered) {
-            val GoPeer = GoResolved.get()
-            if (GoPeer != null) {
-                GoMachine.GoAccept(DiscoveryEvent.MDNS_RESOLVED)
-                return GoPeer
+        if (answered) {
+            val peer = resolved.get()
+            if (peer != null) {
+                machine.accept(DiscoveryEvent.MDNS_RESOLVED)
+                return peer
             }
         }
 
-        return GoFallBackToGateway()
+        return fallBackToGateway()
     }
 
-    private fun GoFallBackToGateway(): PeerAddress? {
-        GoMachine.GoAccept(DiscoveryEvent.RESOLVE_TIMEOUT)
-        val GoSelection = GoMachine.GoSelectPeer(mdns = null, gateway = GoGatewayFallback)
-        return when (GoSelection) {
-            is DiscoverySelection.Selected -> GoSelection.GoPeer
+    private fun fallBackToGateway(): PeerAddress? {
+        machine.accept(DiscoveryEvent.RESOLVE_TIMEOUT)
+        val selection = machine.selectPeer(mdns = null, gateway = gatewayFallback)
+        return when (selection) {
+            is DiscoverySelection.Selected -> selection.peer
             DiscoverySelection.NoPeer -> null
         }
     }
 
-    private fun GoAcquireMulticastLock() {
-        val GoNeeded =
-            GoNeedsMulticastLock(Build.VERSION.SDK_INT) {
-                GoTiramisuExtensionVersion()
+    private fun acquireMulticastLock() {
+        val needed =
+            needsMulticastLock(Build.VERSION.SDK_INT) {
+                tiramisuExtensionVersion()
             }
-        if (!GoNeeded) return
-        val GoLock = GoWifi.createMulticastLock(GoMulticastLockTag)
-        GoLock.setReferenceCounted(false)
-        GoLock.acquire()
-        GoMulticastLock = GoLock
+        if (!needed) return
+        val lock = wifi.createMulticastLock(GoMulticastLockTag)
+        lock.setReferenceCounted(false)
+        lock.acquire()
+        multicastLock = lock
     }
 
     /**
      * Tiramisu SDK-extension version, with the API-30 guard the lint analysis can
      * follow.
      *
-     * [SdkExtensions.getExtensionVersion] requires API 30. [GoNeedsMulticastLock]
+     * [SdkExtensions.getExtensionVersion] requires API 30. [needsMulticastLock]
      * only invokes the extension probe at `sdkInt == 33`, but that call crosses a
      * function boundary and lint cannot see it, so the guard is repeated here: on
      * API 29 (the app's targetSdk) the Tiramisu extension does not exist and `0`
      * is the safe, below-threshold fallback.
      */
-    private fun GoTiramisuExtensionVersion(): Int =
+    private fun tiramisuExtensionVersion(): Int =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             SdkExtensions.getExtensionVersion(Build.VERSION_CODES.TIRAMISU)
         } else {
             GoTiramisuExtensionAbsent
         }
 
-    private fun GoReleaseMulticastLock() {
-        val GoLock = GoMulticastLock ?: return
-        GoMulticastLock = null
-        if (GoLock.isHeld) {
-            GoLock.release()
+    private fun releaseMulticastLock() {
+        val lock = multicastLock ?: return
+        multicastLock = null
+        if (lock.isHeld) {
+            lock.release()
         }
     }
 
-    private inner class GoRegistrationListenerImpl : NsdManager.RegistrationListener {
+    private inner class RegistrationListenerImpl : NsdManager.RegistrationListener {
         override fun onServiceRegistered(goInfo: NsdServiceInfo) {
-            GoMachine.GoAccept(DiscoveryEvent.ADVERTISE_REGISTERED)
+            machine.accept(DiscoveryEvent.ADVERTISE_REGISTERED)
         }
 
         override fun onRegistrationFailed(
             goInfo: NsdServiceInfo,
             goCode: Int,
         ) {
-            GoMachine.GoAccept(
+            machine.accept(
                 DiscoveryEvent.ADVERTISE_FAILED,
                 DiscoveryFailure.AdvertiseFailed(
                     "onRegistrationFailed code=$goCode",
@@ -212,14 +212,14 @@ class NsdDiscoveryAdapter(
         ) = Unit
     }
 
-    private inner class GoDiscoveryListenerImpl(
-        private val GoLatch: CountDownLatch,
-        private val GoResolved: AtomicReference<PeerAddress?>,
+    private inner class DiscoveryListenerImpl(
+        private val latch: CountDownLatch,
+        private val resolved: AtomicReference<PeerAddress?>,
     ) : NsdManager.DiscoveryListener {
         override fun onDiscoveryStarted(goServiceType: String) = Unit
 
         override fun onServiceFound(goInfo: NsdServiceInfo) {
-            GoResolve(goInfo, GoLatch, GoResolved)
+            resolve(goInfo, latch, resolved)
         }
 
         override fun onServiceLost(goInfo: NsdServiceInfo) = Unit
@@ -230,7 +230,7 @@ class NsdDiscoveryAdapter(
             goServiceType: String,
             goCode: Int,
         ) {
-            GoLatch.countDown()
+            latch.countDown()
         }
 
         override fun onStopDiscoveryFailed(
@@ -239,28 +239,28 @@ class NsdDiscoveryAdapter(
         ) = Unit
     }
 
-    private fun GoResolve(
+    private fun resolve(
         goInfo: NsdServiceInfo,
         goLatch: CountDownLatch,
         goResolved: AtomicReference<PeerAddress?>,
     ) {
-        if (GoUsesServiceInfoCallback(Build.VERSION.SDK_INT)) {
-            GoResolveViaServiceInfoCallback(goInfo, goLatch, goResolved)
+        if (usesServiceInfoCallback(Build.VERSION.SDK_INT)) {
+            resolveViaServiceInfoCallback(goInfo, goLatch, goResolved)
         } else {
-            GoResolveViaDeprecatedPath(goInfo, goLatch, goResolved)
+            resolveViaDeprecatedPath(goInfo, goLatch, goResolved)
         }
     }
 
-    private fun GoResolveViaDeprecatedPath(
+    private fun resolveViaDeprecatedPath(
         goInfo: NsdServiceInfo,
         goLatch: CountDownLatch,
         goResolved: AtomicReference<PeerAddress?>,
     ) {
         @Suppress("DEPRECATION")
-        val GoListener =
+        val listener =
             object : NsdManager.ResolveListener {
                 override fun onServiceResolved(goResolvedInfo: NsdServiceInfo) {
-                    GoPublishResolved(goResolvedInfo, goResolved, goLatch)
+                    publishResolved(goResolvedInfo, goResolved, goLatch)
                 }
 
                 override fun onResolveFailed(
@@ -271,30 +271,30 @@ class NsdDiscoveryAdapter(
                 }
             }
         @Suppress("DEPRECATION")
-        GoNsd.resolveService(goInfo, GoListener)
+        nsd.resolveService(goInfo, listener)
     }
 
     /**
      * Resolves a discovered service through the `ServiceInfoCallback` API.
      *
      * `@SuppressLint("NewApi")` is the annotation lint follows across the function
-     * boundary: `GoResolve` only reaches this branch when
-     * `GoUsesServiceInfoCallback(Build.VERSION.SDK_INT)` is true, which holds only at
+     * boundary: `resolve` only reaches this branch when
+     * `usesServiceInfoCallback(Build.VERSION.SDK_INT)` is true, which holds only at
      * `sdkInt >= 35` — so `ServiceInfoCallback` (API 34) and
      * `registerServiceInfoCallback` (T-ext 7) are unreachable on API 29-34 at
-     * runtime. The API-29-34 `resolveService` path in [GoResolveViaDeprecatedPath]
+     * runtime. The API-29-34 `resolveService` path in [resolveViaDeprecatedPath]
      * is untouched and remains the live path on this app's targetSdk 29.
      */
-    @SuppressLint("NewApi") // Guarded by GoUsesServiceInfoCallback(): only reachable at sdkInt >= 35.
-    private fun GoResolveViaServiceInfoCallback(
+    @SuppressLint("NewApi") // Guarded by usesServiceInfoCallback(): only reachable at sdkInt >= 35.
+    private fun resolveViaServiceInfoCallback(
         goInfo: NsdServiceInfo,
         goLatch: CountDownLatch,
         goResolved: AtomicReference<PeerAddress?>,
     ) {
-        val GoCallback =
+        val callback =
             object : NsdManager.ServiceInfoCallback {
                 override fun onServiceUpdated(goResolvedInfo: NsdServiceInfo) {
-                    GoPublishResolved(goResolvedInfo, goResolved, goLatch)
+                    publishResolved(goResolvedInfo, goResolved, goLatch)
                 }
 
                 override fun onServiceLost() {
@@ -307,18 +307,18 @@ class NsdDiscoveryAdapter(
 
                 override fun onServiceInfoCallbackUnregistered() = Unit
             }
-        GoNsd.registerServiceInfoCallback(goInfo, GoContext.mainExecutor, GoCallback)
+        nsd.registerServiceInfoCallback(goInfo, context.mainExecutor, callback)
     }
 
-    private fun GoPublishResolved(
+    private fun publishResolved(
         goInfo: NsdServiceInfo,
         goResolved: AtomicReference<PeerAddress?>,
         goLatch: CountDownLatch,
     ) {
-        val GoHost = goInfo.host?.hostAddress ?: return
+        val host = goInfo.host?.hostAddress ?: return
         goResolved.compareAndSet(
             null,
-            PeerAddress(GoHost, goInfo.port, PeerAddress.GoSourceMdns),
+            PeerAddress(host, goInfo.port, PeerAddress.GoSourceMdns),
         )
         goLatch.countDown()
     }

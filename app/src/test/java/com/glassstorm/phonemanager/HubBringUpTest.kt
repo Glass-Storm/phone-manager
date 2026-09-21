@@ -21,121 +21,121 @@ import org.junit.Test
  */
 class HubBringUpTest {
     /** Records the call order shared by every collaborator. */
-    private class GoCallLog {
+    private class CallLog {
         val calls: MutableList<String> = mutableListOf()
     }
 
     private class RecordingHubServer(
-        private val GoLog: GoCallLog,
-        private val GoPort: Int = 40404,
+        private val log: CallLog,
+        private val port: Int = 40404,
     ) : HubServer {
-        private var GoRunning = false
+        private var running = false
 
-        override fun GoStart(port: Int) {
-            GoLog.calls += "server.start"
-            GoRunning = true
+        override fun start(port: Int) {
+            log.calls += "server.start"
+            running = true
         }
 
-        override fun GoStop() {
-            GoLog.calls += "server.stop"
-            GoRunning = false
+        override fun stop() {
+            log.calls += "server.stop"
+            running = false
         }
 
-        override fun GoIsRunning(): Boolean = GoRunning
+        override fun isRunning(): Boolean = running
 
-        override fun GoBoundPort(): Int = if (GoRunning) GoPort else 0
+        override fun boundPort(): Int = if (running) port else 0
     }
 
     private class RecordingHotspot(
-        private val GoLog: GoCallLog,
-        private val GoManual: HotspotInfo? = null,
-        private val GoFail: HotspotFailure? = null,
+        private val log: CallLog,
+        private val manual: HotspotInfo? = null,
+        private val fail: HotspotFailure? = null,
     ) : HotspotController {
-        private var GoActive = false
+        private var active = false
 
-        override fun GoStartHotspot(): HotspotInfo {
-            GoLog.calls += "hotspot.start"
-            GoFail?.let { throw HotspotUnavailableException(it) }
-            GoActive = true
+        override fun startHotspot(): HotspotInfo {
+            log.calls += "hotspot.start"
+            fail?.let { throw HotspotUnavailableException(it) }
+            active = true
             return HotspotInfo("EcoSys-Phone", "hunter2", "192.168.43.1")
         }
 
-        override fun GoStopHotspot() {
-            GoLog.calls += "hotspot.stop"
-            GoActive = false
+        override fun stopHotspot() {
+            log.calls += "hotspot.stop"
+            active = false
         }
 
-        override fun GoIsActive(): Boolean = GoActive
+        override fun isActive(): Boolean = active
 
-        override fun GoDetectManualTether(): HotspotInfo? = GoManual
+        override fun detectManualTether(): HotspotInfo? = manual
     }
 
     private class RecordingDiscovery(
-        private val GoLog: GoCallLog,
+        private val log: CallLog,
     ) : Discovery {
-        var GoAdvertisedPort: Int? = null
+        var advertisedPort: Int? = null
             private set
 
-        override fun GoAdvertise(
+        override fun advertise(
             name: String,
             port: Int,
         ) {
-            GoLog.calls += "discovery.advertise:$port"
-            GoAdvertisedPort = port
+            log.calls += "discovery.advertise:$port"
+            advertisedPort = port
         }
 
-        override fun GoStopAdvertise() {
-            GoLog.calls += "discovery.stop"
+        override fun stopAdvertise() {
+            log.calls += "discovery.stop"
         }
 
-        override fun GoResolveFirst(timeoutMs: Long): PeerAddress? = null
+        override fun resolveFirst(timeoutMs: Long): PeerAddress? = null
     }
 
-    private fun GoWired(): Triple<Context, GoCallLog, RecordingDiscovery> {
-        val GoLog = GoCallLog()
-        val GoCtx = Context()
-        Register<HubServer>(GoCtx, RecordingHubServer(GoLog))
-        Register<HotspotController>(GoCtx, RecordingHotspot(GoLog))
-        val GoDiscovery = RecordingDiscovery(GoLog)
-        Register<Discovery>(GoCtx, GoDiscovery)
-        return Triple(GoCtx, GoLog, GoDiscovery)
+    private fun wired(): Triple<Context, CallLog, RecordingDiscovery> {
+        val log = CallLog()
+        val ctx = Context()
+        Register<HubServer>(ctx, RecordingHubServer(log))
+        Register<HotspotController>(ctx, RecordingHotspot(log))
+        val discovery = RecordingDiscovery(log)
+        Register<Discovery>(ctx, discovery)
+        return Triple(ctx, log, discovery)
     }
 
     @Test
     fun `bring-up orders hotspot then listener then discovery`() {
         // Given a fully wired Context
-        val (GoCtx, GoLog, GoDiscovery) = GoWired()
+        val (ctx, log, discovery) = wired()
 
         // When the hub is brought up
-        val GoReport = HubBringUp(GoCtx) { null }.GoBringUp(requestedPort = 0)
+        val report = HubBringUp(ctx) { null }.bringUp(requestedPort = 0)
 
         // Then the order respects the data dependencies (discovery advertises the
         // port the listener actually bound) and the report is honest
-        assertThat(GoLog.calls)
+        assertThat(log.calls)
             .containsExactly(
                 "hotspot.start",
                 "server.start",
                 "discovery.advertise:40404",
             ).inOrder()
-        assertThat(GoReport.GoHotspot).isInstanceOf(HotspotBringUp.Hotspot::class.java)
-        assertThat(GoReport.GoPort).isEqualTo(40404)
-        assertThat(GoReport.GoAdvertising).isTrue()
-        assertThat(GoDiscovery.GoAdvertisedPort).isEqualTo(40404)
+        assertThat(report.hotspot).isInstanceOf(HotspotBringUp.Hotspot::class.java)
+        assertThat(report.port).isEqualTo(40404)
+        assertThat(report.advertising).isTrue()
+        assertThat(discovery.advertisedPort).isEqualTo(40404)
     }
 
     @Test
     fun `teardown runs in exact reverse order`() {
         // Given a running hub
-        val (GoCtx, GoLog, _) = GoWired()
-        val GoBringUp = HubBringUp(GoCtx) { null }
-        GoBringUp.GoBringUp(requestedPort = 0)
-        GoLog.calls.clear()
+        val (ctx, log, _) = wired()
+        val bringUp = HubBringUp(ctx) { null }
+        bringUp.bringUp(requestedPort = 0)
+        log.calls.clear()
 
         // When the hub is torn down
-        GoBringUp.GoTearDown()
+        bringUp.tearDown()
 
         // Then discovery stops before the listener before the hotspot
-        assertThat(GoLog.calls)
+        assertThat(log.calls)
             .containsExactly(
                 "discovery.stop",
                 "server.stop",
@@ -146,123 +146,123 @@ class HubBringUpTest {
     @Test
     fun `a repeated start stop pair is idempotent and never double-starts`() {
         // Given a hub taken up and down twice
-        val (GoCtx, GoLog, _) = GoWired()
-        val GoBringUp = HubBringUp(GoCtx) { null }
+        val (ctx, log, _) = wired()
+        val bringUp = HubBringUp(ctx) { null }
 
         // When start/stop runs twice
-        GoBringUp.GoBringUp(requestedPort = 0)
-        GoBringUp.GoTearDown()
-        GoBringUp.GoBringUp(requestedPort = 0)
-        GoBringUp.GoTearDown()
+        bringUp.bringUp(requestedPort = 0)
+        bringUp.tearDown()
+        bringUp.bringUp(requestedPort = 0)
+        bringUp.tearDown()
 
         // Then the listener started exactly twice (once per start), never a
         // duplicate start within one cycle
-        assertThat(GoLog.calls.count { it == "server.start" }).isEqualTo(2)
-        assertThat(GoLog.calls.count { it == "server.stop" }).isEqualTo(2)
+        assertThat(log.calls.count { it == "server.start" }).isEqualTo(2)
+        assertThat(log.calls.count { it == "server.stop" }).isEqualTo(2)
     }
 
     @Test
     fun `teardown before any start is a no-op`() {
         // Given a hub that was never started
-        val (GoCtx, GoLog, _) = GoWired()
+        val (ctx, log, _) = wired()
 
         // When teardown runs
-        HubBringUp(GoCtx) { null }.GoTearDown()
+        HubBringUp(ctx) { null }.tearDown()
 
         // Then nothing was touched
-        assertThat(GoLog.calls).isEmpty()
+        assertThat(log.calls).isEmpty()
     }
 
     @Test
     fun `a missing hotspot permission degrades to unavailable but still starts the listener`() {
         // Given the hotspot gate is blocked
-        val (GoCtx, GoLog, GoDiscovery) = GoWired()
+        val (ctx, log, discovery) = wired()
 
         // When the hub is brought up with a permission blocker
-        val GoReport =
-            HubBringUp(GoCtx) { "android.permission.ACCESS_FINE_LOCATION" }
-                .GoBringUp(requestedPort = 0)
+        val report =
+            HubBringUp(ctx) { "android.permission.ACCESS_FINE_LOCATION" }
+                .bringUp(requestedPort = 0)
 
         // Then the hotspot never started, no ACTIVE claim is made, and the listener
         // + discovery still came up so the hub is reachable by wired peers
-        assertThat(GoLog.calls).doesNotContain("hotspot.start")
-        assertThat(GoReport.GoHotspot).isInstanceOf(HotspotBringUp.Unavailable::class.java)
+        assertThat(log.calls).doesNotContain("hotspot.start")
+        assertThat(report.hotspot).isInstanceOf(HotspotBringUp.Unavailable::class.java)
         assertThat(
-            (GoReport.GoHotspot as HotspotBringUp.Unavailable).GoReason,
+            (report.hotspot as HotspotBringUp.Unavailable).reason,
         ).contains("ACCESS_FINE_LOCATION")
-        assertThat(GoReport.GoPort).isEqualTo(40404)
-        assertThat(GoDiscovery.GoAdvertisedPort).isEqualTo(40404)
+        assertThat(report.port).isEqualTo(40404)
+        assertThat(discovery.advertisedPort).isEqualTo(40404)
     }
 
     @Test
     fun `a manual tether is adopted as a first-class success`() {
         // Given an OEM-blocked device whose user enabled the system hotspot
-        val GoLog = GoCallLog()
-        val GoCtx = Context()
-        Register<HubServer>(GoCtx, RecordingHubServer(GoLog))
+        val log = CallLog()
+        val ctx = Context()
+        Register<HubServer>(ctx, RecordingHubServer(log))
         Register<HotspotController>(
-            GoCtx,
+            ctx,
             RecordingHotspot(
-                GoLog,
-                GoManual = HotspotInfo("manual-tether", "", "192.168.43.1"),
+                log,
+                manual = HotspotInfo("manual-tether", "", "192.168.43.1"),
             ),
         )
-        Register<Discovery>(GoCtx, RecordingDiscovery(GoLog))
+        Register<Discovery>(ctx, RecordingDiscovery(log))
 
         // When the hub is brought up
-        val GoReport = HubBringUp(GoCtx) { null }.GoBringUp(requestedPort = 0)
+        val report = HubBringUp(ctx) { null }.bringUp(requestedPort = 0)
 
         // Then the manual tether is reported as the success it is, with no LOHS start
-        assertThat(GoReport.GoHotspot).isInstanceOf(HotspotBringUp.ManualTether::class.java)
-        assertThat(GoLog.calls).doesNotContain("hotspot.start")
+        assertThat(report.hotspot).isInstanceOf(HotspotBringUp.ManualTether::class.java)
+        assertThat(log.calls).doesNotContain("hotspot.start")
     }
 
     @Test
     fun `a refused hotspot start is reported not thrown`() {
         // Given the platform refuses LocalOnlyHotspot
-        val GoLog = GoCallLog()
-        val GoCtx = Context()
-        Register<HubServer>(GoCtx, RecordingHubServer(GoLog))
+        val log = CallLog()
+        val ctx = Context()
+        Register<HubServer>(ctx, RecordingHubServer(log))
         Register<HotspotController>(
-            GoCtx,
-            RecordingHotspot(GoLog, GoFail = HotspotFailure.StartFailed("OEM refused")),
+            ctx,
+            RecordingHotspot(log, fail = HotspotFailure.StartFailed("OEM refused")),
         )
-        Register<Discovery>(GoCtx, RecordingDiscovery(GoLog))
+        Register<Discovery>(ctx, RecordingDiscovery(log))
 
         // When the hub is brought up
-        val GoReport = HubBringUp(GoCtx) { null }.GoBringUp(requestedPort = 0)
+        val report = HubBringUp(ctx) { null }.bringUp(requestedPort = 0)
 
         // Then the refusal is a reported Unavailable, not a crash, and the listener
         // still came up
-        assertThat(GoReport.GoHotspot).isInstanceOf(HotspotBringUp.Unavailable::class.java)
-        assertThat(GoReport.GoPort).isEqualTo(40404)
+        assertThat(report.hotspot).isInstanceOf(HotspotBringUp.Unavailable::class.java)
+        assertThat(report.port).isEqualTo(40404)
     }
 
     @Test
     fun `a missing hub server fails the bring-up loudly`() {
         // Given a Context with no HubServer registered
-        val GoCtx = Context()
+        val ctx = Context()
 
         // When the hub is brought up
-        val GoThrown = runCatching { HubBringUp(GoCtx) { null }.GoBringUp(0) }.exceptionOrNull()
+        val thrown = runCatching { HubBringUp(ctx) { null }.bringUp(0) }.exceptionOrNull()
 
         // Then it fails with the typed missing-component error, never a silent no-hub
-        assertThat(GoThrown).isInstanceOf(MissingComponentException::class.java)
+        assertThat(thrown).isInstanceOf(MissingComponentException::class.java)
     }
 
     @Test
     fun `a missing discovery port leaves the listener up and reports no advertising`() {
         // Given a Context without a Discovery adapter
-        val GoLog = GoCallLog()
-        val GoCtx = Context()
-        Register<HubServer>(GoCtx, RecordingHubServer(GoLog))
-        Register<HotspotController>(GoCtx, RecordingHotspot(GoLog))
+        val log = CallLog()
+        val ctx = Context()
+        Register<HubServer>(ctx, RecordingHubServer(log))
+        Register<HotspotController>(ctx, RecordingHotspot(log))
 
         // When the hub is brought up
-        val GoReport = HubBringUp(GoCtx) { null }.GoBringUp(requestedPort = 0)
+        val report = HubBringUp(ctx) { null }.bringUp(requestedPort = 0)
 
         // Then the listener is up and advertising is honestly reported as false
-        assertThat(GoReport.GoPort).isEqualTo(40404)
-        assertThat(GoReport.GoAdvertising).isFalse()
+        assertThat(report.port).isEqualTo(40404)
+        assertThat(report.advertising).isFalse()
     }
 }

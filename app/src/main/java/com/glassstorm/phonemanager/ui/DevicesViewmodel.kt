@@ -23,40 +23,40 @@ import kotlinx.coroutines.flow.asStateFlow
  * stay synchronous and the UI updates on the frame the user acted.
  */
 class DevicesViewModel(
-    private val GoContext: Context,
+    private val context: Context,
 ) : ViewModel() {
-    private val GoRepo: DeviceRepository? = FromContextOrNull<DeviceRepository>(GoContext)
+    private val repo: DeviceRepository? = FromContextOrNull<DeviceRepository>(context)
 
-    private val GoState = MutableStateFlow(DevicesUiState())
+    private val state = MutableStateFlow(DevicesUiState())
 
-    val GoUiState: StateFlow<DevicesUiState> = GoState.asStateFlow()
+    val uiState: StateFlow<DevicesUiState> = state.asStateFlow()
 
     init {
-        GoRefresh()
+        refresh()
     }
 
     /** Revoke [deviceId]: the row leaves the store and the list re-renders. */
-    fun GoOnRevoke(deviceId: String) {
-        runCatching { GoRepo?.GoDelete(deviceId) }
-        GoRefresh()
+    fun onRevoke(deviceId: String) {
+        runCatching { repo?.delete(deviceId) }
+        refresh()
     }
 
-    fun GoOnRefresh() {
-        GoRefresh()
+    fun onRefresh() {
+        refresh()
     }
 
-    private fun GoRefresh() {
-        val GoPort = GoRepo
-        if (GoPort == null) {
-            GoState.value = DevicesUiState(GoAvailable = false)
+    private fun refresh() {
+        val port = repo
+        if (port == null) {
+            state.value = DevicesUiState(available = false)
             return
         }
-        val GoRows = runCatching { GoPort.GoList() }.getOrNull()
-        GoState.value =
-            if (GoRows == null) {
-                DevicesUiState(GoAvailable = false)
+        val rows = runCatching { port.list() }.getOrNull()
+        state.value =
+            if (rows == null) {
+                DevicesUiState(available = false)
             } else {
-                DevicesUiState(GoAvailable = true, GoDevices = GoRows)
+                DevicesUiState(available = true, devices = rows)
             }
     }
 }

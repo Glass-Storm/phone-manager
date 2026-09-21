@@ -12,23 +12,23 @@ import android.content.Intent
  */
 interface BatteryExemption {
     /** Whether the platform currently exempts this app from battery optimization. */
-    fun GoIsExempt(): Boolean
+    fun isExempt(): Boolean
 
     /** Ask the user to grant the exemption. A no-op when there is nothing to launch. */
-    fun GoRequestExemption()
+    fun requestExemption()
 }
 
 /** The Android-backed implementation, delegating to [BatteryOptimization]. */
 class AndroidBatteryExemption(
-    private val GoContext: Context,
+    private val context: Context,
 ) : BatteryExemption {
-    override fun GoIsExempt(): Boolean = BatteryOptimization.GoIsExempt(GoContext)
+    override fun isExempt(): Boolean = BatteryOptimization.isExempt(context)
 
-    override fun GoRequestExemption() {
+    override fun requestExemption() {
         // Started from the application Context (the composition root holds no
         // Activity), so the request needs its own task.
-        GoContext.startActivity(
-            BatteryOptimization.GoRequestIntent(GoContext).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        context.startActivity(
+            BatteryOptimization.requestIntent(context).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
         )
     }
 }

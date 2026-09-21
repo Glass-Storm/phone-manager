@@ -11,8 +11,8 @@ package com.glassstorm.phonemanager.domain.adapter.speech
  * a chunk carries no complete utterance.
  *
  * A recognition session is identified by the relay [sessionId] the hub minted
- * ([com.glassstorm.phonemanager.domain.dto.RelaySession.GoSessionId]) so engines
- * that stream state internally can correlate and release it. [GoClose] is the
+ * ([com.glassstorm.phonemanager.domain.dto.RelaySession.sessionId]) so engines
+ * that stream state internally can correlate and release it. [close] is the
  * deterministic teardown: it MUST be idempotent and MUST be called exactly once
  * per session by the relay.
  */
@@ -24,12 +24,12 @@ interface SttPort {
      * Returns the recognized text, or `null` when the chunk produced no complete
      * utterance. Implementations MUST NOT throw on ordinary `null` outcomes.
      */
-    suspend fun GoTranscribe(
+    suspend fun transcribe(
         sessionId: String,
         audioPcm16: ByteArray,
         sampleRateHz: Int,
     ): String?
 
     /** Release any engine state for [sessionId]. Idempotent. */
-    suspend fun GoClose(sessionId: String)
+    suspend fun close(sessionId: String)
 }

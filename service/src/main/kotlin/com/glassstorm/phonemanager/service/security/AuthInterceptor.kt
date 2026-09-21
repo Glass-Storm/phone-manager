@@ -18,7 +18,7 @@ import io.grpc.Status
  * interceptor testable in isolation and lets the implementation live anywhere.
  */
 fun interface TokenVerifier {
-    fun GoVerifyToken(token: String): Device?
+    fun verifyToken(token: String): Device?
 }
 
 /**
@@ -30,14 +30,14 @@ fun interface TokenVerifier {
  * `ecosys.v1.PairingService/Pair` (and only while a pairing window is open — the
  * service enforces that separately). EVERY other method requires a well-formed
  * `authorization: Bearer <token>` metadata header carrying a token the
- * [GoTokenVerifier] recognises.
+ * [tokenVerifier] recognises.
  *
  * ## Mechanics
  *
  * The allowlist is matched against [io.grpc.MethodDescriptor.getFullMethodName]
  * (the `package.Service/Method` string), so it cannot be bypassed by casing or by
  * a bare-method collision across services. On success the resolved device id is
- * attached to the call's [Context] under [GoDeviceIdKey] — never to a global or a
+ * attached to the call's [Context] under [deviceIdKey] — never to a global or a
  * mutable field — and the call proceeds through [Contexts.interceptCall].
  *
  * On any failure the call is closed immediately with [Status.UNAUTHENTICATED] and
@@ -46,7 +46,7 @@ fun interface TokenVerifier {
  * "unknown" from "tampered", and it never echoes the token or the PIN.
  */
 class AuthInterceptor(
-    private val GoTokenVerifier: TokenVerifier,
+    private val tokenVerifier: TokenVerifier,
 ) : ServerInterceptor {
     override fun <ReqT : Any, RespT : Any> interceptCall(
         method: ServerCall<ReqT, RespT>,
@@ -58,21 +58,21 @@ class AuthInterceptor(
             return next.startCall(method, headers)
         }
 
-        val GoDevice =
-            GoResolveDevice(headers)
-                ?: return GoReject(method)
+        val device =
+            resolveDevice(headers)
+                ?: return reject(method)
 
         // Attach the authenticated identity to THIS call's Context only.
-        val GoAuthenticated = Context.current().withValue(GoDeviceIdKey, GoDevice.GoDeviceId)
-        return Contexts.interceptCall(GoAuthenticated, method, headers, next)
+        val authenticated = Context.current().withValue(deviceIdKey, device.deviceId)
+        return Contexts.interceptCall(authenticated, method, headers, next)
     }
 
     /** Extract and verify `Bearer <token>`, or `null` for any malformed/unknown input. */
-    private fun GoResolveDevice(headers: Metadata): Device? {
-        val GoHeader = headers.get(GO_AUTHORIZATION_KEY) ?: return null
-        val GoToken = GoBearerToken(GoHeader) ?: return null
-        if (GoToken.isEmpty()) return null
-        return GoTokenVerifier.GoVerifyToken(GoToken)
+    private fun resolveDevice(headers: Metadata): Device? {
+        val header = headers.get(GO_AUTHORIZATION_KEY) ?: return null
+        val token = bearerToken(header) ?: return null
+        if (token.isEmpty()) return null
+        return tokenVerifier.verifyToken(token)
     }
 
     /**
@@ -81,13 +81,13 @@ class AuthInterceptor(
      * `Bearer` (the scheme name is case-sensitive and must be followed by a
      * single space).
      */
-    private fun GoBearerToken(header: String): String? {
+    private fun bearerToken(header: String): String? {
         if (!header.startsWith("$GO_BEARER_PREFIX ")) return null
         return header.removePrefix("$GO_BEARER_PREFIX ")
     }
 
     /** Close the call with UNAUTHENTICATED without invoking the service body. */
-    private fun <ReqT : Any, RespT : Any> GoReject(call: ServerCall<ReqT, RespT>): ServerCall.Listener<ReqT> {
+    private fun <ReqT : Any, RespT : Any> reject(call: ServerCall<ReqT, RespT>): ServerCall.Listener<ReqT> {
         call.close(GO_UNAUTHENTICATED, Metadata())
         return object : ServerCall.Listener<ReqT>() {}
     }
@@ -103,9 +103,9 @@ class AuthInterceptor(
 
         /**
          * Carries the authenticated device id for the duration of one call.
-         * Read it inside a service method with `AuthInterceptor.GoDeviceIdKey.get()`.
+         * Read it inside a service method with `AuthInterceptor.deviceIdKey.get()`.
          */
-        val GoDeviceIdKey: Context.Key<String> = Context.key("ecosys-device-id")
+        val deviceIdKey: Context.Key<String> = Context.key("ecosys-device-id")
 
         /** Uniform rejection: never says WHY (no oracle), never echoes secrets. */
         private val GO_UNAUTHENTICATED: Status =

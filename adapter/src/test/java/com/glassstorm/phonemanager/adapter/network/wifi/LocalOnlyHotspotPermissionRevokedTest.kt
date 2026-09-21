@@ -38,7 +38,7 @@ class SecurityExceptionShadowWifiManager : ShadowWifiManager() {
 /**
  * The `SecurityException` leg of the hotspot permission defence.
  *
- * The adapter's pre-flight `GoHasRequiredPermission()` check cannot be atomic with
+ * The adapter's pre-flight `hasRequiredPermission()` check cannot be atomic with
  * the platform call, so [PlatformHotspotLauncher] catches the platform's
  * [SecurityException] and reports a typed [HotspotLaunch.Denied]. These tests prove
  * that lands the machine in `ERROR` — never `ACTIVE` — and does not crash.
@@ -46,73 +46,73 @@ class SecurityExceptionShadowWifiManager : ShadowWifiManager() {
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [29], shadows = [SecurityExceptionShadowWifiManager::class])
 class LocalOnlyHotspotPermissionRevokedTest {
-    private val GoApp: Application = ApplicationProvider.getApplicationContext()
+    private val app: Application = ApplicationProvider.getApplicationContext()
 
-    private fun GoGrantFineLocation() {
-        Shadows.shadowOf(GoApp).grantPermissions(Manifest.permission.ACCESS_FINE_LOCATION)
+    private fun grantFineLocation() {
+        Shadows.shadowOf(app).grantPermissions(Manifest.permission.ACCESS_FINE_LOCATION)
     }
 
-    private fun GoSetLocationEnabled(enabled: Boolean) {
-        val GoLoc = GoApp.getSystemService(Context.LOCATION_SERVICE) as LocationManager
-        Shadows.shadowOf(GoLoc).setLocationEnabled(enabled)
+    private fun setLocationEnabled(enabled: Boolean) {
+        val loc = app.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+        Shadows.shadowOf(loc).setLocationEnabled(enabled)
     }
 
     @Test
     fun `the launcher maps a thrown SecurityException to a typed denial`() {
         // Given a platform that throws SecurityException from the hotspot call
-        val GoLauncher = PlatformHotspotLauncher(GoContext = GoApp)
+        val launcher = PlatformHotspotLauncher(context = app)
 
         // When the launcher is driven directly
-        val GoLaunch = GoLauncher.GoLaunch()
+        val launch = launcher.launch()
 
         // Then it is a typed denial with the dedicated permission reason, not a crash
-        assertThat(GoLaunch).isInstanceOf(HotspotLaunch.Denied::class.java)
-        assertThat((GoLaunch as HotspotLaunch.Denied).GoReasonCode)
+        assertThat(launch).isInstanceOf(HotspotLaunch.Denied::class.java)
+        assertThat((launch as HotspotLaunch.Denied).reasonCode)
             .isEqualTo(LocalOnlyHotspotAdapter.REASON_PERMISSION_DENIED)
     }
 
     @Test
     fun `a permission revoked between check and call lands in ERROR and never ACTIVE`() {
         // Given the pre-flight checks pass but the grant is gone by the platform call
-        GoGrantFineLocation()
-        GoSetLocationEnabled(true)
-        val GoHotspot =
+        grantFineLocation()
+        setLocationEnabled(true)
+        val hotspot =
             LocalOnlyHotspotAdapter(
-                GoContext = GoApp,
-                GoTetherProbe = TetherProbe { emptyList() },
+                context = app,
+                tetherProbe = TetherProbe { emptyList() },
             )
 
         // When the hotspot start races the revocation
-        val GoThrown =
+        val thrown =
             assertThrows(HotspotUnavailableException::class.java) {
-                GoHotspot.GoStartHotspot()
+                hotspot.startHotspot()
             }
 
         // Then the cause is the typed PermissionDenied and the state is exactly ERROR
-        assertThat(GoThrown.GoFailure).isEqualTo(HotspotFailure.PermissionDenied)
-        assertThat(GoHotspot.GoState).isEqualTo(HotspotState.ERROR)
-        assertThat(GoHotspot.GoState).isNotEqualTo(HotspotState.ACTIVE)
-        assertThat(GoHotspot.GoIsActive()).isFalse()
-        assertThat(GoHotspot.GoHasLiveReservation()).isFalse()
+        assertThat(thrown.failure).isEqualTo(HotspotFailure.PermissionDenied)
+        assertThat(hotspot.state).isEqualTo(HotspotState.ERROR)
+        assertThat(hotspot.state).isNotEqualTo(HotspotState.ACTIVE)
+        assertThat(hotspot.isActive()).isFalse()
+        assertThat(hotspot.hasLiveReservation()).isFalse()
     }
 
     @Test
     fun `a permission denial never leaves a live reservation behind`() {
         // Given a revoked-grant start failure
-        GoGrantFineLocation()
-        GoSetLocationEnabled(true)
-        val GoHotspot =
+        grantFineLocation()
+        setLocationEnabled(true)
+        val hotspot =
             LocalOnlyHotspotAdapter(
-                GoContext = GoApp,
-                GoTetherProbe = TetherProbe { emptyList() },
+                context = app,
+                tetherProbe = TetherProbe { emptyList() },
             )
-        assertThrows(HotspotUnavailableException::class.java) { GoHotspot.GoStartHotspot() }
+        assertThrows(HotspotUnavailableException::class.java) { hotspot.startHotspot() }
 
         // When the controller is stopped afterwards
-        GoHotspot.GoStopHotspot()
+        hotspot.stopHotspot()
 
         // Then teardown is clean and the state returns to IDLE
-        assertThat(GoHotspot.GoHasLiveReservation()).isFalse()
-        assertThat(GoHotspot.GoState).isEqualTo(HotspotState.IDLE)
+        assertThat(hotspot.hasLiveReservation()).isFalse()
+        assertThat(hotspot.state).isEqualTo(HotspotState.IDLE)
     }
 }

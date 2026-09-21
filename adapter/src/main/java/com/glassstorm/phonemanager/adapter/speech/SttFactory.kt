@@ -11,7 +11,7 @@ import com.glassstorm.phonemanager.domain.adapter.speech.SttPort
 /**
  * Selects the speech engine from app configuration.
  *
- * The composition root calls [GoCreateSttPort] ONCE and registers the result in
+ * The composition root calls [createSttPort] ONCE and registers the result in
  * the Context under the [SttPort] interface; `:service` never learns which engine
  * it is talking to. The DEFAULT (no configuration written yet) is the offline
  * [MockSttAdapter], so a fresh install always transcribes deterministically.
@@ -22,20 +22,20 @@ import com.glassstorm.phonemanager.domain.adapter.speech.SttPort
  * Settings UI for these keys is deliberately out of scope here (T17).
  */
 class SttFactory(
-    private val GoConfig: RuntimeConfigStore,
-    private val GoTransport: SpeechmaticsTransport = SpeechmaticsTransport(),
+    private val config: RuntimeConfigStore,
+    private val transport: SpeechmaticsTransport = SpeechmaticsTransport(),
 ) {
     /** Build the configured engine. */
-    fun GoCreateSttPort(): SttPort =
-        when (GoConfig.GoSttAdapterKind()) {
+    fun createSttPort(): SttPort =
+        when (config.sttAdapterKind()) {
             SttAdapterKind.MOCK -> MockSttAdapter()
             SttAdapterKind.SPEECHMATICS ->
                 SpeechmaticsSttAdapter(
                     SpeechmaticsConfig(
-                        GoApiKey = GoConfig.GoApiKey(),
-                        GoRegion = GoConfig.GoRegion(),
+                        apiKey = config.apiKey(),
+                        region = config.region(),
                     ),
-                    GoTransport,
+                    transport,
                 )
         }
 }

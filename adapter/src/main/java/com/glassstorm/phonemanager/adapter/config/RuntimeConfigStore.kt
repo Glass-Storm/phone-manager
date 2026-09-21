@@ -38,24 +38,24 @@ enum class SttAdapterKind {
  * region `us`, and [HotspotMode.MANUAL] (the user owns the access point).
  */
 class RuntimeConfigStore(
-    private val GoContext: Context,
+    private val context: Context,
 ) : AppConfig {
     /** Persist [kind]; a fresh install with no write at all stays on [SttAdapterKind.MOCK]. */
-    fun GoSetSttAdapterKind(kind: SttAdapterKind) {
-        GoPrefs().edit().putString(GO_KEY_STT_ADAPTER, GoKindToKey(kind)).apply()
+    fun setSttAdapterKind(kind: SttAdapterKind) {
+        prefs().edit().putString(GO_KEY_STT_ADAPTER, kindToKey(kind)).apply()
     }
 
     /** The configured engine, or [SttAdapterKind.MOCK] when unset or unrecognised. */
-    fun GoSttAdapterKind(): SttAdapterKind = GoKindFromKey(GoPrefs().getString(GO_KEY_STT_ADAPTER, null))
+    fun sttAdapterKind(): SttAdapterKind = kindFromKey(prefs().getString(GO_KEY_STT_ADAPTER, null))
 
-    override fun GoSttEngine(): SttEngine =
-        when (GoSttAdapterKind()) {
+    override fun sttEngine(): SttEngine =
+        when (sttAdapterKind()) {
             SttAdapterKind.MOCK -> SttEngine.MOCK
             SttAdapterKind.SPEECHMATICS -> SttEngine.SPEECHMATICS
         }
 
-    override fun GoSetSttEngine(kind: SttEngine) {
-        GoSetSttAdapterKind(
+    override fun setSttEngine(kind: SttEngine) {
+        setSttAdapterKind(
             when (kind) {
                 SttEngine.MOCK -> SttAdapterKind.MOCK
                 SttEngine.SPEECHMATICS -> SttAdapterKind.SPEECHMATICS
@@ -64,65 +64,65 @@ class RuntimeConfigStore(
     }
 
     /** Store [apiKey] trimmed; a blank value REMOVES the key rather than storing "". */
-    override fun GoSetApiKey(apiKey: String?) {
-        val GoTrimmed = apiKey?.trim().orEmpty()
-        if (GoTrimmed.isEmpty()) {
-            GoPrefs().edit().remove(GO_KEY_API_KEY).apply()
+    override fun setApiKey(apiKey: String?) {
+        val trimmed = apiKey?.trim().orEmpty()
+        if (trimmed.isEmpty()) {
+            prefs().edit().remove(GO_KEY_API_KEY).apply()
         } else {
-            GoPrefs().edit().putString(GO_KEY_API_KEY, GoTrimmed).apply()
+            prefs().edit().putString(GO_KEY_API_KEY, trimmed).apply()
         }
     }
 
     /** The stored API key, or `""`. NEVER log this value. */
-    override fun GoApiKey(): String = GoPrefs().getString(GO_KEY_API_KEY, "").orEmpty()
+    override fun apiKey(): String = prefs().getString(GO_KEY_API_KEY, "").orEmpty()
 
     /** True when a usable key is present (the reference's placeholder does not count). */
-    fun GoHasApiKey(): Boolean {
-        val GoKey = GoApiKey()
-        return GoKey.isNotEmpty() && GoKey != GO_PLACEHOLDER_API_KEY
+    fun hasApiKey(): Boolean {
+        val key = apiKey()
+        return key.isNotEmpty() && key != GO_PLACEHOLDER_API_KEY
     }
 
     /**
      * Persist [region] lowercased when it is one of `global|eu|us|au`; any other
      * value is ignored, leaving the previous choice intact.
      */
-    override fun GoSetRegion(region: String?) {
-        val GoLower = region?.trim()?.lowercase(Locale.ROOT).orEmpty()
-        if (GoLower in GO_KNOWN_REGIONS) {
-            GoPrefs().edit().putString(GO_KEY_REGION, GoLower).apply()
+    override fun setRegion(region: String?) {
+        val lower = region?.trim()?.lowercase(Locale.ROOT).orEmpty()
+        if (lower in GO_KNOWN_REGIONS) {
+            prefs().edit().putString(GO_KEY_REGION, lower).apply()
         }
     }
 
     /** The configured region, or [GO_DEFAULT_REGION] (`us`) when unset. */
-    override fun GoRegion(): String = GoPrefs().getString(GO_KEY_REGION, GO_DEFAULT_REGION).orEmpty()
+    override fun region(): String = prefs().getString(GO_KEY_REGION, GO_DEFAULT_REGION).orEmpty()
 
     /** Persist the hotspot mode under the private key spelling. */
-    override fun GoSetHotspotMode(mode: HotspotMode) {
-        GoPrefs().edit().putString(GO_KEY_HOTSPOT_MODE, GoHotspotModeToKey(mode)).apply()
+    override fun setHotspotMode(mode: HotspotMode) {
+        prefs().edit().putString(GO_KEY_HOTSPOT_MODE, hotspotModeToKey(mode)).apply()
     }
 
     /** The configured hotspot mode, or [HotspotMode.MANUAL] when unset or unrecognised. */
-    override fun GoHotspotMode(): HotspotMode =
-        when (GoPrefs().getString(GO_KEY_HOTSPOT_MODE, null)?.trim()?.lowercase(Locale.ROOT)) {
+    override fun hotspotMode(): HotspotMode =
+        when (prefs().getString(GO_KEY_HOTSPOT_MODE, null)?.trim()?.lowercase(Locale.ROOT)) {
             GO_HOTSPOT_AUTO -> HotspotMode.AUTO
             else -> HotspotMode.MANUAL
         }
 
-    private fun GoPrefs(): SharedPreferences = GoContext.getSharedPreferences(GO_PREFS_NAME, Context.MODE_PRIVATE)
+    private fun prefs(): SharedPreferences = context.getSharedPreferences(GO_PREFS_NAME, Context.MODE_PRIVATE)
 
-    private fun GoKindToKey(kind: SttAdapterKind): String =
+    private fun kindToKey(kind: SttAdapterKind): String =
         when (kind) {
             SttAdapterKind.MOCK -> GO_ADAPTER_MOCK
             SttAdapterKind.SPEECHMATICS -> GO_ADAPTER_SPEECHMATICS
         }
 
-    private fun GoKindFromKey(key: String?): SttAdapterKind =
+    private fun kindFromKey(key: String?): SttAdapterKind =
         when (key?.trim()?.lowercase(Locale.ROOT)) {
             GO_ADAPTER_SPEECHMATICS -> SttAdapterKind.SPEECHMATICS
             else -> SttAdapterKind.MOCK
         }
 
-    private fun GoHotspotModeToKey(mode: HotspotMode): String =
+    private fun hotspotModeToKey(mode: HotspotMode): String =
         when (mode) {
             HotspotMode.MANUAL -> GO_HOTSPOT_MANUAL
             HotspotMode.AUTO -> GO_HOTSPOT_AUTO

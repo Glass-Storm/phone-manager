@@ -31,76 +31,76 @@ class AppConfigTest {
     @Test
     fun `an implementation round-trips every setting through the port`() {
         // Given an in-memory implementation of the port
-        val GoConfig: AppConfig = GoMemoryConfig()
+        val config: AppConfig = MemoryConfig()
 
         // When every setting is written
-        GoConfig.GoSetSttEngine(SttEngine.SPEECHMATICS)
-        GoConfig.GoSetApiKey("  key-1  ")
-        GoConfig.GoSetRegion("eu")
-        GoConfig.GoSetHotspotMode(HotspotMode.AUTO)
+        config.setSttEngine(SttEngine.SPEECHMATICS)
+        config.setApiKey("  key-1  ")
+        config.setRegion("eu")
+        config.setHotspotMode(HotspotMode.AUTO)
 
         // Then every setting reads back through the same port
-        assertEquals(SttEngine.SPEECHMATICS, GoConfig.GoSttEngine())
-        assertEquals("key-1", GoConfig.GoApiKey())
-        assertEquals("eu", GoConfig.GoRegion())
-        assertEquals(HotspotMode.AUTO, GoConfig.GoHotspotMode())
+        assertEquals(SttEngine.SPEECHMATICS, config.sttEngine())
+        assertEquals("key-1", config.apiKey())
+        assertEquals("eu", config.region())
+        assertEquals(HotspotMode.AUTO, config.hotspotMode())
     }
 
     @Test
     fun `a fresh implementation defaults to the offline engine and manual hotspot`() {
         // Given a port with nothing written
-        val GoConfig: AppConfig = GoMemoryConfig()
+        val config: AppConfig = MemoryConfig()
 
         // Then the safe defaults hold: no network engine, no automatic access point
-        assertEquals(SttEngine.MOCK, GoConfig.GoSttEngine())
-        assertEquals("", GoConfig.GoApiKey())
-        assertEquals(AppConfig.GoDefaultRegion, GoConfig.GoRegion())
-        assertEquals(HotspotMode.MANUAL, GoConfig.GoHotspotMode())
+        assertEquals(SttEngine.MOCK, config.sttEngine())
+        assertEquals("", config.apiKey())
+        assertEquals(AppConfig.GoDefaultRegion, config.region())
+        assertEquals(HotspotMode.MANUAL, config.hotspotMode())
     }
 
     @Test
     fun `a blank api key clears the stored key`() {
-        val GoConfig: AppConfig = GoMemoryConfig()
-        GoConfig.GoSetApiKey("key-1")
+        val config: AppConfig = MemoryConfig()
+        config.setApiKey("key-1")
 
-        GoConfig.GoSetApiKey("   ")
+        config.setApiKey("   ")
 
-        assertEquals("", GoConfig.GoApiKey())
+        assertEquals("", config.apiKey())
     }
 
     /** Minimal in-memory port implementation: the contract the adapter must satisfy. */
-    private class GoMemoryConfig : AppConfig {
-        private var GoEngine: SttEngine = SttEngine.MOCK
-        private var GoKey: String = ""
-        private var GoRegionValue: String = AppConfig.GoDefaultRegion
-        private var GoMode: HotspotMode = HotspotMode.MANUAL
+    private class MemoryConfig : AppConfig {
+        private var engine: SttEngine = SttEngine.MOCK
+        private var key: String = ""
+        private var regionValue: String = AppConfig.GoDefaultRegion
+        private var mode: HotspotMode = HotspotMode.MANUAL
 
-        override fun GoSttEngine(): SttEngine = GoEngine
+        override fun sttEngine(): SttEngine = engine
 
-        override fun GoSetSttEngine(kind: SttEngine) {
-            GoEngine = kind
+        override fun setSttEngine(kind: SttEngine) {
+            engine = kind
         }
 
-        override fun GoApiKey(): String = GoKey
+        override fun apiKey(): String = key
 
-        override fun GoSetApiKey(apiKey: String?) {
-            GoKey = apiKey?.trim().orEmpty()
+        override fun setApiKey(apiKey: String?) {
+            key = apiKey?.trim().orEmpty()
         }
 
-        override fun GoRegion(): String = GoRegionValue
+        override fun region(): String = regionValue
 
-        override fun GoSetRegion(region: String?) {
+        override fun setRegion(region: String?) {
             region
                 ?.trim()
                 ?.lowercase()
                 ?.takeIf { it.isNotEmpty() }
-                ?.let { GoRegionValue = it }
+                ?.let { regionValue = it }
         }
 
-        override fun GoHotspotMode(): HotspotMode = GoMode
+        override fun hotspotMode(): HotspotMode = mode
 
-        override fun GoSetHotspotMode(mode: HotspotMode) {
-            GoMode = mode
+        override fun setHotspotMode(mode: HotspotMode) {
+            this.mode = mode
         }
     }
 }

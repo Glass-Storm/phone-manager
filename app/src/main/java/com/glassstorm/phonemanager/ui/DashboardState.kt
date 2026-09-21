@@ -10,11 +10,11 @@ import com.glassstorm.phonemanager.domain.dto.HotspotInfo
  * must degrade to an explicit "not available" line instead of crashing.
  */
 data class DashboardUiState(
-    val GoHubAvailable: Boolean = false,
-    val GoHotspotAvailable: Boolean = false,
-    val GoRunning: Boolean = false,
-    val GoBoundPort: Int = 0,
-    val GoPairedCount: Int = 0,
-    val GoHotspot: HotspotInfo? = null,
-    val GoHotspotError: String? = null,
+    val hubAvailable: Boolean = false,
+    val hotspotAvailable: Boolean = false,
+    val running: Boolean = false,
+    val boundPort: Int = 0,
+    val pairedCount: Int = 0,
+    val hotspot: HotspotInfo? = null,
+    val hotspotError: String? = null,
 )

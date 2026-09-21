@@ -28,83 +28,83 @@ import kotlinx.coroutines.flow.asStateFlow
  * Robolectric tests deterministic.
  */
 class DashboardViewModel(
-    private val GoContext: Context,
+    private val context: Context,
 ) : ViewModel() {
-    private val GoHub: HubServer? = FromContextOrNull<HubServer>(GoContext)
-    private val GoHotspot: HotspotController? = FromContextOrNull<HotspotController>(GoContext)
-    private val GoPairing: PairingService? = FromContextOrNull<PairingService>(GoContext)
+    private val hub: HubServer? = FromContextOrNull<HubServer>(context)
+    private val hotspot: HotspotController? = FromContextOrNull<HotspotController>(context)
+    private val pairing: PairingService? = FromContextOrNull<PairingService>(context)
 
-    private val GoState =
+    private val state =
         MutableStateFlow(
             DashboardUiState(
-                GoHubAvailable = GoHub != null,
-                GoHotspotAvailable = GoHotspot != null,
+                hubAvailable = hub != null,
+                hotspotAvailable = hotspot != null,
             ),
         )
 
-    val GoUiState: StateFlow<DashboardUiState> = GoState.asStateFlow()
+    val uiState: StateFlow<DashboardUiState> = state.asStateFlow()
 
     init {
-        GoRefresh()
+        refresh()
     }
 
     /** Start the hub listener on an ephemeral port, then refresh the status panel. */
-    fun GoOnStartHub() {
-        GoHub?.GoStart(0)
-        GoRefresh()
+    fun onStartHub() {
+        hub?.start(0)
+        refresh()
     }
 
     /** Stop the listener and the access point. Idempotent at the port level. */
-    fun GoOnStopHub() {
-        GoHub?.GoStop()
-        GoHotspot?.GoStopHotspot()
-        GoRefresh()
+    fun onStopHub() {
+        hub?.stop()
+        hotspot?.stopHotspot()
+        refresh()
     }
 
     /** Bring the access point up, surfacing the typed failure reason as text. */
-    fun GoOnStartHotspot() {
-        val GoController = GoHotspot ?: return
-        val GoError = runCatching { GoController.GoStartHotspot() }.GoErrorMessage()
-        GoState.value = GoState.value.copy(GoHotspotError = GoError)
-        GoRefresh()
+    fun onStartHotspot() {
+        val controller = hotspot ?: return
+        val error = runCatching { controller.startHotspot() }.errorMessage()
+        state.value = state.value.copy(hotspotError = error)
+        refresh()
     }
 
     /** Tear the access point down. */
-    fun GoOnStopHotspot() {
-        GoHotspot?.GoStopHotspot()
-        GoRefresh()
+    fun onStopHotspot() {
+        hotspot?.stopHotspot()
+        refresh()
     }
 
-    private fun GoRefresh() {
-        GoState.value =
+    private fun refresh() {
+        state.value =
             DashboardUiState(
-                GoHubAvailable = GoHub != null,
-                GoHotspotAvailable = GoHotspot != null,
-                GoRunning = GoHub?.GoIsRunning() ?: false,
-                GoBoundPort = GoHub?.GoBoundPort() ?: 0,
-                GoPairedCount = GoPairing?.GoListPaired()?.size ?: 0,
-                GoHotspot = GoHotspot?.GoDetectManualTether(),
-                GoHotspotError = GoState.value.GoHotspotError,
+                hubAvailable = hub != null,
+                hotspotAvailable = hotspot != null,
+                running = hub?.isRunning() ?: false,
+                boundPort = hub?.boundPort() ?: 0,
+                pairedCount = pairing?.listPaired()?.size ?: 0,
+                hotspot = hotspot?.detectManualTether(),
+                hotspotError = state.value.hotspotError,
             )
     }
 }
 
 /** Render a failed hotspot start as the short reason line the screen shows. */
-private fun Result<*>.GoErrorMessage(): String? =
-    exceptionOrNull()?.let { GoCause ->
-        val GoReason =
-            if (GoCause is HotspotUnavailableException) {
-                GoCause.GoFailure.GoReasonText()
+private fun Result<*>.errorMessage(): String? =
+    exceptionOrNull()?.let { cause ->
+        val reason =
+            if (cause is HotspotUnavailableException) {
+                cause.failure.reasonText()
             } else {
-                GoCause.message ?: "unknown"
+                cause.message ?: "unknown"
             }
-        "Hotspot failed: $GoReason"
+        "Hotspot failed: $reason"
     }
 
 /** The user-visible text for each typed hotspot failure. Exhaustive by design. */
-private fun HotspotFailure.GoReasonText(): String =
+private fun HotspotFailure.reasonText(): String =
     when (this) {
-        is HotspotFailure.StartFailed -> GoReason
+        is HotspotFailure.StartFailed -> reason
         HotspotFailure.PermissionDenied -> "permission-denied"
         HotspotFailure.LocationServicesDisabled -> "location-off"
         is HotspotFailure.IllegalTransition -> "illegal-transition"

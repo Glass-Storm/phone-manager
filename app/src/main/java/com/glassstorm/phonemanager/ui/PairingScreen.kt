@@ -31,11 +31,11 @@ import com.glassstorm.phonemanager.ui.components.card.Card
  */
 @Composable
 fun PairingScreen(
-    GoContext: Context,
+    context: Context,
     modifier: Modifier = Modifier,
 ) {
-    val GoViewModel: PairingViewModel = viewModel { PairingViewModel(GoContext) }
-    val GoState by GoViewModel.GoUiState.collectAsState()
+    val viewModel: PairingViewModel = viewModel { PairingViewModel(context) }
+    val state by viewModel.uiState.collectAsState()
 
     Column(
         modifier =
@@ -47,21 +47,21 @@ fun PairingScreen(
     ) {
         Text(text = "Pairing", style = AppTheme.typography.h2)
 
-        if (!GoState.GoAvailable) {
+        if (!state.available) {
             Text(text = "Pairing service not available")
             return@Column
         }
 
-        GoWindowCard(GoState, GoViewModel)
+        windowCard(state, viewModel)
 
-        GoDeviceListCard(GoState, GoViewModel)
+        deviceListCard(state, viewModel)
     }
 }
 
 @Composable
-private fun GoWindowCard(
-    GoState: PairingUiState,
-    GoViewModel: PairingViewModel,
+private fun windowCard(
+    state: PairingUiState,
+    viewModel: PairingViewModel,
 ) {
     Card {
         Column(
@@ -70,23 +70,23 @@ private fun GoWindowCard(
         ) {
             Text(text = "Pairing window", style = AppTheme.typography.h4)
 
-            if (GoState.GoPin == null) {
+            if (state.pin == null) {
                 Text(text = "No pairing window open")
-                Button(text = "Open pairing window", onClick = GoViewModel::GoOnOpenWindow)
+                Button(text = "Open pairing window", onClick = viewModel::onOpenWindow)
             } else {
                 Text(text = "PIN", style = AppTheme.typography.label2)
-                Text(text = GoState.GoPin!!, style = AppTheme.typography.h1)
-                Text(text = "Single-use. Expires in ${GoState.GoExpiresInSeconds}s.")
+                Text(text = state.pin!!, style = AppTheme.typography.h1)
+                Text(text = "Single-use. Expires in ${state.expiresInSeconds}s.")
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Button(
                         text = "Reopen pairing window",
                         variant = ButtonVariant.SecondaryOutlined,
-                        onClick = GoViewModel::GoOnOpenWindow,
+                        onClick = viewModel::onOpenWindow,
                     )
                     Button(
                         text = "Close pairing window",
                         variant = ButtonVariant.DestructiveOutlined,
-                        onClick = GoViewModel::GoOnCloseWindow,
+                        onClick = viewModel::onCloseWindow,
                     )
                 }
             }
@@ -95,9 +95,9 @@ private fun GoWindowCard(
 }
 
 @Composable
-private fun GoDeviceListCard(
-    GoState: PairingUiState,
-    GoViewModel: PairingViewModel,
+private fun deviceListCard(
+    state: PairingUiState,
+    viewModel: PairingViewModel,
 ) {
     Card {
         Column(
@@ -106,19 +106,19 @@ private fun GoDeviceListCard(
         ) {
             Text(text = "Paired devices", style = AppTheme.typography.h4)
 
-            if (GoState.GoDevices.isEmpty()) {
+            if (state.devices.isEmpty()) {
                 Text(text = "No paired devices")
             } else {
-                GoState.GoDevices.forEach { GoDevice ->
-                    Text(text = GoDevice.GoDeviceName)
+                state.devices.forEach { device ->
+                    Text(text = device.deviceName)
                     Text(
-                        text = "Role: ${GoDevice.GoRole}",
+                        text = "Role: ${device.role}",
                         style = AppTheme.typography.label2,
                     )
                     Button(
-                        text = "Revoke ${GoDevice.GoDeviceName}",
+                        text = "Revoke ${device.deviceName}",
                         variant = ButtonVariant.DestructiveOutlined,
-                        onClick = { GoViewModel.GoOnRevoke(GoDevice.GoDeviceId) },
+                        onClick = { viewModel.onRevoke(device.deviceId) },
                     )
                     HorizontalDivider()
                 }

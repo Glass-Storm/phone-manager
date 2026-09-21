@@ -35,11 +35,11 @@ import com.glassstorm.phonemanager.ui.components.textfield.OutlinedTextField
  */
 @Composable
 fun SettingsScreen(
-    GoContext: Context,
+    context: Context,
     modifier: Modifier = Modifier,
 ) {
-    val GoViewModel: SettingsViewModel = viewModel { SettingsViewModel(GoContext) }
-    val GoState by GoViewModel.GoUiState.collectAsState()
+    val viewModel: SettingsViewModel = viewModel { SettingsViewModel(context) }
+    val state by viewModel.uiState.collectAsState()
 
     Column(
         modifier =
@@ -51,25 +51,25 @@ fun SettingsScreen(
     ) {
         Text(text = "Settings", style = AppTheme.typography.h2)
 
-        if (!GoState.GoConfigAvailable) {
+        if (!state.configAvailable) {
             Text(text = "Configuration not available")
             return@Column
         }
 
-        GoSpeechCard(GoState, GoViewModel)
+        speechCard(state, viewModel)
 
-        GoHotspotCard(GoState, GoViewModel)
+        hotspotCard(state, viewModel)
 
-        GoBatteryCard(GoState, GoViewModel)
+        batteryCard(state, viewModel)
 
-        GoEndpointCard(GoState)
+        endpointCard(state)
     }
 }
 
 @Composable
-private fun GoSpeechCard(
-    GoState: SettingsUiState,
-    GoViewModel: SettingsViewModel,
+private fun speechCard(
+    state: SettingsUiState,
+    viewModel: SettingsViewModel,
 ) {
     Card {
         Column(
@@ -77,29 +77,29 @@ private fun GoSpeechCard(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(text = "Speech engine", style = AppTheme.typography.h4)
-            Text(text = "Current engine: ${GoState.GoSttEngine}")
+            Text(text = "Current engine: ${state.sttEngine}")
 
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Button(
                     text = "Use Mock",
                     variant = ButtonVariant.SecondaryOutlined,
-                    onClick = { GoViewModel.GoOnSelectEngine(SttEngine.MOCK) },
+                    onClick = { viewModel.onSelectEngine(SttEngine.MOCK) },
                 )
                 Button(
                     text = "Use Speechmatics",
                     variant = ButtonVariant.SecondaryOutlined,
-                    onClick = { GoViewModel.GoOnSelectEngine(SttEngine.SPEECHMATICS) },
+                    onClick = { viewModel.onSelectEngine(SttEngine.SPEECHMATICS) },
                 )
             }
 
-            Text(text = "API key configured: ${if (GoState.GoApiKeyConfigured) "yes" else "no"}")
+            Text(text = "API key configured: ${if (state.apiKeyConfigured) "yes" else "no"}")
 
             OutlinedTextField(
-                value = GoState.GoApiKeyDraft,
-                onValueChange = GoViewModel::GoOnApiKeyDraftChanged,
+                value = state.apiKeyDraft,
+                onValueChange = viewModel::onApiKeyDraftChanged,
                 singleLine = true,
                 visualTransformation =
-                    if (GoState.GoApiKeyVisible) {
+                    if (state.apiKeyVisible) {
                         VisualTransformation.None
                     } else {
                         PasswordVisualTransformation()
@@ -110,23 +110,23 @@ private fun GoSpeechCard(
                 Button(
                     text = "Set API key",
                     variant = ButtonVariant.PrimaryOutlined,
-                    onClick = GoViewModel::GoOnSaveApiKey,
+                    onClick = viewModel::onSaveApiKey,
                 )
                 Button(
-                    text = if (GoState.GoApiKeyVisible) "Hide API key" else "Show API key",
+                    text = if (state.apiKeyVisible) "Hide API key" else "Show API key",
                     variant = ButtonVariant.SecondaryOutlined,
-                    onClick = GoViewModel::GoOnToggleApiKeyVisibility,
+                    onClick = viewModel::onToggleApiKeyVisibility,
                 )
             }
 
-            Text(text = "Current region: ${GoState.GoRegion}")
+            Text(text = "Current region: ${state.region}")
 
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                GoRegionChoices.forEach { GoRegionValue ->
+                regionChoices.forEach { regionValue ->
                     Button(
-                        text = "Region $GoRegionValue",
+                        text = "Region $regionValue",
                         variant = ButtonVariant.SecondaryOutlined,
-                        onClick = { GoViewModel.GoOnSelectRegion(GoRegionValue) },
+                        onClick = { viewModel.onSelectRegion(regionValue) },
                     )
                 }
             }
@@ -135,9 +135,9 @@ private fun GoSpeechCard(
 }
 
 @Composable
-private fun GoHotspotCard(
-    GoState: SettingsUiState,
-    GoViewModel: SettingsViewModel,
+private fun hotspotCard(
+    state: SettingsUiState,
+    viewModel: SettingsViewModel,
 ) {
     Card {
         Column(
@@ -145,18 +145,18 @@ private fun GoHotspotCard(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(text = "Hotspot", style = AppTheme.typography.h4)
-            Text(text = "Hotspot mode: ${GoState.GoHotspotMode}")
+            Text(text = "Hotspot mode: ${state.hotspotMode}")
 
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Button(
                     text = "Hotspot mode Manual",
                     variant = ButtonVariant.SecondaryOutlined,
-                    onClick = { GoViewModel.GoOnSelectHotspotMode(HotspotMode.MANUAL) },
+                    onClick = { viewModel.onSelectHotspotMode(HotspotMode.MANUAL) },
                 )
                 Button(
                     text = "Hotspot mode Auto",
                     variant = ButtonVariant.SecondaryOutlined,
-                    onClick = { GoViewModel.GoOnSelectHotspotMode(HotspotMode.AUTO) },
+                    onClick = { viewModel.onSelectHotspotMode(HotspotMode.AUTO) },
                 )
             }
         }
@@ -164,9 +164,9 @@ private fun GoHotspotCard(
 }
 
 @Composable
-private fun GoBatteryCard(
-    GoState: SettingsUiState,
-    GoViewModel: SettingsViewModel,
+private fun batteryCard(
+    state: SettingsUiState,
+    viewModel: SettingsViewModel,
 ) {
     Card {
         Column(
@@ -175,35 +175,35 @@ private fun GoBatteryCard(
         ) {
             Text(text = "Battery", style = AppTheme.typography.h4)
 
-            if (!GoState.GoBatteryAvailable) {
+            if (!state.batteryAvailable) {
                 Text(text = "Battery exemption not available")
                 return@Column
             }
 
             Text(
-                text = "Battery optimization: ${if (GoState.GoBatteryExempt) "exempt" else "not exempt"}",
+                text = "Battery optimization: ${if (state.batteryExempt) "exempt" else "not exempt"}",
             )
             Button(
                 text = "Request battery exemption",
-                enabled = !GoState.GoBatteryExempt,
-                onClick = GoViewModel::GoOnRequestBatteryExemption,
+                enabled = !state.batteryExempt,
+                onClick = viewModel::onRequestBatteryExemption,
             )
         }
     }
 }
 
 @Composable
-private fun GoEndpointCard(GoState: SettingsUiState) {
+private fun endpointCard(state: SettingsUiState) {
     Card {
         Column(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(text = "Endpoint", style = AppTheme.typography.h4)
-            Text(text = "Protocol: ${GoState.GoProtocol}")
-            Text(text = "Hub port: ${GoState.GoHubPort}")
+            Text(text = "Protocol: ${state.protocol}")
+            Text(text = "Hub port: ${state.hubPort}")
         }
     }
 }
 
-private val GoRegionChoices = listOf("global", "eu", "us", "au")
+private val regionChoices = listOf("global", "eu", "us", "au")

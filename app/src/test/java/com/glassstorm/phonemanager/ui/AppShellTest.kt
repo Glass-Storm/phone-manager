@@ -28,46 +28,46 @@ class AppShellTest {
 
     @Test
     fun `dashboard is the start destination`() {
-        composeRule.GoSetShellContent(GoStartRoute = "dashboard")
+        composeRule.setShellContent(startRoute = "dashboard")
         composeRule.onNodeWithText("Dashboard").assertIsDisplayed()
     }
 
     @Test
     fun `pairing route renders its placeholder`() {
-        composeRule.GoSetShellContent(GoStartRoute = "pairing")
+        composeRule.setShellContent(startRoute = "pairing")
         composeRule.onNodeWithText("Pairing").assertIsDisplayed()
     }
 
     @Test
     fun `stream route renders its placeholder`() {
-        composeRule.GoSetShellContent(GoStartRoute = "stream")
+        composeRule.setShellContent(startRoute = "stream")
         composeRule.onNodeWithText("Stream").assertIsDisplayed()
     }
 
     @Test
     fun `devices route renders its placeholder`() {
-        composeRule.GoSetShellContent(GoStartRoute = "devices")
+        composeRule.setShellContent(startRoute = "devices")
         composeRule.onNodeWithText("Devices").assertIsDisplayed()
     }
 
     @Test
     fun `settings route renders its placeholder`() {
-        composeRule.GoSetShellContent(GoStartRoute = "settings")
+        composeRule.setShellContent(startRoute = "settings")
         composeRule.onNodeWithText("Settings").assertIsDisplayed()
     }
 
     @Test
     fun `shell declares exactly the five required routes`() {
-        composeRule.GoSetShellContent(GoStartRoute = "dashboard")
+        composeRule.setShellContent(startRoute = "dashboard")
         assertThat(GO_ROUTES)
             .containsExactly("dashboard", "pairing", "stream", "devices", "settings")
             .inOrder()
     }
 
-    private fun ComposeContentTestRule.GoSetShellContent(GoStartRoute: String) {
+    private fun ComposeContentTestRule.setShellContent(startRoute: String) {
         setContent {
             AppTheme {
-                AppShell(GoStartRoute = GoStartRoute)
+                AppShell(startRoute = startRoute)
             }
         }
     }

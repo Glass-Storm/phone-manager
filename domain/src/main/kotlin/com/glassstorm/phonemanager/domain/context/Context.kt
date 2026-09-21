@@ -26,12 +26,12 @@ class Context {
         registry[type] = instance
     }
 
-    fun <T : Any> GoUnregister(type: KClass<T>) {
+    fun <T : Any> unregister(type: KClass<T>) {
         registry.remove(type)
     }
 
     @PublishedApi
-    internal fun <T : Any> GoLookup(type: KClass<T>): T? = registry[type] as? T
+    internal fun <T : Any> lookup(type: KClass<T>): T? = registry[type] as? T
 }
 
 /** Register [instance] under its reified static type. */
@@ -42,9 +42,9 @@ inline fun <reified T : Any> Register(
 
 /** Resolve the registered instance of [T], or throw [MissingFromContextException]. */
 inline fun <reified T : Any> FromContext(ctx: Context): T =
-    ctx.GoLookup(T::class) ?: throw MissingFromContextException(
+    ctx.lookup(T::class) ?: throw MissingFromContextException(
         "no ${T::class.qualifiedName} registered in Context",
     )
 
 /** Resolve the registered instance of [T], or `null` when absent. */
-inline fun <reified T : Any> FromContextOrNull(ctx: Context): T? = ctx.GoLookup(T::class)
+inline fun <reified T : Any> FromContextOrNull(ctx: Context): T? = ctx.lookup(T::class)

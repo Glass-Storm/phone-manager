@@ -33,53 +33,53 @@ import kotlinx.coroutines.withContext
  * which completes the results collector, so no coroutine is left behind.
  */
 class StreamGrpcService(
-    GoCtx: Context,
+    ctx: Context,
 ) : StreamServiceGrpcKt.StreamServiceCoroutineImplBase() {
-    private val GoStream: StreamService = FromContext<StreamService>(GoCtx)
+    private val stream: StreamService = FromContext<StreamService>(ctx)
 
     override fun openStream(requests: Flow<StreamFrame>): Flow<StreamFrame> =
         channelFlow {
             // Never trust a frame field for identity: use the token-proved device id.
-            val GoDeviceId =
-                AuthInterceptor.GoDeviceIdKey.get()
+            val deviceId =
+                AuthInterceptor.deviceIdKey.get()
                     ?: throw StatusException(Status.UNAUTHENTICATED.withDescription("missing bearer token"))
-            val GoSession = GoStream.GoOpenSession(GoDeviceId)
+            val session = stream.openSession(deviceId)
             try {
                 coroutineScope {
                     // Relayed utterances are forwarded as they are produced.
                     launch {
-                        GoStream.GoResults(GoSession.GoSessionId).collect { GoResult ->
-                            send(GoTranscriptFrame(GoResult.GoText))
+                        stream.results(session.sessionId).collect { result ->
+                            send(transcriptFrame(result.text))
                         }
                     }
                     try {
-                        requests.collect { GoFrame -> GoDispatch(GoSession.GoSessionId, GoFrame) }
+                        requests.collect { frame -> dispatch(session.sessionId, frame) }
                     } finally {
                         // Closes the results channel -> the launched collector completes.
-                        withContext(NonCancellable) { GoStream.GoCloseSession(GoSession.GoSessionId) }
+                        withContext(NonCancellable) { stream.closeSession(session.sessionId) }
                     }
                 }
             } finally {
                 // Idempotent safety net for the cancel/error paths that skip the inner
                 // finally (e.g. cancellation while collecting the inbound flow).
-                withContext(NonCancellable) { GoStream.GoCloseSession(GoSession.GoSessionId) }
+                withContext(NonCancellable) { stream.closeSession(session.sessionId) }
             }
         }
 
-    private suspend fun GoDispatch(
+    private suspend fun dispatch(
         sessionId: String,
         frame: StreamFrame,
     ) {
         when (frame.payloadCase) {
             StreamFrame.PayloadCase.AUDIO_PCM16_16K ->
-                GoStream.GoPushAudio(
+                stream.pushAudio(
                     sessionId = sessionId,
                     audioPcm16 = frame.audioPcm1616K.toByteArray(),
                     sampleRateHz = StreamService.GoAudioSampleRateHz,
                 )
 
             StreamFrame.PayloadCase.VIDEO_H264_NAL ->
-                GoStream.GoPushVideo(sessionId, frame.videoH264Nal.toByteArray())
+                stream.pushVideo(sessionId, frame.videoH264Nal.toByteArray())
 
             // Transcript/result frames are hub->peer output; a peer echoing them
             // changes nothing, so they are accepted and ignored.
@@ -91,7 +91,7 @@ class StreamGrpcService(
         }
     }
 
-    private fun GoTranscriptFrame(text: String): StreamFrame =
+    private fun transcriptFrame(text: String): StreamFrame =
         StreamFrame
             .newBuilder()
             .setTranscript(text)
