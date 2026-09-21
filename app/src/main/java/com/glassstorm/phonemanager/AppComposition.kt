@@ -8,7 +8,6 @@ import com.glassstorm.phonemanager.adapter.repository.memory.MemoryDeviceReposit
 import com.glassstorm.phonemanager.adapter.repository.sqlite.SqliteDeviceRepository
 import com.glassstorm.phonemanager.adapter.speech.SttFactory
 import com.glassstorm.phonemanager.adapter.speech.mock.MockSttAdapter
-import com.glassstorm.phonemanager.adapter.transport.grpc.HubServerAdapter
 import com.glassstorm.phonemanager.battery.AndroidBatteryExemption
 import com.glassstorm.phonemanager.battery.BatteryExemption
 import com.glassstorm.phonemanager.core.domain.adapter.config.AppConfig
@@ -28,6 +27,7 @@ import com.glassstorm.phonemanager.core.domain.service.StreamService
 import com.glassstorm.phonemanager.core.service.DeviceServiceImpl
 import com.glassstorm.phonemanager.core.service.PairingServiceImpl
 import com.glassstorm.phonemanager.core.service.StreamServiceImpl
+import com.glassstorm.phonemanager.transport.grpc.HubServerAdapter
 import android.content.Context as AndroidContext
 
 /**

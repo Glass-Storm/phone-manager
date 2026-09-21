@@ -23,14 +23,17 @@ android {
     buildTypes {
         release {
             // The whole point of the T7 gate: the hub's runtime-discovered gRPC
-            // transport must survive shrinking, and the adapter's consumer rules
-            // travel into THIS build. Debug stays unminified so tests stay fast
-            // and readable.
+            // transport must survive shrinking. The keep rules now live with the
+            // transport they protect in `:transport:grpc`; because that module is a
+            // pure Kotlin/JVM library it cannot use AGP's `consumerProguardFiles`,
+            // so the app references the rule file explicitly here. Debug stays
+            // unminified so tests stay fast and readable.
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
+                rootProject.file("transport/grpc/r8-rules.pro"),
             )
         }
     }
@@ -41,7 +44,8 @@ dependencies {
 
     // Composition root: :app owns the wiring, so it may see both the services and the adapters.
     implementation(project(":core:domain"))
-    implementation(project(":service"))
+    implementation(project(":core:service"))
+    implementation(project(":transport:grpc"))
     implementation(project(":adapter"))
 
     // The GO gRPC transport (T6 spike verdict: netty-shaded, IPv4 explicit, plaintext).

@@ -2,7 +2,6 @@ package com.glassstorm.phonemanager
 
 import android.app.Application
 import androidx.test.core.app.ApplicationProvider
-import com.glassstorm.phonemanager.adapter.transport.grpc.HubServerAdapter
 import com.glassstorm.phonemanager.core.domain.adapter.relay.FrameSink
 import com.glassstorm.phonemanager.core.domain.adapter.transport.HubServer
 import com.glassstorm.phonemanager.core.domain.context.Context
@@ -15,6 +14,7 @@ import com.glassstorm.phonemanager.testkit.goBinary
 import com.glassstorm.phonemanager.testkit.repoRoot
 import com.glassstorm.phonemanager.testkit.run
 import com.glassstorm.phonemanager.testkit.syntheticVideoNal
+import com.glassstorm.phonemanager.transport.grpc.HubServerAdapter
 import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
 import org.junit.After

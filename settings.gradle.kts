@@ -19,7 +19,7 @@ dependencyResolutionManagement {
 rootProject.name = "phone-manager"
 
 include(":app")
-include(":service", ":adapter")
+include(":adapter")
 // The hand-written domain DTOs (pure Kotlin data types, zero dependencies): the
 // shared language spoken across every layer, extracted so consumers depend on
 // the data alone rather than the whole `:core:domain` port module.
@@ -34,6 +34,11 @@ include(":core:domain")
 // the DTO<->proto mapping live in `:transport:grpc`, which is the only module
 // allowed to see `ecosys.v1`.
 include(":core:service")
+// The gRPC boundary: the service implementations, the bearer-token interceptor,
+// the netty-backed hub server, and the DTO <-> proto mapping. This is the ONE
+// module allowed to depend on the FROZEN `:contract`, so the `ecosys.v1` wire
+// format never leaks into the domain's language. Pure Kotlin/JVM (no Android).
+include(":transport:grpc")
 // The FROZEN `ecosys.v1` wire contract: its own module so the out-of-scope
 // glasses app and Ubuntu daemon can consume/version/publish it independently of
 // the hub implementation. It owns the .proto AND the protobuf/gRPC codegen.

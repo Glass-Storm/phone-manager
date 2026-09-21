@@ -50,7 +50,7 @@ jobs:
           sdkmanager "platform-tools" "platforms;android-36" "platforms;android-29" "build-tools;36.0.0"
 
       - name: Run tests, assemble APKs & lint
-        run: ./gradlew :core:domain:test :service:test :adapter:testDebugUnitTest :app:testDebugUnitTest assembleDebug assembleRelease lint --stacktrace
+        run: ./gradlew :core:domain:test :transport:grpc:test :adapter:testDebugUnitTest :app:testDebugUnitTest assembleDebug assembleRelease lint --stacktrace
 
       - name: Upload JUnit test results
         if: always()
@@ -59,7 +59,7 @@ jobs:
           name: junit-results-${{ github.sha }}
           path: |
             domain/build/test-results/**
-            service/build/test-results/**
+            transport/grpc/build/test-results/**
             adapter/build/test-results/**
             app/build/test-results/**
           if-no-files-found: error
