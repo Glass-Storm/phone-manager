@@ -1,37 +1,44 @@
 package com.glassstorm.phonemanager.transport.grpc
 
 import com.glassstorm.phonemanager.core.domain.adapter.relay.FrameSink
-import com.glassstorm.phonemanager.core.domain.adapter.repository.DeviceRepository
 import com.glassstorm.phonemanager.core.domain.adapter.speech.SttPort
-import com.glassstorm.phonemanager.core.domain.context.Context
-import com.glassstorm.phonemanager.core.domain.context.register
 import com.glassstorm.phonemanager.core.domain.security.TokenVerifier
-import com.glassstorm.phonemanager.core.domain.service.PairingService
 import com.glassstorm.phonemanager.core.domain.service.StreamService
 import com.glassstorm.phonemanager.core.service.PairingServiceImpl
 import com.glassstorm.phonemanager.core.service.StreamServiceImpl
 
 /**
- * The smallest Context that can host a real hub: the two gRPC services resolve
- * their collaborators eagerly in their constructors, so all five ports must be
- * registered before the adapter is built.
+ * The smallest hand-wired set of collaborators that can host a real hub, with no
+ * dependency registry: the two gRPC services and the interceptor take their ports
+ * by CONSTRUCTOR, so the test composes the graph directly.
  *
- * `PairingServiceImpl` is the real service (it is also the `TokenVerifier` the
- * `AuthInterceptor` needs); only the leaf ports are fakes, exactly as an Android
- * composition would swap in real adapters.
+ * `PairingServiceImpl` is the real service (it is also the [TokenVerifier] the
+ * `AuthInterceptor` needs) and is built once, so the service surface and the
+ * verifier observe the SAME pairing state. Only the leaf ports are fakes, exactly
+ * as an Android composition would swap in real adapters.
  */
-fun hubContext(): Context {
-    val ctx = Context()
-    // ONE pairing instance, registered twice: the service surface and the
-    // interceptor's token verifier must observe the same pairing state.
-    val pairing = PairingServiceImpl(ctx)
-    register<DeviceRepository>(ctx, FakeDeviceRepository())
-    register<PairingService>(ctx, pairing)
-    register<TokenVerifier>(ctx, pairing)
-    register<StreamService>(ctx, StreamServiceImpl(ctx))
-    register<SttPort>(ctx, NoopSttPort())
-    register<FrameSink>(ctx, NoopFrameSink())
-    return ctx
+class HubParts(
+    val repo: FakeDeviceRepository,
+    val stt: FakeSttPort,
+    val sink: FakeFrameSink,
+    val pairing: PairingServiceImpl,
+    val stream: StreamService,
+) {
+    val tokenVerifier: TokenVerifier get() = pairing
+}
+
+fun hubParts(): HubParts {
+    val repo = FakeDeviceRepository()
+    val stt = FakeSttPort()
+    val sink = FakeFrameSink()
+    val pairing = PairingServiceImpl(repo)
+    return HubParts(
+        repo = repo,
+        stt = stt,
+        sink = sink,
+        pairing = pairing,
+        stream = StreamServiceImpl(stt, sink),
+    )
 }
 
 private class NoopSttPort : SttPort {
@@ -50,3 +57,6 @@ private class NoopFrameSink : FrameSink {
         h264Nal: ByteArray,
     ) = Unit
 }
+
+/** A paired service surface with inert media ports; used where media never flows. */
+fun inertStreamService(): StreamService = StreamServiceImpl(NoopSttPort(), NoopFrameSink())

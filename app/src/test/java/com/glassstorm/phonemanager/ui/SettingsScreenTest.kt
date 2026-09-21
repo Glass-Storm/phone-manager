@@ -13,8 +13,6 @@ import androidx.compose.ui.test.performTextInput
 import com.glassstorm.phonemanager.battery.BatteryExemption
 import com.glassstorm.phonemanager.core.domain.adapter.config.AppConfig
 import com.glassstorm.phonemanager.core.domain.adapter.transport.HubServer
-import com.glassstorm.phonemanager.core.domain.context.Context
-import com.glassstorm.phonemanager.core.domain.context.register
 import com.glassstorm.phonemanager.core.model.HotspotMode
 import com.glassstorm.phonemanager.core.model.SttEngine
 import com.google.common.truth.Truth.assertThat
@@ -41,8 +39,8 @@ class SettingsScreenTest {
     val composeRule = createComposeRule()
 
     @Test
-    fun `renders the unavailable state when the config port is absent`() {
-        composeRule.setSettingsContent(Context())
+    fun `renders the unavailable state when the config port read fails`() {
+        composeRule.setSettingsContent(config = FakeAppConfig(failReads = true))
 
         composeRule.assertText("Settings")
         composeRule.assertText("Configuration not available")
@@ -55,9 +53,8 @@ class SettingsScreenTest {
                 engine = SttEngine.SPEECHMATICS,
                 regionValue = "eu",
             )
-        val ctx = Context().also { register<AppConfig>(it, config) }
 
-        composeRule.setSettingsContent(ctx)
+        composeRule.setSettingsContent(config = config)
 
         composeRule.assertText("Speech engine")
         composeRule.assertText("Current engine: Speechmatics")
@@ -67,9 +64,8 @@ class SettingsScreenTest {
     @Test
     fun `selecting the cloud engine persists it through the port`() {
         val config = FakeAppConfig(engine = SttEngine.MOCK)
-        val ctx = Context().also { register<AppConfig>(it, config) }
 
-        composeRule.setSettingsContent(ctx)
+        composeRule.setSettingsContent(config = config)
         composeRule.assertText("Current engine: Mock (offline)")
 
         composeRule.click("Use Speechmatics")
@@ -81,9 +77,8 @@ class SettingsScreenTest {
     @Test
     fun `selecting a region persists it through the port`() {
         val config = FakeAppConfig(regionValue = "us")
-        val ctx = Context().also { register<AppConfig>(it, config) }
 
-        composeRule.setSettingsContent(ctx)
+        composeRule.setSettingsContent(config = config)
         composeRule.assertText("Current region: us")
 
         composeRule.click("Region au")
@@ -95,9 +90,8 @@ class SettingsScreenTest {
     @Test
     fun `selecting the automatic hotspot mode persists it through the port`() {
         val config = FakeAppConfig(mode = HotspotMode.MANUAL)
-        val ctx = Context().also { register<AppConfig>(it, config) }
 
-        composeRule.setSettingsContent(ctx)
+        composeRule.setSettingsContent(config = config)
         composeRule.assertText("Hotspot mode: Manual")
 
         composeRule.click("Hotspot mode Auto")
@@ -110,9 +104,8 @@ class SettingsScreenTest {
     fun `a stored api key is never rendered in cleartext by default`() {
         // Given a store holding a recognizable key
         val config = FakeAppConfig(storedKey = "sk-SECRET-SENTINEL-1234")
-        val ctx = Context().also { register<AppConfig>(it, config) }
 
-        composeRule.setSettingsContent(ctx)
+        composeRule.setSettingsContent(config = config)
 
         // When the whole semantics tree is searched for the raw key
         // Then it is absent, and a masked password field is present instead
@@ -124,9 +117,8 @@ class SettingsScreenTest {
     @Test
     fun `a fresh install with no key renders the not-configured state and stays masked`() {
         val config = FakeAppConfig(storedKey = "")
-        val ctx = Context().also { register<AppConfig>(it, config) }
 
-        composeRule.setSettingsContent(ctx)
+        composeRule.setSettingsContent(config = config)
 
         composeRule.assertText("API key configured: no")
         // The input is still a masked password field even when empty, so the shape
@@ -138,9 +130,8 @@ class SettingsScreenTest {
     @Test
     fun `an empty api key submission never crashes and keeps the unconfigured state`() {
         val config = FakeAppConfig(storedKey = "")
-        val ctx = Context().also { register<AppConfig>(it, config) }
 
-        composeRule.setSettingsContent(ctx)
+        composeRule.setSettingsContent(config = config)
         composeRule.click("Set API key")
 
         assertThat(config.apiKey()).isEmpty()
@@ -150,9 +141,8 @@ class SettingsScreenTest {
     @Test
     fun `a newly typed api key is persisted and reported as configured`() {
         val config = FakeAppConfig(storedKey = "")
-        val ctx = Context().also { register<AppConfig>(it, config) }
 
-        composeRule.setSettingsContent(ctx)
+        composeRule.setSettingsContent(config = config)
         composeRule.typeIntoField("sk-typed-777")
         composeRule.click("Set API key")
 
@@ -165,9 +155,8 @@ class SettingsScreenTest {
     @Test
     fun `revealing the api key takes an explicit action`() {
         val config = FakeAppConfig(storedKey = "sk-SECRET-SENTINEL-1234")
-        val ctx = Context().also { register<AppConfig>(it, config) }
 
-        composeRule.setSettingsContent(ctx)
+        composeRule.setSettingsContent(config = config)
         composeRule.assertText("Show API key")
 
         composeRule.click("Show API key")
@@ -181,13 +170,8 @@ class SettingsScreenTest {
     fun `the exemption button reflects the current state and requests when pressed`() {
         val config = FakeAppConfig()
         val battery = FakeBatteryExemption(exempt = false)
-        val ctx =
-            Context().also {
-                register<AppConfig>(it, config)
-                register<BatteryExemption>(it, battery)
-            }
 
-        composeRule.setSettingsContent(ctx)
+        composeRule.setSettingsContent(config = config, battery = battery)
         composeRule.assertText("Battery optimization: not exempt")
 
         composeRule.click("Request battery exemption")
@@ -197,26 +181,16 @@ class SettingsScreenTest {
 
     @Test
     fun `an already exempt app renders the exempt state`() {
-        val ctx =
-            Context().also {
-                register<AppConfig>(it, FakeAppConfig())
-                register<BatteryExemption>(it, FakeBatteryExemption(exempt = true))
-            }
-
-        composeRule.setSettingsContent(ctx)
+        composeRule.setSettingsContent(battery = FakeBatteryExemption(exempt = true))
 
         composeRule.assertText("Battery optimization: exempt")
     }
 
     @Test
     fun `the protocol and the bound hub port are displayed`() {
-        val ctx =
-            Context().also {
-                register<AppConfig>(it, FakeAppConfig())
-                register<HubServer>(it, FakeHubServer(boundPortValue = 40404).also { it.start(0) })
-            }
-
-        composeRule.setSettingsContent(ctx)
+        composeRule.setSettingsContent(
+            hub = FakeHubServer(boundPortValue = 40404).also { it.start(0) },
+        )
 
         composeRule.assertText("Protocol: ecosys.v1")
         composeRule.assertText("Hub port: 40404")
@@ -224,21 +198,20 @@ class SettingsScreenTest {
 
     @Test
     fun `a stopped hub renders a zero port without crashing`() {
-        val ctx =
-            Context().also {
-                register<AppConfig>(it, FakeAppConfig())
-                register<HubServer>(it, FakeHubServer(boundPortValue = 40404))
-            }
-
-        composeRule.setSettingsContent(ctx)
+        composeRule.setSettingsContent(hub = FakeHubServer(boundPortValue = 40404))
 
         composeRule.assertText("Hub port: 0")
     }
 
-    private fun ComposeContentTestRule.setSettingsContent(ctx: Context) {
+    private fun ComposeContentTestRule.setSettingsContent(
+        config: AppConfig = FakeAppConfig(),
+        hub: HubServer = FakeHubServer(),
+        battery: BatteryExemption = FakeBatteryExemption(),
+    ) {
+        val viewModel = SettingsViewModel(config, hub, battery)
         setContent {
             AppTheme {
-                SettingsScreen(context = ctx)
+                SettingsScreen(viewModelFactory = viewModelFactory(viewModel))
             }
         }
     }

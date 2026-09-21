@@ -19,9 +19,10 @@ import com.glassstorm.phonemanager.permission.HubPermissions
  * is the ONE owner of bring-up — no Activity starts the hotspot or the discovery.
  *
  * Thin on purpose: the Android lifecycle lives here, the ordered bring-up lives
- * in [HubBringUp], and the listener itself is resolved from the composition root
- * through the [com.glassstorm.phonemanager.core.domain.adapter.transport.HubServer]
- * port. This class names no concrete adapter.
+ * in [HubBringUp], and every collaborator is resolved from the process-wide Dagger
+ * graph the [PhoneManagerApplication] built — the same graph the UI uses, so the
+ * foreground service and the screens observe the SAME listener and pairing state.
+ * This class names no concrete adapter.
  */
 class HubForegroundService : Service() {
     private var bringUp: HubBringUp? = null
@@ -30,9 +31,6 @@ class HubForegroundService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        // The network adapters need a real WifiManager/NsdManager, so the Android
-        // Context is recorded before anything resolves the registry.
-        AppComposition.initAndroid(this)
         // The channel MUST exist before startForeground on API 26+, or the OS
         // rejects the notification and the service crashes.
         ensureChannel()
@@ -45,13 +43,7 @@ class HubForegroundService : Service() {
     ): Int {
         startForeground(NOTIFICATION_ID, notification())
         if (bringUp == null) {
-            bringUp =
-                HubBringUp(
-                    ctx = AppComposition.appContext(),
-                    permissionBlocker = {
-                        HubPermissions.blockingHotspotPermission(applicationContext)
-                    },
-                ).also { it.bringUp(requestedPort(intent)) }
+            bringUp = newBringUp().also { it.bringUp(requestedPort(intent)) }
         }
         // Restart the hub after the OS reclaims the process: the hub is the whole
         // point of this service, so a stolen process must come back.
@@ -64,9 +56,20 @@ class HubForegroundService : Service() {
         super.onDestroy()
     }
 
-    private fun requestedPort(intent: Intent?): Int =
-        intent?.getIntExtra(EXTRA_PORT, AppComposition.DEFAULT_HUB_PORT)
-            ?: AppComposition.DEFAULT_HUB_PORT
+    /** Build the ordered bring-up from the process-wide graph. */
+    private fun newBringUp(): HubBringUp {
+        val component = (application as PhoneManagerApplication).component
+        return HubBringUp(
+            hub = component.hubServer(),
+            hotspot = component.hotspotController(),
+            discovery = component.discovery(),
+            permissionBlocker = {
+                HubPermissions.blockingHotspotPermission(applicationContext)
+            },
+        )
+    }
+
+    private fun requestedPort(intent: Intent?): Int = intent?.getIntExtra(EXTRA_PORT, DEFAULT_HUB_PORT) ?: DEFAULT_HUB_PORT
 
     private fun ensureChannel() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
@@ -91,6 +94,12 @@ class HubForegroundService : Service() {
             .build()
 
     companion object {
+        /**
+         * The hub's default listening port. Reachable by hotspot peers via the
+         * gateway address, and the port the discovery adapter advertises.
+         */
+        const val DEFAULT_HUB_PORT: Int = 9000
+
         /** Notification channel the hub's ongoing notification lives on. */
         const val CHANNEL_ID: String = "hub-foreground"
 

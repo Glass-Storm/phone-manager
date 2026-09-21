@@ -1,10 +1,14 @@
 package com.glassstorm.phonemanager.di
 
 import android.app.Application
+import androidx.lifecycle.ViewModelProvider
 import com.glassstorm.phonemanager.adapter.android.di.AndroidAdapterModule
 import com.glassstorm.phonemanager.adapter.android.di.ApplicationContext
 import com.glassstorm.phonemanager.adapter.jvm.di.JvmAdapterModule
 import com.glassstorm.phonemanager.core.domain.adapter.config.AppConfig
+import com.glassstorm.phonemanager.core.domain.adapter.network.Discovery
+import com.glassstorm.phonemanager.core.domain.adapter.network.HotspotController
+import com.glassstorm.phonemanager.core.domain.adapter.repository.DeviceRepository
 import com.glassstorm.phonemanager.core.domain.adapter.transport.HubServer
 import com.glassstorm.phonemanager.core.domain.security.TokenVerifier
 import com.glassstorm.phonemanager.core.domain.service.DeviceService
@@ -22,9 +26,10 @@ import javax.inject.Singleton
  * One `@Singleton` component composes every layer's module: the use cases
  * (`ServiceModule`), the gRPC transport (`TransportModule`), the Android-free
  * adapters (`JvmAdapterModule`), the platform adapters (`AndroidAdapterModule`),
- * and the app-owned glue (`AppModule`). This is the compile-time replacement for
- * the hand-rolled `Context` registry — a missing or duplicated binding now fails
- * the BUILD, not a runtime lookup.
+ * the app-owned glue (`AppModule`), and the ViewModel multibinding
+ * (`ViewModelModule`). This is the compile-time replacement for the hand-rolled
+ * `Context` registry — a missing or duplicated binding fails the BUILD, not a
+ * runtime lookup.
  *
  * ## The application Context
  *
@@ -38,7 +43,8 @@ import javax.inject.Singleton
  * ```
  * DaggerAppComponent.factory().create(application)
  * ```
- * (done once in `PhoneManagerApplication.onCreate`; T16 rewires consumers onto it)
+ * (done once in `PhoneManagerApplication.onCreate`; consumers resolve through the
+ * [PhoneManagerApplication.component] field)
  */
 @Singleton
 @Component(
@@ -48,13 +54,13 @@ import javax.inject.Singleton
         JvmAdapterModule::class,
         AndroidAdapterModule::class,
         AppModule::class,
+        ViewModelModule::class,
     ],
 )
 interface AppComponent {
     /**
      * The use-case surfaces. Exposed individually (rather than a `Map<Class<*>, Any>`)
-     * so each consumer gets its port by type — the constructor-injection migration
-     * T16 performs.
+     * so each consumer gets its port by type.
      */
     fun deviceService(): DeviceService
 
@@ -74,6 +80,18 @@ interface AppComponent {
 
     /** The app-private runtime configuration the Settings screen reads and writes. */
     fun appConfig(): AppConfig
+
+    /** The persistent device repository, so integration tests can drive the real store. */
+    fun deviceRepository(): DeviceRepository
+
+    /** The platform access-point controller the foreground service drives bring-up with. */
+    fun hotspotController(): HotspotController
+
+    /** The DNS-SD advertiser the foreground service drives bring-up with. */
+    fun discovery(): Discovery
+
+    /** The ViewModel factory the Compose shell threads down to every screen. */
+    fun viewModelFactory(): ViewModelProvider.Factory
 
     /** Creates the graph with the application Context bound. */
     @Component.Factory

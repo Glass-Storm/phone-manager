@@ -14,8 +14,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.glassstorm.phonemanager.core.domain.context.Context
 import com.glassstorm.phonemanager.core.model.HotspotMode
 import com.glassstorm.phonemanager.core.model.SttEngine
 import com.glassstorm.phonemanager.ui.components.Button
@@ -35,10 +35,10 @@ import com.glassstorm.phonemanager.ui.components.textfield.OutlinedTextField
  */
 @Composable
 fun SettingsScreen(
-    context: Context,
+    viewModelFactory: ViewModelProvider.Factory,
     modifier: Modifier = Modifier,
 ) {
-    val viewModel: SettingsViewModel = viewModel { SettingsViewModel(context) }
+    val viewModel: SettingsViewModel = viewModel(factory = viewModelFactory)
     val state by viewModel.uiState.collectAsState()
 
     Column(

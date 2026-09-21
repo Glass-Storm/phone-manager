@@ -4,6 +4,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.ComposeContentTestRule
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.lifecycle.ViewModelProvider
 import com.google.common.truth.Truth.assertThat
 import org.junit.Rule
 import org.junit.Test
@@ -20,6 +21,8 @@ import org.robolectric.RobolectricTestRunner
  * shared constant is tautological and passes even when the UI renders the wrong text.
  *
  * One route per test: `createComposeRule()` permits a single `setContent` per test.
+ * Every screen resolves its ViewModel through the passed factory, so the test builds
+ * the five ViewModels from domain-port fakes.
  */
 @RunWith(RobolectricTestRunner::class)
 class AppShellTest {
@@ -65,9 +68,18 @@ class AppShellTest {
     }
 
     private fun ComposeContentTestRule.setShellContent(startRoute: String) {
+        val pairing = FakePairingService()
+        val factory: ViewModelProvider.Factory =
+            viewModelFactory(
+                DashboardViewModel(FakeHubServer(), FakeHotspotController(), pairing),
+                DevicesViewModel(FakeDeviceRepository()),
+                PairingViewModel(pairing),
+                SettingsViewModel(FakeAppConfig(), FakeHubServer(), FakeBatteryExemption()),
+                StreamViewModel(FakeStreamService(), pairing),
+            )
         setContent {
             AppTheme {
-                AppShell(startRoute = startRoute)
+                AppShell(viewModelFactory = factory, startRoute = startRoute)
             }
         }
     }

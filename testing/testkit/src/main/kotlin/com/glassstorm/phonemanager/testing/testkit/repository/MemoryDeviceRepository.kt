@@ -1,14 +1,14 @@
-package com.glassstorm.phonemanager.adapter.jvm.repository.memory
+package com.glassstorm.phonemanager.testing.testkit.repository
 
 import com.glassstorm.phonemanager.core.domain.adapter.repository.DeviceRepository
 import com.glassstorm.phonemanager.core.model.Device
 
 /**
- * In-memory [DeviceRepository] implementation.
+ * In-memory [DeviceRepository] test double.
  *
- * The reference fake used by the vertical sample slice: it satisfies the domain
- * port without any Android or SQLite dependency, so `:service` tests and the
- * composition root can be exercised on a plain JVM.
+ * It satisfies the domain port without any Android or SQLite dependency, so the
+ * `:service`/`:transport:grpc` suites and the `:app` E2E harness can exercise the
+ * graph on a plain JVM (or under Robolectric for `:app`).
  */
 class MemoryDeviceRepository : DeviceRepository {
     private val rows: MutableMap<String, Device> = LinkedHashMap()

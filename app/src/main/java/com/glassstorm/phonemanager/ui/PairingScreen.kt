@@ -12,8 +12,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.glassstorm.phonemanager.core.domain.context.Context
 import com.glassstorm.phonemanager.ui.components.Button
 import com.glassstorm.phonemanager.ui.components.ButtonVariant
 import com.glassstorm.phonemanager.ui.components.HorizontalDivider
@@ -24,17 +24,15 @@ import com.glassstorm.phonemanager.ui.components.card.Card
  * Pairing flow: open a single-use PIN window, show the PIN, list paired devices
  * and revoke one.
  *
- * The [Context] is the composition root's registry; the ViewModel is built from
- * it with `viewModel(initializer)` because this project has no DI framework and
- * must not gain one. An absent `PairingService` renders "not available" instead
- * of crashing the shell.
+ * [viewModelFactory] is the Dagger-backed factory the shell threads down. A
+ * FAILING `PairingService` renders "not available" instead of crashing the shell.
  */
 @Composable
 fun PairingScreen(
-    context: Context,
+    viewModelFactory: ViewModelProvider.Factory,
     modifier: Modifier = Modifier,
 ) {
-    val viewModel: PairingViewModel = viewModel { PairingViewModel(context) }
+    val viewModel: PairingViewModel = viewModel(factory = viewModelFactory)
     val state by viewModel.uiState.collectAsState()
 
     Column(

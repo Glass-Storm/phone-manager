@@ -1,9 +1,6 @@
 package com.glassstorm.phonemanager.transport.grpc
 
 import com.glassstorm.phonemanager.core.domain.adapter.transport.HubServer
-import com.glassstorm.phonemanager.core.domain.context.Context
-import com.glassstorm.phonemanager.core.domain.context.fromContext
-import com.glassstorm.phonemanager.core.domain.security.TokenVerifier
 import com.glassstorm.phonemanager.transport.grpc.security.AuthInterceptor
 import io.grpc.ServerBuilder
 import io.grpc.netty.shaded.io.grpc.netty.NettyServerBuilder
@@ -20,11 +17,10 @@ import java.net.InetSocketAddress
  *
  * ## Collaborators are CONSTRUCTOR dependencies
  *
- * The two gRPC services and the [AuthInterceptor] arrive ready-built, so this
- * adapter NEVER reads the registry. Dagger supplies them through `TransportModule`,
- * which builds the production bind with [ALL_INTERFACES_ADDRESS]; the
- * registry-compat constructor keeps the [LOOPBACK_ADDRESS] default the tests rely
- * on and exists only until T16 deletes the `Context` registry.
+ * The two gRPC services and the [AuthInterceptor] arrive ready-built. Dagger
+ * supplies them through `TransportModule`, which builds the production bind with
+ * [ALL_INTERFACES_ADDRESS]; callers that need [LOOPBACK_ADDRESS] (the tests, and
+ * the `:app` E2E harness) pass it explicitly.
  *
  * ## Bind-address decision (documented, deliberate)
  *
@@ -49,17 +45,6 @@ class HubServerAdapter(
     private val authInterceptor: AuthInterceptor,
     private val bindAddress: String,
 ) : HubServer {
-    /** Registry-compat constructor; T16 removes it with the registry. */
-    constructor(
-        ctx: Context,
-        bindAddress: String = LOOPBACK_ADDRESS,
-    ) : this(
-        PairingGrpcService(ctx),
-        StreamGrpcService(ctx),
-        AuthInterceptor(fromContext<TokenVerifier>(ctx)),
-        bindAddress,
-    )
-
     private val hub: GrpcHubServer = GrpcHubServer { newBuilder(it) }
 
     override fun start(port: Int) = hub.start(port)
@@ -90,8 +75,5 @@ class HubServerAdapter(
          * LAN peers (glasses, Ubuntu daemon) must be able to dial in.
          */
         const val ALL_INTERFACES_ADDRESS: String = "0.0.0.0"
-
-        /** Registry-compat factory the app composition uses; T16 removes it. */
-        fun forLanPeers(ctx: Context): HubServerAdapter = HubServerAdapter(ctx, ALL_INTERFACES_ADDRESS)
     }
 }

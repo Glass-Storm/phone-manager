@@ -12,8 +12,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.glassstorm.phonemanager.core.domain.context.Context
 import com.glassstorm.phonemanager.ui.components.Button
 import com.glassstorm.phonemanager.ui.components.ButtonVariant
 import com.glassstorm.phonemanager.ui.components.HorizontalDivider
@@ -24,17 +24,17 @@ import com.glassstorm.phonemanager.ui.components.card.Card
  * Ecosystem hub status: listener state, hotspot credentials, bound port and how
  * many devices are paired.
  *
- * The [Context] is the composition root's registry; the ViewModel is built from
- * it with `viewModel(initializer)` because this project has no DI framework.
- * A port that is not registered renders as "not available" — the app shell test
- * composes an almost-empty Context, and this screen must never crash there.
+ * [viewModelFactory] is the Dagger-backed factory the shell threads down: the
+ * ViewModel and its ports are resolved from the compile-time graph, so a wiring
+ * error is a build failure rather than an "unavailable" state. A port that is
+ * present but FAILING still renders as "not available" instead of crashing.
  */
 @Composable
 fun DashboardScreen(
-    context: Context,
+    viewModelFactory: ViewModelProvider.Factory,
     modifier: Modifier = Modifier,
 ) {
-    val viewModel: DashboardViewModel = viewModel { DashboardViewModel(context) }
+    val viewModel: DashboardViewModel = viewModel(factory = viewModelFactory)
     val state by viewModel.uiState.collectAsState()
 
     Column(

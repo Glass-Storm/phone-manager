@@ -1,7 +1,5 @@
 package com.glassstorm.phonemanager.transport.grpc
 
-import com.glassstorm.phonemanager.core.domain.context.Context
-import com.glassstorm.phonemanager.core.domain.context.fromContext
 import com.glassstorm.phonemanager.core.domain.service.StreamService
 import com.glassstorm.phonemanager.transport.grpc.security.AuthInterceptor
 import ecosys.v1.StreamFrame
@@ -26,8 +24,7 @@ import kotlinx.coroutines.withContext
  * id inside a frame.
  *
  * [StreamService] is a CONSTRUCTOR dependency supplied by `TransportModule` at
- * the composition root. The registry-compat constructor exists only until T16
- * deletes the `Context` registry.
+ * the composition root.
  *
  * ## Teardown
  *
@@ -39,9 +36,6 @@ import kotlinx.coroutines.withContext
 class StreamGrpcService(
     private val stream: StreamService,
 ) : StreamServiceGrpcKt.StreamServiceCoroutineImplBase() {
-    /** Registry-compat constructor; T16 removes it with the registry. */
-    constructor(ctx: Context) : this(fromContext<StreamService>(ctx))
-
     override fun openStream(requests: Flow<StreamFrame>): Flow<StreamFrame> =
         channelFlow {
             // Never trust a frame field for identity: use the token-proved device id.

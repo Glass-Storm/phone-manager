@@ -12,11 +12,8 @@ import com.glassstorm.phonemanager.di.DaggerAppComponent
  * and the UI resolve the SAME `PairingServiceImpl`, `StreamServiceImpl` and
  * `HubServer` through it, so they can never observe different hub state.
  *
- * ## Transitional (T15)
- *
- * The legacy `Context` registry still exists and is still what the consumers use;
- * T16 rewires them onto this component and deletes the registry. Building the
- * graph here now is what proves it compiles and resolves alongside the registry.
+ * [HubForegroundService] resolves its collaborators and [MainActivity] resolves
+ * the ViewModel factory from this field; nothing builds a second graph.
  */
 class PhoneManagerApplication : Application() {
     /**

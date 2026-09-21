@@ -1,8 +1,5 @@
 package com.glassstorm.phonemanager.core.service
 
-import com.glassstorm.phonemanager.core.domain.adapter.repository.DeviceRepository
-import com.glassstorm.phonemanager.core.domain.context.Context
-import com.glassstorm.phonemanager.core.domain.context.register
 import com.glassstorm.phonemanager.core.model.PairOutcome
 import com.glassstorm.phonemanager.core.model.Pairing
 import com.google.common.truth.Truth.assertThat
@@ -33,16 +30,13 @@ class PairingConcurrencyTest {
     @get:Rule
     val deadline: Timeout = Timeout.seconds(60)
 
-    private lateinit var ctx: Context
     private lateinit var repo: FakeDeviceRepository
     private lateinit var pairing: PairingServiceImpl
 
     @Before
     fun buildService() {
-        ctx = Context()
         repo = FakeDeviceRepository()
-        register<DeviceRepository>(ctx, repo)
-        pairing = PairingServiceImpl(ctx, clock = { System.currentTimeMillis() })
+        pairing = PairingServiceImpl.withClock(repo, clock = { System.currentTimeMillis() })
     }
 
     // ------------------------------------------------- case 1: single-use under race

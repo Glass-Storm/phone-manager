@@ -1,7 +1,5 @@
 package com.glassstorm.phonemanager.transport.grpc
 
-import com.glassstorm.phonemanager.core.domain.context.Context
-import com.glassstorm.phonemanager.core.domain.context.register
 import com.glassstorm.phonemanager.core.domain.security.TokenVerifier
 import com.glassstorm.phonemanager.core.domain.service.PairingService
 import com.glassstorm.phonemanager.core.domain.service.StreamService
@@ -81,19 +79,16 @@ class GrpcMappingTest {
 
     @Before
     fun startServer() {
-        val ctx = Context()
         pairing = RecordingPairingService()
         stream = RecordingStreamService()
-        register<PairingService>(ctx, pairing)
-        register<StreamService>(ctx, stream)
 
         val name = InProcessServerBuilder.generateName()
         server =
             InProcessServerBuilder
                 .forName(name)
                 .directExecutor()
-                .addService(PairingGrpcService(ctx))
-                .addService(StreamGrpcService(ctx))
+                .addService(PairingGrpcService(pairing))
+                .addService(StreamGrpcService(stream))
                 .intercept(AuthInterceptor(TokenVerifier { token -> device.takeIf { token == GOOD_TOKEN } }))
                 .build()
                 .start()

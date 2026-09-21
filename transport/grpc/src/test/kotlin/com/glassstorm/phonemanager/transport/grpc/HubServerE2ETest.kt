@@ -1,12 +1,5 @@
 package com.glassstorm.phonemanager.transport.grpc
 
-import com.glassstorm.phonemanager.core.domain.adapter.relay.FrameSink
-import com.glassstorm.phonemanager.core.domain.adapter.repository.DeviceRepository
-import com.glassstorm.phonemanager.core.domain.adapter.speech.SttPort
-import com.glassstorm.phonemanager.core.domain.context.Context
-import com.glassstorm.phonemanager.core.domain.context.register
-import com.glassstorm.phonemanager.core.domain.service.PairingService
-import com.glassstorm.phonemanager.core.domain.service.StreamService
 import com.glassstorm.phonemanager.core.service.PairingServiceImpl
 import com.glassstorm.phonemanager.core.service.StreamServiceImpl
 import com.glassstorm.phonemanager.testing.testkit.ProcessRun
@@ -56,7 +49,6 @@ class HubServerE2ETest {
     private lateinit var repo: FakeDeviceRepository
     private lateinit var stt: FakeSttPort
     private lateinit var sink: FakeFrameSink
-    private lateinit var ctx: Context
     private var port: Int = 0
 
     /** Every child process this test class launched, so [@After] can guarantee reaping. */
@@ -72,25 +64,20 @@ class HubServerE2ETest {
             .that(probe.ok)
             .isTrue()
 
-        // Given a Context wired with domain-port fakes only (no :adapter edge)
-        ctx = Context()
+        // Given a hand-wired graph over domain-port fakes only (no :adapter edge)
         repo = FakeDeviceRepository()
         stt = FakeSttPort("mockpeer recognized utterance")
         sink = FakeFrameSink()
-        pairing = PairingServiceImpl(ctx, clock = { System.currentTimeMillis() })
-        register<DeviceRepository>(ctx, repo)
-        register<PairingService>(ctx, pairing)
-        register<StreamService>(ctx, StreamServiceImpl(ctx))
-        register<SttPort>(ctx, stt)
-        register<FrameSink>(ctx, sink)
+        pairing = PairingServiceImpl(repo)
+        val stream = StreamServiceImpl(stt, sink)
 
         // The transport under test: netty-shaded NIO, IPv4 explicit, ephemeral port.
         hub =
             GrpcHubServer { port ->
                 NettyServerBuilder
                     .forAddress(InetSocketAddress("127.0.0.1", port))
-                    .addService(PairingGrpcService(ctx))
-                    .addService(StreamGrpcService(ctx))
+                    .addService(PairingGrpcService(pairing))
+                    .addService(StreamGrpcService(stream))
                     .intercept(AuthInterceptor(pairing))
             }
         hub.start(0)

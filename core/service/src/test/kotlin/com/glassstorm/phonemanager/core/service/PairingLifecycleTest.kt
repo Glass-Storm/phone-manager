@@ -1,8 +1,5 @@
 package com.glassstorm.phonemanager.core.service
 
-import com.glassstorm.phonemanager.core.domain.adapter.repository.DeviceRepository
-import com.glassstorm.phonemanager.core.domain.context.Context
-import com.glassstorm.phonemanager.core.domain.context.register
 import com.glassstorm.phonemanager.core.domain.service.PairingService
 import com.glassstorm.phonemanager.core.model.PairOutcome
 import com.glassstorm.phonemanager.core.model.Pairing
@@ -23,18 +20,15 @@ import org.junit.Test
  * no `sleep`, no wall clock, no flake.
  */
 class PairingLifecycleTest {
-    private lateinit var ctx: Context
     private lateinit var repo: FakeDeviceRepository
     private lateinit var pairing: PairingServiceImpl
     private var nowMs: Long = 1_000_000L
 
     @Before
     fun buildService() {
-        // Given a Context wired with a domain-port fake only (never an :adapter type)
-        ctx = Context()
+        // Given the service constructed over a domain-port fake only (never an :adapter type)
         repo = FakeDeviceRepository()
-        register<DeviceRepository>(ctx, repo)
-        pairing = PairingServiceImpl(ctx, clock = { nowMs })
+        pairing = PairingServiceImpl.withClock(repo, clock = { nowMs })
         nowMs = 1_000_000L
     }
 

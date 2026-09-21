@@ -3,8 +3,12 @@ plugins {
     alias(libs.plugins.phonemanager.ktlint)
 }
 
-// Pure Kotlin/JVM: no Android, no runtime dependencies. It only carries the
-// bounded child-process runner and the deterministic media generators shared by
-// the `:transport:grpc` JVM harness and the `:app` Robolectric hub suite. Keeping
-// it dependency-free is what lets `:app` (an Android module) consume it as a plain
-// `testImplementation` project without dragging a runtime onto the APK.
+// Test support shared by the `:transport:grpc` JVM harness and the `:app`
+// Robolectric hub suite: the bounded child-process runner, the deterministic
+// media generators, and the in-memory `DeviceRepository` test double. Its only
+// dependency is `:core:domain`, because `MemoryDeviceRepository` implements the
+// `DeviceRepository` port; nothing here reaches a platform API, so `:app` can
+// consume it as a plain `testImplementation` project without a runtime edge.
+dependencies {
+    implementation(project(":core:domain"))
+}

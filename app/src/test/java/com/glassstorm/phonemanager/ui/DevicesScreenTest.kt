@@ -7,8 +7,6 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import com.glassstorm.phonemanager.core.domain.adapter.repository.DeviceRepository
-import com.glassstorm.phonemanager.core.domain.context.Context
-import com.glassstorm.phonemanager.core.domain.context.register
 import com.google.common.truth.Truth.assertThat
 import org.junit.Rule
 import org.junit.Test
@@ -22,9 +20,9 @@ import org.robolectric.RobolectricTestRunner
  * shared constant is tautological and passes even when the UI renders the wrong
  * text. `createComposeRule()` permits a single `setContent` per test.
  *
- * The screen must resolve its data through the `DeviceRepository` DOMAIN port, so
- * these tests drive a fake repository (seeded rows, revoke, and a store that throws)
- * rather than a concrete `:adapter` class.
+ * Under compile-time DI a port cannot be ABSENT, so the "unavailable" rendering is
+ * driven by a repository whose read THROWS — the genuine failure path. The screen
+ * still resolves its data through the `DeviceRepository` DOMAIN port only.
  */
 @RunWith(RobolectricTestRunner::class)
 class DevicesScreenTest {
@@ -32,8 +30,8 @@ class DevicesScreenTest {
     val composeRule = createComposeRule()
 
     @Test
-    fun `renders the unavailable state when the repository port is absent`() {
-        composeRule.setDevicesContent(Context())
+    fun `renders the unavailable state when the repository read fails`() {
+        composeRule.setDevicesContent(FakeDeviceRepository(failOnList = true))
 
         composeRule.assertText("Devices")
         composeRule.assertText("Device store not available")
@@ -41,9 +39,7 @@ class DevicesScreenTest {
 
     @Test
     fun `an empty store shows the no-devices line`() {
-        val ctx = Context().also { register<DeviceRepository>(it, FakeDeviceRepository()) }
-
-        composeRule.setDevicesContent(ctx)
+        composeRule.setDevicesContent(FakeDeviceRepository())
 
         composeRule.assertText("No paired devices")
     }
@@ -55,9 +51,8 @@ class DevicesScreenTest {
                 it.seedDevice("d-1", "Glass One", role = "GLASS", lastSeenMs = 1_700_000_000_000L)
                 it.seedDevice("d-2", "Ubuntu Daemon", role = "DAEMON")
             }
-        val ctx = Context().also { register<DeviceRepository>(it, repo) }
 
-        composeRule.setDevicesContent(ctx)
+        composeRule.setDevicesContent(repo)
 
         composeRule.assertText("Glass One")
         composeRule.assertText("Role: GLASS")
@@ -72,9 +67,8 @@ class DevicesScreenTest {
             FakeDeviceRepository().also {
                 it.seedDevice("d-1", "Glass One", lastSeenMs = null)
             }
-        val ctx = Context().also { register<DeviceRepository>(it, repo) }
 
-        composeRule.setDevicesContent(ctx)
+        composeRule.setDevicesContent(repo)
 
         composeRule.assertText("Last seen: never")
     }
@@ -86,9 +80,8 @@ class DevicesScreenTest {
                 it.seedDevice("d-1", "Glass One", role = "GLASS")
                 it.seedDevice("d-2", "Ubuntu Daemon", role = "DAEMON")
             }
-        val ctx = Context().also { register<DeviceRepository>(it, repo) }
 
-        composeRule.setDevicesContent(ctx)
+        composeRule.setDevicesContent(repo)
         composeRule.assertText("Glass One")
 
         composeRule.click("Revoke Glass One")
@@ -101,9 +94,8 @@ class DevicesScreenTest {
     @Test
     fun `revoking the last device falls back to the empty line`() {
         val repo = FakeDeviceRepository().also { it.seedDevice("d-1", "Glass One") }
-        val ctx = Context().also { register<DeviceRepository>(it, repo) }
 
-        composeRule.setDevicesContent(ctx)
+        composeRule.setDevicesContent(repo)
         composeRule.click("Revoke Glass One")
 
         composeRule.assertText("No paired devices")
@@ -111,26 +103,11 @@ class DevicesScreenTest {
     }
 
     @Test
-    fun `a failing repository renders unavailable instead of crashing`() {
-        // The port exists but its list read throws, which is exactly what a broken
-        // database would do: the screen must degrade, not take the shell down.
-        val ctx =
-            Context().also {
-                register<DeviceRepository>(it, FakeDeviceRepository(failOnList = true))
-            }
-
-        composeRule.setDevicesContent(ctx)
-
-        composeRule.assertText("Device store not available")
-    }
-
-    @Test
     fun `revoking the same device twice is idempotent`() {
         // A double tap (or a revoke that races another) must not crash and must
         // leave the store in the same shape: the second delete is a harmless no-op.
         val repo = FakeDeviceRepository().also { it.seedDevice("d-1", "Glass One") }
-        val ctx = Context().also { register<DeviceRepository>(it, repo) }
-        val viewModel = DevicesViewModel(ctx)
+        val viewModel = DevicesViewModel(repo)
 
         viewModel.onRevoke("d-1")
         viewModel.onRevoke("d-1")
@@ -140,10 +117,11 @@ class DevicesScreenTest {
         assertThat(repo.deletedIds).containsExactly("d-1", "d-1")
     }
 
-    private fun ComposeContentTestRule.setDevicesContent(ctx: Context) {
+    private fun ComposeContentTestRule.setDevicesContent(repo: DeviceRepository) {
+        val viewModel = DevicesViewModel(repo)
         setContent {
             AppTheme {
-                DevicesScreen(context = ctx)
+                DevicesScreen(viewModelFactory = viewModelFactory(viewModel))
             }
         }
     }

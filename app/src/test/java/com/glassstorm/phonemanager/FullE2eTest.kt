@@ -2,12 +2,11 @@ package com.glassstorm.phonemanager
 
 import android.app.Application
 import androidx.test.core.app.ApplicationProvider
+import com.glassstorm.phonemanager.adapter.jvm.speech.SttFactory
 import com.glassstorm.phonemanager.core.domain.adapter.relay.FrameSink
 import com.glassstorm.phonemanager.core.domain.adapter.transport.HubServer
-import com.glassstorm.phonemanager.core.domain.context.Context
-import com.glassstorm.phonemanager.core.domain.context.fromContext
-import com.glassstorm.phonemanager.core.domain.context.register
 import com.glassstorm.phonemanager.core.domain.service.PairingService
+import com.glassstorm.phonemanager.core.service.StreamServiceImpl
 import com.glassstorm.phonemanager.testing.testkit.MockPeerDriver
 import com.glassstorm.phonemanager.testing.testkit.MockPeerTranscript
 import com.glassstorm.phonemanager.testing.testkit.goBinary
@@ -15,6 +14,9 @@ import com.glassstorm.phonemanager.testing.testkit.repoRoot
 import com.glassstorm.phonemanager.testing.testkit.run
 import com.glassstorm.phonemanager.testing.testkit.syntheticVideoNal
 import com.glassstorm.phonemanager.transport.grpc.HubServerAdapter
+import com.glassstorm.phonemanager.transport.grpc.PairingGrpcService
+import com.glassstorm.phonemanager.transport.grpc.StreamGrpcService
+import com.glassstorm.phonemanager.transport.grpc.security.AuthInterceptor
 import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
 import org.junit.After
@@ -32,17 +34,16 @@ import java.util.Collections
  * T18 harness (b): the FULL scenario against the **Robolectric-hosted `:app` hub**.
  *
  * This is the suite that proves the ANDROID WIRING, not just the protocol: the
- * Context comes from the real [AppComposition] (SQLite repository, real
- * `SttFactory` -> `MockSttAdapter`, `DiscardingFrameSink`, `PairingServiceImpl`)
- * and only two ports are overridden:
+ * graph comes from the real [PhoneManagerApplication] component (SQLite repository,
+ * real `SttFactory` -> `MockSttAdapter`, `PairingServiceImpl`), and only two
+ * collaborators are chosen for the test:
  *
- *  * [HubServer] — re-registered with the loopback [HubServerAdapter]. The app
- *    default is `forLanPeers` (`0.0.0.0`), which is FORBIDDEN in tests; the
- *    override is what makes the bind `127.0.0.1` + ephemeral.
- *  * [FrameSink] — re-registered with a RECORDING sink, so byte-exactness of the
- *    video passthrough is assertable at the port boundary. The production
- *    `DiscardingFrameSink` (asserted present in [AppCompositionTest]) cannot be
- *    observed, so the recording double is required to prove the relay handed the
+ *  * [HubServer] — built with the loopback [HubServerAdapter]. The app's own bind
+ *    is `0.0.0.0` (all interfaces), which is FORBIDDEN in tests; the explicit
+ *    loopback + ephemeral port is what makes this safe.
+ *  * [FrameSink] — a RECORDING sink, so byte-exactness of the video passthrough is
+ *    assertable at the port boundary. The production `DiscardingFrameSink` cannot
+ *    be observed, so the recording double is required to prove the relay handed the
  *    bytes over unchanged.
  *
  * No emulator, no device: Robolectric only, as issues.md R2 mandates.
@@ -66,7 +67,7 @@ class FullE2eTest {
         }
     }
 
-    private lateinit var ctx: Context
+    private lateinit var pairing: PairingService
     private lateinit var hub: HubServer
     private lateinit var sink: RecordingFrameSink
     private var driver: MockPeerDriver? = null
@@ -79,15 +80,21 @@ class FullE2eTest {
             .that(probe.ok)
             .isTrue()
 
-        // Given the REAL app composition for this Android context
-        ctx = AppComposition.buildContext(app)
+        // Given the REAL app graph for this Android context
+        val component = (app as PhoneManagerApplication).component
+        pairing = component.pairingService()
 
-        // When the loopback listener and the recording sink are bound over it
-        hub = HubServerAdapter(ctx)
-        assertThat((hub as HubServerAdapter).bindAddress()).isEqualTo("127.0.0.1")
-        register<HubServer>(ctx, hub)
+        // When the loopback listener and the recording sink are composed over it
         sink = RecordingFrameSink()
-        register<FrameSink>(ctx, sink)
+        val stt = SttFactory(component.appConfig()).createSttPort()
+        val stream = StreamServiceImpl(stt, sink)
+        hub =
+            HubServerAdapter(
+                pairingService = PairingGrpcService(pairing),
+                streamService = StreamGrpcService(stream),
+                authInterceptor = AuthInterceptor(component.tokenVerifier()),
+                bindAddress = HubServerAdapter.LOOPBACK_ADDRESS,
+            )
         hub.start(0)
         assertThat(hub.boundPort()).isGreaterThan(0)
     }
@@ -102,7 +109,6 @@ class FullE2eTest {
     @Test
     fun `the full scenario passes against the robolectric app hub with byte exact video`() {
         // Given a driver bound to the app hub's ephemeral port
-        val pairing = fromContext<PairingService>(ctx)
         driver =
             MockPeerDriver(
                 port = hub.boundPort(),

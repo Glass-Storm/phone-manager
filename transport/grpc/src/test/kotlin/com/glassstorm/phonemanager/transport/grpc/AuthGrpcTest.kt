@@ -1,12 +1,5 @@
 package com.glassstorm.phonemanager.transport.grpc
 
-import com.glassstorm.phonemanager.core.domain.adapter.relay.FrameSink
-import com.glassstorm.phonemanager.core.domain.adapter.repository.DeviceRepository
-import com.glassstorm.phonemanager.core.domain.adapter.speech.SttPort
-import com.glassstorm.phonemanager.core.domain.context.Context
-import com.glassstorm.phonemanager.core.domain.context.register
-import com.glassstorm.phonemanager.core.domain.service.PairingService
-import com.glassstorm.phonemanager.core.domain.service.StreamService
 import com.glassstorm.phonemanager.core.model.PairOutcome
 import com.glassstorm.phonemanager.core.service.PairingServiceImpl
 import com.glassstorm.phonemanager.core.service.StreamServiceImpl
@@ -57,25 +50,20 @@ class AuthGrpcTest {
 
     @Before
     fun startServer() {
-        // Given a Context wired with domain-port fakes only
-        val ctx = Context()
+        // Given a hand-wired graph over domain-port fakes only
         repo = FakeDeviceRepository()
         stt = FakeSttPort("recognized utterance")
         sink = FakeFrameSink()
-        pairing = PairingServiceImpl(ctx, clock = { nowMs })
-        register<DeviceRepository>(ctx, repo)
-        register<PairingService>(ctx, pairing)
-        register<StreamService>(ctx, StreamServiceImpl(ctx))
-        register<SttPort>(ctx, stt)
-        register<FrameSink>(ctx, sink)
+        pairing = PairingServiceImpl.withClock(repo, clock = { nowMs })
+        val stream = StreamServiceImpl(stt, sink)
 
         val name = InProcessServerBuilder.generateName()
         server =
             InProcessServerBuilder
                 .forName(name)
                 .directExecutor()
-                .addService(PairingGrpcService(ctx))
-                .addService(StreamGrpcService(ctx))
+                .addService(PairingGrpcService(pairing))
+                .addService(StreamGrpcService(stream))
                 .intercept(AuthInterceptor(pairing))
                 .build()
                 .start()

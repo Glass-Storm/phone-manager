@@ -1,8 +1,6 @@
 package com.glassstorm.phonemanager.core.service
 
 import com.glassstorm.phonemanager.core.domain.adapter.repository.DeviceRepository
-import com.glassstorm.phonemanager.core.domain.context.Context
-import com.glassstorm.phonemanager.core.domain.context.fromContext
 import com.glassstorm.phonemanager.core.domain.security.TokenVerifier
 import com.glassstorm.phonemanager.core.domain.service.PairingService
 import com.glassstorm.phonemanager.core.model.Device
@@ -23,7 +21,7 @@ import javax.inject.Singleton
  * ## Single object for two ports
  *
  * This class implements BOTH [PairingService] and [TokenVerifier]. The gRPC
- * Pairing service and the [AuthInterceptor] must observe the SAME pairing state,
+ * Pairing service and the `AuthInterceptor` must observe the SAME pairing state,
  * or the interceptor could verify against a different authority than the one
  * `Pair` mints tokens into. Dagger binds both ports to one `@Singleton` instance
  * (see `ServiceModule`), exactly as the registry registered this object twice.
@@ -55,121 +53,119 @@ import javax.inject.Singleton
  * callers holding the correct PIN could both pass the "not consumed" check and
  * mint two tokens from one single-use PIN, and concurrent bad PINs could lose
  * increments and let a brute-force slip past [PairingService.MAX_PIN_ATTEMPTS].
- *
- * ## Constructor shape (transitional, T15)
- *
- * The repository is held as a provider so both construction paths stay
- * behaviourally identical while the `Context` registry still exists: the [Inject]
- * constructor captures the bound instance, and the `Context` constructor performs
- * the same per-call lookup as before. T16 removes the registry constructor.
  */
 @Singleton
-class PairingServiceImpl private constructor(
-    private val repositoryProvider: () -> DeviceRepository,
-    private val clock: () -> Long,
-) : PairingService,
-    TokenVerifier {
-    @Inject
-    constructor(repository: DeviceRepository) : this({ repository }, { System.currentTimeMillis() })
+class PairingServiceImpl
+    private constructor(
+        private val repository: DeviceRepository,
+        private val clock: () -> Long,
+    ) : PairingService,
+        TokenVerifier {
+        @Inject
+        constructor(repository: DeviceRepository) : this(repository, System::currentTimeMillis)
 
-    /** Registry-compat constructor; T16 removes it with the registry. */
-    constructor(
-        ctx: Context,
-        clock: () -> Long = { System.currentTimeMillis() },
-    ) : this({ fromContext(ctx) }, clock)
+        private val random = SecureRandom()
 
-    private val random = SecureRandom()
+        private var window: Pairing? = null
+        private var windowConsumed: Boolean = false
+        private var failedAttempts: Int = 0
 
-    private var window: Pairing? = null
-    private var windowConsumed: Boolean = false
-    private var failedAttempts: Int = 0
-
-    private fun repo(): DeviceRepository = repositoryProvider()
-
-    @Synchronized
-    override fun openWindow(ttlMs: Long): Pairing {
-        val fresh = Pairing(pin = TokenCodec.newPin(), expiresAtMs = clock() + ttlMs)
-        window = fresh
-        windowConsumed = false
-        failedAttempts = 0
-        return fresh
-    }
-
-    @Synchronized
-    override fun stopWindow() {
-        window = null
-        windowConsumed = false
-        failedAttempts = 0
-    }
-
-    @Synchronized
-    override fun pair(
-        pin: String,
-        deviceName: String,
-        role: String,
-    ): PairOutcome {
-        if (pin.isBlank()) return reject(PairOutcome.REASON_PIN_MISSING)
-        if (deviceName.isBlank()) return reject(PairOutcome.REASON_NAME_MISSING)
-
-        val current = window ?: return reject(PairOutcome.REASON_NO_WINDOW)
-        if (clock() > current.expiresAtMs) return reject(PairOutcome.REASON_PIN_EXPIRED)
-        if (windowConsumed) return reject(PairOutcome.REASON_PIN_CONSUMED)
-        if (failedAttempts >= PairingService.MAX_PIN_ATTEMPTS) {
-            return reject(PairOutcome.REASON_PIN_LOCKED)
+        @Synchronized
+        override fun openWindow(ttlMs: Long): Pairing {
+            val fresh = Pairing(pin = TokenCodec.newPin(), expiresAtMs = clock() + ttlMs)
+            window = fresh
+            windowConsumed = false
+            failedAttempts = 0
+            return fresh
         }
 
-        // Constant-time PIN check — never `String.equals` on a secret.
-        if (!TokenCodec.constantTimeEquals(current.pin, pin)) {
-            failedAttempts += 1
-            return reject(PairOutcome.REASON_PIN_INVALID)
+        @Synchronized
+        override fun stopWindow() {
+            window = null
+            windowConsumed = false
+            failedAttempts = 0
         }
 
-        // Success: single-use burn first, so a crash mid-issue cannot replay the PIN.
-        windowConsumed = true
-        failedAttempts = 0
+        @Synchronized
+        override fun pair(
+            pin: String,
+            deviceName: String,
+            role: String,
+        ): PairOutcome {
+            if (pin.isBlank()) return reject(PairOutcome.REASON_PIN_MISSING)
+            if (deviceName.isBlank()) return reject(PairOutcome.REASON_NAME_MISSING)
 
-        val salt = TokenCodec.newSalt()
-        val token = TokenCodec.deriveToken(pin, salt, TokenCodec.DEFAULT_ITERATIONS)
-        val deviceId = newDeviceId()
-        repo().upsert(
-            Device(
-                deviceId = deviceId,
-                deviceName = deviceName,
-                role = role,
-                tokenHash = TokenCodec.hashToken(token),
-                pairedAtMs = clock(),
-                lastSeenMs = null,
-            ),
-        )
-        return PairOutcome.Ok(deviceId = deviceId, token = token)
+            val current = window ?: return reject(PairOutcome.REASON_NO_WINDOW)
+            if (clock() > current.expiresAtMs) return reject(PairOutcome.REASON_PIN_EXPIRED)
+            if (windowConsumed) return reject(PairOutcome.REASON_PIN_CONSUMED)
+            if (failedAttempts >= PairingService.MAX_PIN_ATTEMPTS) {
+                return reject(PairOutcome.REASON_PIN_LOCKED)
+            }
+
+            // Constant-time PIN check — never `String.equals` on a secret.
+            if (!TokenCodec.constantTimeEquals(current.pin, pin)) {
+                failedAttempts += 1
+                return reject(PairOutcome.REASON_PIN_INVALID)
+            }
+
+            // Success: single-use burn first, so a crash mid-issue cannot replay the PIN.
+            windowConsumed = true
+            failedAttempts = 0
+
+            val salt = TokenCodec.newSalt()
+            val token = TokenCodec.deriveToken(pin, salt, TokenCodec.DEFAULT_ITERATIONS)
+            val deviceId = newDeviceId()
+            repository.upsert(
+                Device(
+                    deviceId = deviceId,
+                    deviceName = deviceName,
+                    role = role,
+                    tokenHash = TokenCodec.hashToken(token),
+                    pairedAtMs = clock(),
+                    lastSeenMs = null,
+                ),
+            )
+            return PairOutcome.Ok(deviceId = deviceId, token = token)
+        }
+
+        override fun verifyToken(token: String): Device? {
+            val hash = TokenCodec.hashToken(token)
+            val device = repository.getByTokenHash(hash) ?: return null
+            // Verified tokens double as proof of liveness.
+            repository.touch(device.deviceId, clock())
+            return device
+        }
+
+        override fun touchLastSeen(
+            deviceId: String,
+            seenAtMs: Long,
+        ) {
+            repository.touch(deviceId, seenAtMs)
+        }
+
+        override fun revoke(deviceId: String) {
+            // Deleting the row removes the token hash, so the token stops verifying.
+            repository.delete(deviceId)
+        }
+
+        override fun listPaired(): List<Device> = repository.list()
+
+        private fun reject(reason: String): PairOutcome = PairOutcome.Rejected(reason = reason)
+
+        private fun newDeviceId(): String {
+            val bytes = ByteArray(16).also { random.nextBytes(it) }
+            return bytes.joinToString("") { "%02x".format(it) }
+        }
+
+        companion object {
+            /**
+             * Test seam: builds the service against a deterministic clock so TTL and
+             * expiry are exact. Production always uses the `@Inject` constructor,
+             * which binds [System.currentTimeMillis].
+             */
+            fun withClock(
+                repository: DeviceRepository,
+                clock: () -> Long,
+            ): PairingServiceImpl = PairingServiceImpl(repository, clock)
+        }
     }
-
-    override fun verifyToken(token: String): Device? {
-        val hash = TokenCodec.hashToken(token)
-        val device = repo().getByTokenHash(hash) ?: return null
-        // Verified tokens double as proof of liveness.
-        repo().touch(device.deviceId, clock())
-        return device
-    }
-
-    override fun touchLastSeen(
-        deviceId: String,
-        seenAtMs: Long,
-    ) {
-        repo().touch(deviceId, seenAtMs)
-    }
-
-    override fun revoke(deviceId: String) {
-        // Deleting the row removes the token hash, so the token stops verifying.
-        repo().delete(deviceId)
-    }
-
-    override fun listPaired(): List<Device> = repo().list()
-
-    private fun reject(reason: String): PairOutcome = PairOutcome.Rejected(reason = reason)
-
-    private fun newDeviceId(): String {
-        val bytes = ByteArray(16).also { random.nextBytes(it) }
-        return bytes.joinToString("") { "%02x".format(it) }
-    }
-}

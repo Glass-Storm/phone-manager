@@ -3,8 +3,6 @@ package com.glassstorm.phonemanager
 import com.glassstorm.phonemanager.core.domain.adapter.network.Discovery
 import com.glassstorm.phonemanager.core.domain.adapter.network.HotspotController
 import com.glassstorm.phonemanager.core.domain.adapter.transport.HubServer
-import com.glassstorm.phonemanager.core.domain.context.Context
-import com.glassstorm.phonemanager.core.domain.context.fromContextOrNull
 import com.glassstorm.phonemanager.core.domain.network.HotspotUnavailableException
 import com.glassstorm.phonemanager.core.model.HotspotInfo
 
@@ -51,33 +49,31 @@ data class HubBringUpReport(
  * a no-op rather than a double-start (the service may be re-created by the OS at
  * any time).
  *
- * Every collaborator is resolved through the Context registry against a DOMAIN
- * port. This class never names a concrete adapter, so `:app` stays free of the
- * adapters' identities.
+ * Every collaborator is a CONSTRUCTOR dependency typed as a DOMAIN port. This
+ * class never names a concrete adapter, so `:app` stays free of the adapters'
+ * identities, and Dagger supplies the ports from the compile-time graph — a
+ * missing port is a build failure, not a runtime branch.
  *
- * A missing access point is NOT fatal to the listener: the hub degrades to
- * "listener up, hotspot unavailable" and reports that honestly instead of
- * claiming an access point it never brought up. A missing [HubServer] is fatal —
- * there is no hub without it.
+ * A refused or permission-blocked access point is NOT fatal to the listener: the
+ * hub degrades to "listener up, hotspot unavailable" and reports that honestly
+ * instead of claiming an access point it never brought up.
  */
 class HubBringUp(
-    private val ctx: Context,
+    private val hub: HubServer,
+    private val hotspot: HotspotController,
+    private val discovery: Discovery,
     private val permissionBlocker: () -> String?,
 ) {
     private var wasStarted: Boolean = false
 
     /** Bring the hub up in dependency order and report what actually came up. */
     fun bringUp(requestedPort: Int): HubBringUpReport {
-        val hub =
-            fromContextOrNull<HubServer>(ctx)
-                ?: throw MissingComponentException("HubServer")
-
-        val hotspot = bringUpHotspot()
-        val port = startListener(hub, requestedPort)
+        val hotspotOutcome = bringUpHotspot()
+        val port = startListener(requestedPort)
         val advertising = advertiseDiscovery(port)
 
         wasStarted = true
-        return HubBringUpReport(hotspot, port, advertising)
+        return HubBringUpReport(hotspotOutcome, port, advertising)
     }
 
     /** Tear the hub down in exact reverse order. Idempotent. */
@@ -90,11 +86,7 @@ class HubBringUp(
     }
 
     private fun bringUpHotspot(): HotspotBringUp {
-        val controller =
-            fromContextOrNull<HotspotController>(ctx)
-                ?: return HotspotBringUp.Unavailable("no HotspotController registered")
-
-        detectManualTether(controller)?.let { return it }
+        detectManualTether()?.let { return it }
 
         val blocker = permissionBlocker()
         if (blocker != null) {
@@ -102,21 +94,18 @@ class HubBringUp(
         }
 
         return try {
-            HotspotBringUp.Hotspot(controller.startHotspot())
+            HotspotBringUp.Hotspot(hotspot.startHotspot())
         } catch (goRefused: HotspotUnavailableException) {
             HotspotBringUp.Unavailable(goRefused.failure.toString())
         }
     }
 
-    private fun detectManualTether(controller: HotspotController): HotspotBringUp? =
-        runCatching { controller.detectManualTether() }
+    private fun detectManualTether(): HotspotBringUp? =
+        runCatching { hotspot.detectManualTether() }
             .getOrNull()
             ?.let { HotspotBringUp.ManualTether(it) }
 
-    private fun startListener(
-        hub: HubServer,
-        requestedPort: Int,
-    ): Int {
+    private fun startListener(requestedPort: Int): Int {
         if (!hub.isRunning()) {
             hub.start(requestedPort)
         }
@@ -124,7 +113,6 @@ class HubBringUp(
     }
 
     private fun advertiseDiscovery(port: Int): Boolean {
-        val discovery = fromContextOrNull<Discovery>(ctx) ?: return false
         if (port <= 0) return false
         return runCatching {
             discovery.advertise(DISCOVERY_NAME, port)
@@ -133,17 +121,16 @@ class HubBringUp(
     }
 
     private fun stopAdvertisingDiscovery() {
-        fromContextOrNull<Discovery>(ctx)?.let { runCatching { it.stopAdvertise() } }
+        runCatching { discovery.stopAdvertise() }
     }
 
     private fun stopListener() {
-        fromContextOrNull<HubServer>(ctx)?.let { runCatching { it.stop() } }
+        runCatching { hub.stop() }
     }
 
     private fun stopHotspot() {
-        val controller = fromContextOrNull<HotspotController>(ctx) ?: return
-        if (!controller.isActive()) return
-        runCatching { controller.stopHotspot() }
+        if (!hotspot.isActive()) return
+        runCatching { hotspot.stopHotspot() }
     }
 
     companion object {
@@ -151,10 +138,3 @@ class HubBringUp(
         const val DISCOVERY_NAME: String = "phone-manager"
     }
 }
-
-/** Thrown when the hub cannot come up because a required port was never registered. */
-class MissingComponentException(
-    component: String,
-) : IllegalStateException(
-        "hub bring-up needs a registered $component",
-    )

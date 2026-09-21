@@ -1,9 +1,13 @@
 package com.glassstorm.phonemanager
 
+import android.app.Application
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import androidx.test.core.app.ApplicationProvider
+import com.glassstorm.phonemanager.core.domain.adapter.network.Discovery
+import com.glassstorm.phonemanager.core.domain.adapter.network.HotspotController
+import com.glassstorm.phonemanager.core.domain.adapter.transport.HubServer
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -20,11 +24,18 @@ import org.robolectric.shadows.ShadowService
  * host, issues.md R2): they prove the notification channel exists BEFORE
  * `startForeground` and that the service actually became foreground. The service
  * is started on an EPHEMERAL port so the test never squats the production port.
+ *
+ * The service resolves its collaborators from the process-wide Dagger graph the
+ * [PhoneManagerApplication] built, so these tests reach the SAME `HubServer`,
+ * `HotspotController` and `Discovery` through
+ * `(application as PhoneManagerApplication).component`.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [29])
 class HubForegroundServiceTest {
     private val context: Context = ApplicationProvider.getApplicationContext()
+
+    private fun component() = (context as Application as PhoneManagerApplication).component
 
     private fun startService(): HubForegroundService {
         val intent =
@@ -88,10 +99,7 @@ class HubForegroundServiceTest {
                 .buildService(HubForegroundService::class.java, intent)
                 .create()
                 .startCommand(0, 0)
-        val hub =
-            com.glassstorm.phonemanager.core.domain.context.fromContext<
-                com.glassstorm.phonemanager.core.domain.adapter.transport.HubServer,
-            >(AppComposition.appContext())
+        val hub: HubServer = component().hubServer()
         assertThat(hub.isRunning()).isTrue()
         val port = hub.boundPort()
 
@@ -115,10 +123,7 @@ class HubForegroundServiceTest {
                 .buildService(HubForegroundService::class.java, intent)
                 .create()
                 .startCommand(0, 0)
-        val hub =
-            com.glassstorm.phonemanager.core.domain.context.fromContext<
-                com.glassstorm.phonemanager.core.domain.adapter.transport.HubServer,
-            >(AppComposition.appContext())
+        val hub: HubServer = component().hubServer()
         val port = hub.boundPort()
 
         // When the OS re-delivers the start command
@@ -136,7 +141,7 @@ class HubForegroundServiceTest {
     fun `a missing hotspot permission never leaves the hotspot ACTIVE`() {
         // Given the location permission is denied (Robolectric's default) and a
         // started service that therefore cannot bring the access point up
-        shadowOf(context as android.app.Application).denyPermissions(
+        shadowOf(context as Application).denyPermissions(
             android.Manifest.permission.ACCESS_FINE_LOCATION,
         )
         val controller =
@@ -146,42 +151,28 @@ class HubForegroundServiceTest {
                     Intent(context, HubForegroundService::class.java).putExtra(HubForegroundService.EXTRA_PORT, 0),
                 ).create()
                 .startCommand(0, 0)
-        val hotspot =
-            com.glassstorm.phonemanager.core.domain.context.fromContext<
-                com.glassstorm.phonemanager.core.domain.adapter.network.HotspotController,
-            >(AppComposition.appContext())
+        val hotspot: HotspotController = component().hotspotController()
 
         // When the access point state is inspected
         // Then it never claims ACTIVE, and the hub listener still came up so wired
         // peers stay reachable
         assertThat(hotspot.isActive()).isFalse()
-        val hub =
-            com.glassstorm.phonemanager.core.domain.context.fromContext<
-                com.glassstorm.phonemanager.core.domain.adapter.transport.HubServer,
-            >(AppComposition.appContext())
+        val hub: HubServer = component().hubServer()
         assertThat(hub.isRunning()).isTrue()
 
         controller.destroy()
     }
 
     @Test
-    fun `the service registers the platform network ports it needs to bring up`() {
-        // Given a created service, which records the Android Context into the
-        // composition root before anything resolves it
-        Robolectric.buildService(HubForegroundService::class.java).create().destroy()
-        val ctx = AppComposition.appContext()
+    fun `the graph provides the platform network ports the service brings up with`() {
+        // Given the process-wide graph the manifest-declared application built
+        val component = component()
 
         // When the network ports are resolved by their domain types
-        val hotspot =
-            com.glassstorm.phonemanager.core.domain.context.fromContextOrNull<
-                com.glassstorm.phonemanager.core.domain.adapter.network.HotspotController,
-            >(ctx)
-        val discovery =
-            com.glassstorm.phonemanager.core.domain.context.fromContextOrNull<
-                com.glassstorm.phonemanager.core.domain.adapter.network.Discovery,
-            >(ctx)
+        val hotspot: HotspotController = component.hotspotController()
+        val discovery: Discovery = component.discovery()
 
-        // Then the platform-backed adapters are registered, so bring-up is possible
+        // Then the platform-backed adapters are present, so bring-up is possible
         assertThat(hotspot).isNotNull()
         assertThat(discovery).isNotNull()
     }

@@ -8,8 +8,6 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import com.glassstorm.phonemanager.core.domain.context.Context
-import com.glassstorm.phonemanager.core.domain.context.register
 import com.glassstorm.phonemanager.core.domain.service.PairingService
 import com.google.common.truth.Truth.assertThat
 import org.junit.Rule
@@ -22,6 +20,9 @@ import org.robolectric.RobolectricTestRunner
  *
  * Expected strings are LITERALS so a wrong render cannot pass. `createComposeRule()`
  * permits a single `setContent` per test, so there is one route per test method.
+ *
+ * Under compile-time DI a port cannot be ABSENT, so the "unavailable" rendering is
+ * driven by a pairing port whose read THROWS — the genuine failure path.
  */
 @RunWith(RobolectricTestRunner::class)
 class PairingScreenTest {
@@ -29,8 +30,8 @@ class PairingScreenTest {
     val composeRule = createComposeRule()
 
     @Test
-    fun `renders the unavailable state when the pairing port is absent`() {
-        composeRule.setPairingContent(Context())
+    fun `renders the unavailable state when the pairing port read fails`() {
+        composeRule.setPairingContent(FakePairingService(failOnList = true))
 
         composeRule.onNodeWithText("Pairing").assertIsDisplayed()
         composeRule.onNodeWithText("Pairing service not available").assertIsDisplayed()
@@ -39,9 +40,8 @@ class PairingScreenTest {
     @Test
     fun `no pin is shown until the window is opened`() {
         val pairing = FakePairingService(pinSequence = listOf("428193"))
-        val ctx = Context().also { register<PairingService>(it, pairing) }
 
-        composeRule.setPairingContent(ctx)
+        composeRule.setPairingContent(pairing)
 
         composeRule.onNodeWithText("No pairing window open").assertIsDisplayed()
         assertThat(pairing.openCalls).isEqualTo(0)
@@ -50,9 +50,8 @@ class PairingScreenTest {
     @Test
     fun `the pin renders after the window opens`() {
         val pairing = FakePairingService(pinSequence = listOf("428193"))
-        val ctx = Context().also { register<PairingService>(it, pairing) }
 
-        composeRule.setPairingContent(ctx)
+        composeRule.setPairingContent(pairing)
         composeRule.onNodeWithText("Open pairing window").performClick()
         composeRule.waitForIdle()
 
@@ -65,9 +64,8 @@ class PairingScreenTest {
         // The fake replaces its window and returns a DIFFERENT pin the second time,
         // exactly like the real service. Two live PINs would therefore be visible.
         val pairing = FakePairingService(pinSequence = listOf("428193", "999999"))
-        val ctx = Context().also { register<PairingService>(it, pairing) }
 
-        composeRule.setPairingContent(ctx)
+        composeRule.setPairingContent(pairing)
         composeRule.onNodeWithText("Open pairing window").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithText("Reopen pairing window").performClick()
@@ -87,9 +85,8 @@ class PairingScreenTest {
                 it.seedDevice(deviceId = "d-1", deviceName = "Glass One")
                 it.seedDevice(deviceId = "d-2", deviceName = "Ubuntu Daemon", role = "DAEMON")
             }
-        val ctx = Context().also { register<PairingService>(it, pairing) }
 
-        composeRule.setPairingContent(ctx)
+        composeRule.setPairingContent(pairing)
         composeRule.onNodeWithText("Glass One").assertIsDisplayed()
         composeRule.onNodeWithText("Ubuntu Daemon").assertIsDisplayed()
 
@@ -103,9 +100,8 @@ class PairingScreenTest {
     @Test
     fun `closing the window hides the pin again`() {
         val pairing = FakePairingService(pinSequence = listOf("428193"))
-        val ctx = Context().also { register<PairingService>(it, pairing) }
 
-        composeRule.setPairingContent(ctx)
+        composeRule.setPairingContent(pairing)
         composeRule.onNodeWithText("Open pairing window").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithText("428193").assertIsDisplayed()
@@ -117,10 +113,11 @@ class PairingScreenTest {
         composeRule.onNodeWithText("No pairing window open").assertIsDisplayed()
     }
 
-    private fun androidx.compose.ui.test.junit4.ComposeContentTestRule.setPairingContent(ctx: Context) {
+    private fun androidx.compose.ui.test.junit4.ComposeContentTestRule.setPairingContent(pairing: PairingService) {
+        val viewModel = PairingViewModel(pairing)
         setContent {
             AppTheme {
-                PairingScreen(context = ctx)
+                PairingScreen(viewModelFactory = viewModelFactory(viewModel))
             }
         }
     }

@@ -4,10 +4,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.ViewModelProvider
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.glassstorm.phonemanager.core.domain.context.Context
 import com.glassstorm.phonemanager.ui.components.Scaffold
 
 const val ROUTE_DASHBOARD = "dashboard"
@@ -28,15 +28,14 @@ val ROUTES: List<String> =
 /**
  * The app shell: one [NavHost] over the five routes the hub exposes.
  *
- * [context] is the composition root's registry, handed down so each screen can
- * build its ViewModel against the domain ports. The default is an EMPTY registry
- * on purpose: the shell must still render (screens degrade to an "unavailable"
- * line) when a port is missing, which is exactly the state the shell test composes.
+ * [viewModelFactory] is the Dagger-backed [ViewModelProvider.Factory] the
+ * composition root owns, handed down so each screen can resolve its ViewModel and
+ * its domain ports from the compile-time graph.
  */
 @Composable
 fun AppShell(
+    viewModelFactory: ViewModelProvider.Factory,
     startRoute: String = ROUTE_DASHBOARD,
-    context: Context = Context(),
 ) {
     val navController = rememberNavController()
 
@@ -46,11 +45,11 @@ fun AppShell(
             startDestination = startRoute,
             modifier = Modifier.fillMaxSize(),
         ) {
-            composable(ROUTE_DASHBOARD) { DashboardScreen(context, Modifier.padding(insets)) }
-            composable(ROUTE_PAIRING) { PairingScreen(context, Modifier.padding(insets)) }
-            composable(ROUTE_STREAM) { StreamScreen(context, Modifier.padding(insets)) }
-            composable(ROUTE_DEVICES) { DevicesScreen(context, Modifier.padding(insets)) }
-            composable(ROUTE_SETTINGS) { SettingsScreen(context, Modifier.padding(insets)) }
+            composable(ROUTE_DASHBOARD) { DashboardScreen(viewModelFactory, Modifier.padding(insets)) }
+            composable(ROUTE_PAIRING) { PairingScreen(viewModelFactory, Modifier.padding(insets)) }
+            composable(ROUTE_STREAM) { StreamScreen(viewModelFactory, Modifier.padding(insets)) }
+            composable(ROUTE_DEVICES) { DevicesScreen(viewModelFactory, Modifier.padding(insets)) }
+            composable(ROUTE_SETTINGS) { SettingsScreen(viewModelFactory, Modifier.padding(insets)) }
         }
     }
 }

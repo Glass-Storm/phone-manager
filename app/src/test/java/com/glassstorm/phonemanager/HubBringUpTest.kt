@@ -3,8 +3,6 @@ package com.glassstorm.phonemanager
 import com.glassstorm.phonemanager.core.domain.adapter.network.Discovery
 import com.glassstorm.phonemanager.core.domain.adapter.network.HotspotController
 import com.glassstorm.phonemanager.core.domain.adapter.transport.HubServer
-import com.glassstorm.phonemanager.core.domain.context.Context
-import com.glassstorm.phonemanager.core.domain.context.register
 import com.glassstorm.phonemanager.core.domain.network.HotspotFailure
 import com.glassstorm.phonemanager.core.domain.network.HotspotUnavailableException
 import com.glassstorm.phonemanager.core.model.HotspotInfo
@@ -16,8 +14,10 @@ import org.junit.Test
  * The ordered bring-up and its reverse teardown, driven with test-local fakes that
  * implement the DOMAIN ports only — exactly like a real adapter.
  *
- * `HubBringUp` never names a concrete adapter, so these fakes bind under the port
- * types and the ordering is observed through recorded calls.
+ * `HubBringUp` never names a concrete adapter; the collaborators arrive by
+ * CONSTRUCTOR, so the ordering is observed through recorded calls. Under
+ * compile-time DI an absent port is impossible, so the tests exercise only the
+ * reachable failure paths (permission blocker, refused start, manual tether).
  */
 class HubBringUpTest {
     /** Records the call order shared by every collaborator. */
@@ -91,23 +91,33 @@ class HubBringUpTest {
         override fun resolveFirst(timeoutMs: Long): PeerAddress? = null
     }
 
-    private fun wired(): Triple<Context, CallLog, RecordingDiscovery> {
+    private fun wired(): Triple<CallLog, RecordingHubServer, RecordingDiscovery> {
         val log = CallLog()
-        val ctx = Context()
-        register<HubServer>(ctx, RecordingHubServer(log))
-        register<HotspotController>(ctx, RecordingHotspot(log))
-        val discovery = RecordingDiscovery(log)
-        register<Discovery>(ctx, discovery)
-        return Triple(ctx, log, discovery)
+        return Triple(log, RecordingHubServer(log), RecordingDiscovery(log))
     }
+
+    private fun bringUp(
+        log: CallLog,
+        hub: HubServer,
+        hotspot: HotspotController,
+        discovery: Discovery,
+        permissionBlocker: () -> String? = { null },
+    ): HubBringUp =
+        HubBringUp(
+            hub = hub,
+            hotspot = hotspot,
+            discovery = discovery,
+            permissionBlocker = permissionBlocker,
+        )
 
     @Test
     fun `bring-up orders hotspot then listener then discovery`() {
-        // Given a fully wired Context
-        val (ctx, log, discovery) = wired()
+        // Given fully wired collaborators
+        val (log, hub, discovery) = wired()
 
         // When the hub is brought up
-        val report = HubBringUp(ctx) { null }.bringUp(requestedPort = 0)
+        val report =
+            bringUp(log, hub, RecordingHotspot(log), discovery).bringUp(requestedPort = 0)
 
         // Then the order respects the data dependencies (discovery advertises the
         // port the listener actually bound) and the report is honest
@@ -126,8 +136,8 @@ class HubBringUpTest {
     @Test
     fun `teardown runs in exact reverse order`() {
         // Given a running hub
-        val (ctx, log, _) = wired()
-        val bringUp = HubBringUp(ctx) { null }
+        val (log, hub, discovery) = wired()
+        val bringUp = bringUp(log, hub, RecordingHotspot(log), discovery)
         bringUp.bringUp(requestedPort = 0)
         log.calls.clear()
 
@@ -146,8 +156,8 @@ class HubBringUpTest {
     @Test
     fun `a repeated start stop pair is idempotent and never double-starts`() {
         // Given a hub taken up and down twice
-        val (ctx, log, _) = wired()
-        val bringUp = HubBringUp(ctx) { null }
+        val (log, hub, discovery) = wired()
+        val bringUp = bringUp(log, hub, RecordingHotspot(log), discovery)
 
         // When start/stop runs twice
         bringUp.bringUp(requestedPort = 0)
@@ -164,10 +174,10 @@ class HubBringUpTest {
     @Test
     fun `teardown before any start is a no-op`() {
         // Given a hub that was never started
-        val (ctx, log, _) = wired()
+        val (log, hub, discovery) = wired()
 
         // When teardown runs
-        HubBringUp(ctx) { null }.tearDown()
+        bringUp(log, hub, RecordingHotspot(log), discovery).tearDown()
 
         // Then nothing was touched
         assertThat(log.calls).isEmpty()
@@ -176,12 +186,17 @@ class HubBringUpTest {
     @Test
     fun `a missing hotspot permission degrades to unavailable but still starts the listener`() {
         // Given the hotspot gate is blocked
-        val (ctx, log, discovery) = wired()
+        val (log, hub, discovery) = wired()
 
         // When the hub is brought up with a permission blocker
         val report =
-            HubBringUp(ctx) { "android.permission.ACCESS_FINE_LOCATION" }
-                .bringUp(requestedPort = 0)
+            bringUp(
+                log,
+                hub,
+                RecordingHotspot(log),
+                discovery,
+                permissionBlocker = { "android.permission.ACCESS_FINE_LOCATION" },
+            ).bringUp(requestedPort = 0)
 
         // Then the hotspot never started, no ACTIVE claim is made, and the listener
         // + discovery still came up so the hub is reachable by wired peers
@@ -198,19 +213,10 @@ class HubBringUpTest {
     fun `a manual tether is adopted as a first-class success`() {
         // Given an OEM-blocked device whose user enabled the system hotspot
         val log = CallLog()
-        val ctx = Context()
-        register<HubServer>(ctx, RecordingHubServer(log))
-        register<HotspotController>(
-            ctx,
-            RecordingHotspot(
-                log,
-                manual = HotspotInfo("manual-tether", "", "192.168.43.1"),
-            ),
-        )
-        register<Discovery>(ctx, RecordingDiscovery(log))
+        val hotspot = RecordingHotspot(log, manual = HotspotInfo("manual-tether", "", "192.168.43.1"))
 
         // When the hub is brought up
-        val report = HubBringUp(ctx) { null }.bringUp(requestedPort = 0)
+        val report = bringUp(log, RecordingHubServer(log), hotspot, RecordingDiscovery(log)).bringUp(requestedPort = 0)
 
         // Then the manual tether is reported as the success it is, with no LOHS start
         assertThat(report.hotspot).isInstanceOf(HotspotBringUp.ManualTether::class.java)
@@ -221,16 +227,10 @@ class HubBringUpTest {
     fun `a refused hotspot start is reported not thrown`() {
         // Given the platform refuses LocalOnlyHotspot
         val log = CallLog()
-        val ctx = Context()
-        register<HubServer>(ctx, RecordingHubServer(log))
-        register<HotspotController>(
-            ctx,
-            RecordingHotspot(log, fail = HotspotFailure.StartFailed("OEM refused")),
-        )
-        register<Discovery>(ctx, RecordingDiscovery(log))
+        val hotspot = RecordingHotspot(log, fail = HotspotFailure.StartFailed("OEM refused"))
 
         // When the hub is brought up
-        val report = HubBringUp(ctx) { null }.bringUp(requestedPort = 0)
+        val report = bringUp(log, RecordingHubServer(log), hotspot, RecordingDiscovery(log)).bringUp(requestedPort = 0)
 
         // Then the refusal is a reported Unavailable, not a crash, and the listener
         // still came up
@@ -239,30 +239,27 @@ class HubBringUpTest {
     }
 
     @Test
-    fun `a missing hub server fails the bring-up loudly`() {
-        // Given a Context with no HubServer registered
-        val ctx = Context()
-
-        // When the hub is brought up
-        val thrown = runCatching { HubBringUp(ctx) { null }.bringUp(0) }.exceptionOrNull()
-
-        // Then it fails with the typed missing-component error, never a silent no-hub
-        assertThat(thrown).isInstanceOf(MissingComponentException::class.java)
-    }
-
-    @Test
-    fun `a missing discovery port leaves the listener up and reports no advertising`() {
-        // Given a Context without a Discovery adapter
+    fun `a zero bound port reports no advertising`() {
+        // Given a listener that never binds (boundPort stays 0)
         val log = CallLog()
-        val ctx = Context()
-        register<HubServer>(ctx, RecordingHubServer(log))
-        register<HotspotController>(ctx, RecordingHotspot(log))
+        val hub =
+            object : HubServer {
+                override fun start(port: Int) = Unit
+
+                override fun stop() = Unit
+
+                override fun isRunning(): Boolean = false
+
+                override fun boundPort(): Int = 0
+            }
+        val discovery = RecordingDiscovery(log)
 
         // When the hub is brought up
-        val report = HubBringUp(ctx) { null }.bringUp(requestedPort = 0)
+        val report = bringUp(log, hub, RecordingHotspot(log), discovery).bringUp(requestedPort = 0)
 
-        // Then the listener is up and advertising is honestly reported as false
-        assertThat(report.port).isEqualTo(40404)
+        // Then advertising is honestly reported as false and nothing was advertised
+        assertThat(report.port).isEqualTo(0)
         assertThat(report.advertising).isFalse()
+        assertThat(discovery.advertisedPort).isNull()
     }
 }

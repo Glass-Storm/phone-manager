@@ -11,8 +11,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.glassstorm.phonemanager.core.domain.context.Context
 import com.glassstorm.phonemanager.core.model.Device
 import com.glassstorm.phonemanager.ui.components.Button
 import com.glassstorm.phonemanager.ui.components.ButtonVariant
@@ -28,14 +28,14 @@ import java.time.Instant
  * against).
  *
  * The list comes from the `DeviceRepository` domain port; the screen never names an
- * adapter. A missing or failing store renders "not available" rather than crashing.
+ * adapter. A failing store renders "not available" rather than crashing.
  */
 @Composable
 fun DevicesScreen(
-    context: Context,
+    viewModelFactory: ViewModelProvider.Factory,
     modifier: Modifier = Modifier,
 ) {
-    val viewModel: DevicesViewModel = viewModel { DevicesViewModel(context) }
+    val viewModel: DevicesViewModel = viewModel(factory = viewModelFactory)
     val state by viewModel.uiState.collectAsState()
 
     Column(

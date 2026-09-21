@@ -2,8 +2,6 @@ package com.glassstorm.phonemanager.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.glassstorm.phonemanager.core.domain.context.Context
-import com.glassstorm.phonemanager.core.domain.context.fromContextOrNull
 import com.glassstorm.phonemanager.core.domain.service.PairingService
 import com.glassstorm.phonemanager.core.domain.service.StreamService
 import com.glassstorm.phonemanager.core.model.RelayStats
@@ -13,13 +11,14 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 /**
  * Stream state holder.
  *
- * It resolves its collaborators from the [Context] registry by the DOMAIN
- * interface type and keeps an absent port as `null`, which is what drives the
- * "not available" rendering instead of a crash.
+ * The `StreamService` and `PairingService` ports are CONSTRUCTOR dependencies. A
+ * FAILING port degrades to the "not available" rendering instead of a crash; a
+ * missing port is impossible under compile-time DI.
  *
  * ## Per-session counters
  *
@@ -36,96 +35,135 @@ import kotlinx.coroutines.launch
  * `viewModelScope`, so a stop cancels them explicitly and a cleared ViewModel
  * cancels them automatically — neither can outlive the session or the screen.
  */
-class StreamViewModel(
-    private val context: Context,
-    private val pollIntervalMs: Long = DEFAULT_POLL_INTERVAL_MS,
-) : ViewModel() {
-    private val stream: StreamService? = fromContextOrNull<StreamService>(context)
-    private val pairing: PairingService? = fromContextOrNull<PairingService>(context)
+class StreamViewModel
+    private constructor(
+        private val stream: StreamService,
+        private val pairing: PairingService,
+        private val pollIntervalMs: Long,
+    ) : ViewModel() {
+        @Inject
+        constructor(
+            stream: StreamService,
+            pairing: PairingService,
+        ) : this(stream, pairing, DEFAULT_POLL_INTERVAL_MS)
 
-    private val state = MutableStateFlow(StreamUiState(available = stream != null))
+        private val state = MutableStateFlow(StreamUiState())
 
-    val uiState: StateFlow<StreamUiState> = state.asStateFlow()
+        val uiState: StateFlow<StreamUiState> = state.asStateFlow()
 
-    private var baseline: RelayStats = zeroStats
-    private var pollJob: Job? = null
-    private var resultsJob: Job? = null
+        private var baseline: RelayStats = zeroStats
+        private var pollJob: Job? = null
+        private var resultsJob: Job? = null
 
-    /** Open a relay session for the first paired peer and start refreshing it. */
-    fun onStart() {
-        val service = stream ?: return
-        if (state.value.sessionId != null) return
+        init {
+            refreshAvailability()
+        }
 
-        baseline = service.stats()
-        val peerId =
-            pairing?.listPaired()?.firstOrNull()?.deviceId ?: DEFAULT_PEER_ID
-        val session = service.openSession(peerId)
+        /** Open a relay session for the first paired peer and start refreshing it. */
+        fun onStart() {
+            if (state.value.sessionId != null) return
 
-        state.value =
-            state.value.copy(
-                sessionId = session.sessionId,
-                peerId = session.deviceId,
-            )
-        refresh()
-
-        pollJob =
-            viewModelScope.launch {
-                while (true) {
-                    delay(pollIntervalMs)
-                    refresh()
-                }
+            val stats = runCatching { stream.stats() }
+            if (stats.isFailure) {
+                state.value = state.value.copy(available = false)
+                return
             }
-        resultsJob = viewModelScope.launch { collectResults(session.sessionId) }
-    }
+            baseline = stats.getOrThrow()
+            val peerId = runCatching { pairing.listPaired().firstOrNull()?.deviceId }.getOrNull() ?: DEFAULT_PEER_ID
+            val session = runCatching { stream.openSession(peerId) }
+            if (session.isFailure) {
+                state.value = state.value.copy(available = false)
+                return
+            }
+            val opened = session.getOrThrow()
 
-    /** Close the live session and return the screen to its idle zeros. */
-    fun onStop() {
-        val service = stream ?: return
-        val sessionId = state.value.sessionId ?: return
-
-        cancelJobs()
-        state.value = StreamUiState(available = true)
-        viewModelScope.launch { service.closeSession(sessionId) }
-    }
-
-    private fun cancelJobs() {
-        pollJob?.cancel()
-        pollJob = null
-        resultsJob?.cancel()
-        resultsJob = null
-    }
-
-    private suspend fun collectResults(sessionId: String) {
-        stream?.results(sessionId)?.collect { result ->
             state.value =
                 state.value.copy(
-                    latestTranscript = result.text,
-                    latestSpeakerLabel = result.speakerLabel,
+                    available = true,
+                    sessionId = opened.sessionId,
+                    peerId = opened.deviceId,
+                )
+            refresh()
+
+            pollJob =
+                viewModelScope.launch {
+                    while (true) {
+                        delay(pollIntervalMs)
+                        refresh()
+                    }
+                }
+            resultsJob = viewModelScope.launch { collectResults(opened.sessionId) }
+        }
+
+        /** Close the live session and return the screen to its idle zeros. */
+        fun onStop() {
+            val sessionId = state.value.sessionId ?: return
+
+            cancelJobs()
+            state.value = StreamUiState(available = true)
+            viewModelScope.launch { runCatching { stream.closeSession(sessionId) } }
+        }
+
+        private fun cancelJobs() {
+            pollJob?.cancel()
+            pollJob = null
+            resultsJob?.cancel()
+            resultsJob = null
+        }
+
+        private suspend fun collectResults(sessionId: String) {
+            runCatching {
+                stream.results(sessionId).collect { result ->
+                    state.value =
+                        state.value.copy(
+                            latestTranscript = result.text,
+                            latestSpeakerLabel = result.speakerLabel,
+                        )
+                }
+            }
+        }
+
+        private fun refreshAvailability() {
+            val stats = runCatching { stream.stats() }
+            state.value = state.value.copy(available = stats.isSuccess)
+        }
+
+        private fun refresh() {
+            val stats = runCatching { stream.stats() }
+            if (stats.isFailure) {
+                state.value = state.value.copy(available = false)
+                return
+            }
+            val value = stats.getOrThrow()
+            state.value =
+                state.value.copy(
+                    available = true,
+                    audioFrames = value.audioFrames - baseline.audioFrames,
+                    videoFrames = value.videoFrames - baseline.videoFrames,
+                    videoDropped = value.videoDropped - baseline.videoDropped,
+                    transcripts = value.transcripts - baseline.transcripts,
+                    liveSessions = value.liveSessions,
                 )
         }
-    }
 
-    private fun refresh() {
-        val service = stream ?: return
-        val stats = service.stats()
-        state.value =
-            state.value.copy(
-                audioFrames = stats.audioFrames - baseline.audioFrames,
-                videoFrames = stats.videoFrames - baseline.videoFrames,
-                videoDropped = stats.videoDropped - baseline.videoDropped,
-                transcripts = stats.transcripts - baseline.transcripts,
-                liveSessions = stats.liveSessions,
-            )
-    }
+        companion object {
+            /** Counter refresh cadence. Short enough to look live, long enough not to spin. */
+            const val DEFAULT_POLL_INTERVAL_MS: Long = 250L
 
-    companion object {
-        /** Counter refresh cadence. Short enough to look live, long enough not to spin. */
-        const val DEFAULT_POLL_INTERVAL_MS: Long = 250L
+            /** Peer used when no paired device exists yet: the session is still real. */
+            const val DEFAULT_PEER_ID: String = "local-peer"
 
-        /** Peer used when no paired device exists yet: the session is still real. */
-        const val DEFAULT_PEER_ID: String = "local-peer"
+            /**
+             * Test seam: builds the ViewModel with an explicit poll interval so the
+             * cadence is deterministic. Production uses the `@Inject` constructor.
+             */
+            fun forTesting(
+                stream: StreamService,
+                pairing: PairingService,
+                pollIntervalMs: Long = DEFAULT_POLL_INTERVAL_MS,
+            ): StreamViewModel = StreamViewModel(stream, pairing, pollIntervalMs)
+        }
     }
-}
 
 private val zeroStats =
     RelayStats(

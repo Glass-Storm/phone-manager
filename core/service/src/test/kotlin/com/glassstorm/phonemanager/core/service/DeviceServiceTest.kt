@@ -1,10 +1,6 @@
 package com.glassstorm.phonemanager.core.service
 
 import com.glassstorm.phonemanager.core.domain.adapter.repository.DeviceRepository
-import com.glassstorm.phonemanager.core.domain.context.Context
-import com.glassstorm.phonemanager.core.domain.context.MissingFromContextException
-import com.glassstorm.phonemanager.core.domain.context.fromContext
-import com.glassstorm.phonemanager.core.domain.context.register
 import com.glassstorm.phonemanager.core.domain.service.DeviceService
 import com.glassstorm.phonemanager.core.model.Device
 import com.google.common.truth.Truth.assertThat
@@ -12,8 +8,9 @@ import org.junit.Assert.assertThrows
 import org.junit.Test
 
 /**
- * Proves the service resolves its collaborator through the domain INTERFACE
- * from the Context registry (never a constructor-injected concrete adapter).
+ * Proves the service takes its collaborator as a CONSTRUCTOR dependency through
+ * the domain INTERFACE — any implementation is interchangeable, and a failing one
+ * surfaces its own failure rather than a lookup error.
  */
 class DeviceServiceTest {
     /** Test-local fake of the domain port — deliberately NOT the `:adapter` class. */
@@ -44,11 +41,10 @@ class DeviceServiceTest {
     }
 
     @Test
-    fun `service works with a fake adapter registered under the domain interface`() {
-        // Given a Context holding a DeviceRepository under the domain port type
-        val ctx = Context()
-        register<DeviceRepository>(ctx, FakeDeviceRepository())
-        val service = DeviceServiceImpl(ctx)
+    fun `service delegates to the repository injected through the domain interface`() {
+        // Given a repository fake injected as the domain port
+        val repository = FakeDeviceRepository()
+        val service = DeviceServiceImpl(repository)
         val device =
             Device(
                 deviceId = "d-1",
@@ -62,18 +58,16 @@ class DeviceServiceTest {
         // When the service is used
         service.registerDevice(device)
 
-        // Then it delegated to the registered interface implementation
+        // Then it delegated to the injected implementation
         assertThat(service.listDevices()).containsExactly(device)
-        assertThat(fromContext<DeviceRepository>(ctx).get("d-1")).isEqualTo(device)
+        assertThat(repository.get("d-1")).isEqualTo(device)
     }
 
     @Test
-    fun `service resolves the interface type, so any implementation is interchangeable`() {
-        // Given a Context holding only the interface binding
-        val ctx = Context()
-        register<DeviceRepository>(ctx, FakeDeviceRepository())
-        val serviceA = DeviceServiceImpl(ctx)
-        val serviceB = DeviceServiceImpl(Context().also { register<DeviceRepository>(it, FakeDeviceRepository()) })
+    fun `any repository implementation is interchangeable`() {
+        // Given two services over independent repositories
+        val serviceA = DeviceServiceImpl(FakeDeviceRepository())
+        val serviceB = DeviceServiceImpl(FakeDeviceRepository())
 
         // When each service registers a distinct device
         serviceA.registerDevice(
@@ -97,33 +91,46 @@ class DeviceServiceTest {
             ),
         )
 
-        // Then their stores are independent, proving resolution is by interface binding
+        // Then their stores are independent, proving construction over the interface
         assertThat(serviceA.listDevices().map { it.deviceId }).containsExactly("a")
         assertThat(serviceB.listDevices().map { it.deviceId }).containsExactly("b")
     }
 
     @Test
-    fun `service throws when no collaborator is registered`() {
-        // Given an empty Context
-        val ctx = Context()
-        val service = DeviceServiceImpl(ctx)
+    fun `a failing repository propagates its failure rather than hiding it`() {
+        // Given a repository whose read throws
+        val failing =
+            object : DeviceRepository {
+                override fun upsert(device: Device) = Unit
 
-        // When/Then the missing binding surfaces as the typed absence error
-        assertThrows(MissingFromContextException::class.java) {
+                override fun get(deviceId: String): Device? = null
+
+                override fun getByTokenHash(tokenHash: String): Device? = null
+
+                override fun list(): List<Device> = throw IllegalStateException("device store unavailable")
+
+                override fun touch(
+                    deviceId: String,
+                    seenAtMs: Long,
+                ) = Unit
+
+                override fun delete(deviceId: String) = Unit
+            }
+        val service = DeviceServiceImpl(failing)
+
+        // When/Then the wrapped failure surfaces, never a silent empty list
+        assertThrows(IllegalStateException::class.java) {
             service.listDevices()
         }
     }
 
     @Test
-    fun `registry can hold the service itself under its domain interface`() {
-        // Given a wired Context (the composition-root pattern)
-        val ctx = Context()
-        register<DeviceRepository>(ctx, FakeDeviceRepository())
-        register<DeviceService>(ctx, DeviceServiceImpl(ctx))
+    fun `the service can be used through its domain interface`() {
+        // Given a service constructed over the domain port
+        val service: DeviceService = DeviceServiceImpl(FakeDeviceRepository())
 
-        // When the app resolves the service by interface
-        val resolved = fromContext<DeviceService>(ctx)
-        resolved.registerDevice(
+        // When the app uses it by interface
+        service.registerDevice(
             Device(
                 deviceId = "x",
                 deviceName = "X",
@@ -135,6 +142,6 @@ class DeviceServiceTest {
         )
 
         // Then it is usable through the port
-        assertThat(resolved.listDevices().map { it.deviceId }).containsExactly("x")
+        assertThat(service.listDevices().map { it.deviceId }).containsExactly("x")
     }
 }

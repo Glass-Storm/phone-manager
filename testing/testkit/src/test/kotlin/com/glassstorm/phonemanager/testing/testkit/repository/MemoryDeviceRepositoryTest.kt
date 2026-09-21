@@ -1,11 +1,11 @@
-package com.glassstorm.phonemanager.adapter.jvm.repository.memory
+package com.glassstorm.phonemanager.testing.testkit.repository
 
 import com.glassstorm.phonemanager.core.domain.adapter.repository.DeviceRepository
 import com.glassstorm.phonemanager.core.model.Device
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 
-/** Behaviour of the in-memory fake adapter — mirrors the real repository port contract. */
+/** Behaviour of the in-memory test double — mirrors the real repository port contract. */
 class MemoryDeviceRepositoryTest {
     private fun pairedDevice(
         id: String,

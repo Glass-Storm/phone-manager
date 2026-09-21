@@ -19,13 +19,13 @@ repo ships the hub plus the contract they generate their clients from.
 | ------------------ | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `:app`             | Android application | Compose UI (Lumo components), the five screens, and the composition root. The only module allowed to see the services AND the adapters.                                        |
 | `:core:model`      | pure Kotlin/JVM     | The hand-written domain DTOs: pure data types with zero dependencies, the shared language spoken across every layer.                                                           |
-| `:core:domain`     | pure Kotlin/JVM     | Ports (interfaces), the two deterministic state machines, and the Context registry. Zero implementation, zero framework annotations, no contract edge.                         |
+| `:core:domain`     | pure Kotlin/JVM     | Ports (interfaces) and the two deterministic state machines. Zero implementation, zero framework annotations, no contract edge.                                               |
 | `:core:service`    | pure Kotlin/JVM     | The use-case implementations (device, pairing, relay). Contract-free and gRPC-free by construction.                                                                            |
 | `:transport:grpc`  | pure Kotlin/JVM     | The gRPC service implementations, the bearer-token interceptor, the netty-backed hub server, and the DTO↔proto mapping. The ONE module allowed to depend on `:contract`.       |
 | `:contract`        | pure Kotlin/JVM     | The FROZEN `ecosys.v1` wire contract: the `.proto` source of truth and its protobuf/gRPC-lite codegen. The ONE artifact the out-of-scope peers consume.                        |
-| `:adapter:jvm`     | pure Kotlin/JVM     | Android-free port implementations: the STT engines, the discarding frame sink, and the in-memory repository.                                                                   |
+| `:adapter:jvm`     | pure Kotlin/JVM     | Android-free port implementations: the STT engines and the discarding frame sink.                                                                                              |
 | `:adapter:android` | Android library     | Platform-backed adapters: SQLite, LocalOnlyHotspot, NSD discovery, and the runtime config store. The battery-exemption helper lives in `:app` (it is app-owned platform glue). |
-| `:testing:testkit` | pure Kotlin/JVM     | Test support: the bounded child-process runner and the deterministic media generators, shared by the `:transport:grpc` and `:app` test suites. No runtime dependencies.        |
+| `:testing:testkit` | pure Kotlin/JVM     | Test support: the bounded child-process runner, the deterministic media generators, and the in-memory repository double, shared by the `:transport:grpc` and `:app` test suites. Its only dependency is `:core:domain`. |
 
 `tools/mockpeer` (the Go reference peer) is NOT a Gradle module; it stays at the
 repo root because the root `go.work` and the Go module are root-relative.
@@ -205,9 +205,11 @@ suite as evidence that on-device behaviour works.
   is consumed by exactly one module, `:transport:grpc`, which maps the wire
   format to the domain's own DTOs; `ecosys.v1.*` never appears elsewhere. Only the
   `:app` composition root wires implementations to ports.
-- **The Context registry is the only DI.** Collaborators are registered as types
-  and resolved with `fromContext<T>(ctx)` against the domain INTERFACE, never by
-  a concrete class. There is no Hilt, Koin, or Room anywhere in this repo.
+- **Dagger is the only DI.** Each port is bound to its implementation in a
+  `@Module` and injected by CONSTRUCTOR; the `@Singleton @Component` graph is
+  built once in `PhoneManagerApplication`. A missing or duplicated binding fails
+  the BUILD, not a runtime lookup. There is no Hilt, Koin, Room, or service
+  registry anywhere in this repo.
 - **Naming.** Standard Kotlin convention. Files are PascalCase and match their
   primary class (`PairingService.kt`, `Context.kt`, `Device.kt`); functions,
   members, locals, and parameters are lowerCamelCase (`startHotspot`,

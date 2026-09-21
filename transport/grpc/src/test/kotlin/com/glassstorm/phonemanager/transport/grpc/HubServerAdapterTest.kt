@@ -1,5 +1,6 @@
 package com.glassstorm.phonemanager.transport.grpc
 
+import com.glassstorm.phonemanager.transport.grpc.security.AuthInterceptor
 import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
 import org.junit.Test
@@ -17,7 +18,15 @@ import java.net.ServerSocket
  * Android API, so these run on the plain JVM with no Robolectric.
  */
 class HubServerAdapterTest {
-    private fun adapter(): HubServerAdapter = HubServerAdapter(hubContext())
+    private fun adapter(): HubServerAdapter {
+        val parts = hubParts()
+        return HubServerAdapter(
+            pairingService = PairingGrpcService(parts.pairing),
+            streamService = StreamGrpcService(parts.stream),
+            authInterceptor = AuthInterceptor(parts.tokenVerifier),
+            bindAddress = HubServerAdapter.LOOPBACK_ADDRESS,
+        )
+    }
 
     @Test
     fun `default adapter binds the IPv4 loopback and never the wildcard`() {

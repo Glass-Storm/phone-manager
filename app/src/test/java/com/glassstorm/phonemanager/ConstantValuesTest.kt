@@ -79,7 +79,7 @@ class ConstantValuesTest {
         assertThat(SettingsViewModel.PROTOCOL).isEqualTo("ecosys.v1")
         assertThat(HubServerAdapter.LOOPBACK_ADDRESS).isEqualTo("127.0.0.1")
         assertThat(HubServerAdapter.ALL_INTERFACES_ADDRESS).isEqualTo("0.0.0.0")
-        assertThat(AppComposition.DEFAULT_HUB_PORT).isEqualTo(9000)
+        assertThat(HubForegroundService.DEFAULT_HUB_PORT).isEqualTo(9000)
     }
 
     @Test

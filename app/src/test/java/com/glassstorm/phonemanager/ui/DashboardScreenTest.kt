@@ -4,10 +4,9 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import com.glassstorm.phonemanager.core.domain.adapter.network.HotspotController
 import com.glassstorm.phonemanager.core.domain.adapter.transport.HubServer
-import com.glassstorm.phonemanager.core.domain.context.Context
-import com.glassstorm.phonemanager.core.domain.context.register
 import com.glassstorm.phonemanager.core.domain.network.HotspotFailure
 import com.glassstorm.phonemanager.core.domain.service.PairingService
 import org.junit.Rule
@@ -22,9 +21,9 @@ import org.robolectric.RobolectricTestRunner
  * shared constant is tautological and passes even when the UI renders the wrong
  * text. One `setContent` per test method — `createComposeRule()` allows no more.
  *
- * The doubles implement the DOMAIN ports only; `:app`'s test sources never touch
- * a concrete `:adapter` class, which is what proves the screen stays behind the
- * interface.
+ * Under compile-time DI a port cannot be ABSENT, so the "not available" rendering
+ * is driven by a port that FAILS instead. The doubles implement the DOMAIN ports
+ * only; `:app`'s test sources never touch a concrete `:adapter` class.
  */
 @RunWith(RobolectricTestRunner::class)
 class DashboardScreenTest {
@@ -32,8 +31,8 @@ class DashboardScreenTest {
     val composeRule = createComposeRule()
 
     @Test
-    fun `renders the unavailable state when no ports are registered`() {
-        composeRule.setDashboardContent(Context())
+    fun `renders the unavailable state when the hub and hotspot ports fail`() {
+        composeRule.setDashboardContent(FakeHubServer(failOnRead = true), FakeHotspotController(failOnDetect = true))
 
         composeRule.onNodeWithText("Dashboard").assertIsDisplayed()
         composeRule.onNodeWithText("Hub server not available").assertIsDisplayed()
@@ -47,13 +46,12 @@ class DashboardScreenTest {
                 it.seedDevice(deviceId = "d-1", deviceName = "Glass One")
                 it.seedDevice(deviceId = "d-2", deviceName = "Ubuntu Daemon", role = "DAEMON")
             }
-        val ctx =
-            Context().also {
-                register<HubServer>(it, FakeHubServer(boundPortValue = 40404))
-                register<PairingService>(it, pairing)
-            }
 
-        composeRule.setDashboardContent(ctx)
+        composeRule.setDashboardContent(
+            hub = FakeHubServer(boundPortValue = 40404),
+            hotspot = FakeHotspotController(failOnDetect = true),
+            pairing = pairing,
+        )
         composeRule.onNodeWithText("Hub: stopped").assertIsDisplayed()
 
         composeRule.onNodeWithText("Start hub").performClick()
@@ -62,47 +60,44 @@ class DashboardScreenTest {
         composeRule.onNodeWithText("Hub: running").assertIsDisplayed()
         composeRule.onNodeWithText("Port: 40404").assertIsDisplayed()
         composeRule.onNodeWithText("Paired devices: 2").assertIsDisplayed()
-        // Only some ports are registered on this Context: the absent one degrades, not crashes.
+        // The failing hotspot port degrades, it does not crash the shell.
         composeRule.onNodeWithText("Hotspot not available").assertIsDisplayed()
     }
 
     @Test
     fun `starting the hotspot shows the credentials and the gateway ip`() {
-        val ctx =
-            Context().also {
-                register<HotspotController>(it, FakeHotspotController())
-            }
+        composeRule.setDashboardContent(hub = FakeHubServer(), hotspot = FakeHotspotController())
 
-        composeRule.setDashboardContent(ctx)
         composeRule.onNodeWithText("Start hotspot").performClick()
         composeRule.waitForIdle()
 
-        composeRule.onNodeWithText("SSID: EcoSys-Phone").assertIsDisplayed()
-        composeRule.onNodeWithText("Passphrase: hunter2-phone").assertIsDisplayed()
-        composeRule.onNodeWithText("Gateway: 192.168.43.1").assertIsDisplayed()
+        composeRule.onNodeWithText("SSID: EcoSys-Phone").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Passphrase: hunter2-phone").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Gateway: 192.168.43.1").performScrollTo().assertIsDisplayed()
     }
 
     @Test
     fun `a failing hotspot start renders the typed reason instead of crashing`() {
-        val ctx =
-            Context().also {
-                register<HotspotController>(
-                    it,
-                    FakeHotspotController(failWith = HotspotFailure.StartFailed(reason = "denied")),
-                )
-            }
+        composeRule.setDashboardContent(
+            hub = FakeHubServer(),
+            hotspot = FakeHotspotController(failWith = HotspotFailure.StartFailed(reason = "denied")),
+        )
 
-        composeRule.setDashboardContent(ctx)
         composeRule.onNodeWithText("Start hotspot").performClick()
         composeRule.waitForIdle()
 
         composeRule.onNodeWithText("Hotspot failed: denied").assertIsDisplayed()
     }
 
-    private fun androidx.compose.ui.test.junit4.ComposeContentTestRule.setDashboardContent(ctx: Context) {
+    private fun androidx.compose.ui.test.junit4.ComposeContentTestRule.setDashboardContent(
+        hub: HubServer = FakeHubServer(),
+        hotspot: HotspotController = FakeHotspotController(),
+        pairing: PairingService = FakePairingService(),
+    ) {
+        val viewModel = DashboardViewModel(hub, hotspot, pairing)
         setContent {
             AppTheme {
-                DashboardScreen(context = ctx)
+                DashboardScreen(viewModelFactory = viewModelFactory(viewModel))
             }
         }
     }

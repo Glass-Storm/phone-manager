@@ -12,8 +12,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.glassstorm.phonemanager.core.domain.context.Context
 import com.glassstorm.phonemanager.ui.components.Button
 import com.glassstorm.phonemanager.ui.components.ButtonVariant
 import com.glassstorm.phonemanager.ui.components.HorizontalDivider
@@ -28,14 +28,14 @@ import com.glassstorm.phonemanager.ui.components.card.Card
  * H.264, so the screen shows the video counters (including the drop-oldest
  * evictions) and nothing else. There is no recording or playback either.
  *
- * An absent `StreamService` renders "not available" rather than crashing the shell.
+ * A FAILING `StreamService` renders "not available" rather than crashing the shell.
  */
 @Composable
 fun StreamScreen(
-    context: Context,
+    viewModelFactory: ViewModelProvider.Factory,
     modifier: Modifier = Modifier,
 ) {
-    val viewModel: StreamViewModel = viewModel { StreamViewModel(context) }
+    val viewModel: StreamViewModel = viewModel(factory = viewModelFactory)
     val state by viewModel.uiState.collectAsState()
 
     Column(

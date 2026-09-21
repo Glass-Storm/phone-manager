@@ -8,6 +8,11 @@ import com.glassstorm.phonemanager.core.domain.security.TokenVerifier
 import com.glassstorm.phonemanager.core.domain.service.DeviceService
 import com.glassstorm.phonemanager.core.domain.service.PairingService
 import com.glassstorm.phonemanager.transport.grpc.HubServerAdapter
+import com.glassstorm.phonemanager.ui.DashboardViewModel
+import com.glassstorm.phonemanager.ui.DevicesViewModel
+import com.glassstorm.phonemanager.ui.PairingViewModel
+import com.glassstorm.phonemanager.ui.SettingsViewModel
+import com.glassstorm.phonemanager.ui.StreamViewModel
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -87,6 +92,22 @@ class AppComponentTest {
         assertThat((hub as HubServerAdapter).bindAddress()).isEqualTo(
             HubServerAdapter.ALL_INTERFACES_ADDRESS,
         )
+    }
+
+    @Test
+    fun `the view model factory resolves every bound screen view model`() {
+        // Given the production Dagger component
+        val component = component()
+        val factory = component.viewModelFactory()
+
+        // When each screen ViewModel is requested by its runtime class
+        // Then the ViewModelKey map resolved it — a missing @IntoMap binding would
+        // throw here, so this is the guard for the multibinding
+        assertThat(factory.create(DashboardViewModel::class.java)).isInstanceOf(DashboardViewModel::class.java)
+        assertThat(factory.create(DevicesViewModel::class.java)).isInstanceOf(DevicesViewModel::class.java)
+        assertThat(factory.create(PairingViewModel::class.java)).isInstanceOf(PairingViewModel::class.java)
+        assertThat(factory.create(SettingsViewModel::class.java)).isInstanceOf(SettingsViewModel::class.java)
+        assertThat(factory.create(StreamViewModel::class.java)).isInstanceOf(StreamViewModel::class.java)
     }
 
     @Test

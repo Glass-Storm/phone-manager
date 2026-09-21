@@ -1,5 +1,7 @@
 package com.glassstorm.phonemanager.ui
 
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import com.glassstorm.phonemanager.battery.BatteryExemption
 import com.glassstorm.phonemanager.core.domain.adapter.config.AppConfig
 import com.glassstorm.phonemanager.core.domain.adapter.network.HotspotController
@@ -34,6 +36,7 @@ import kotlinx.coroutines.flow.emptyFlow
 /** [HubServer] fake: `start` always binds [boundPortValue] and flips running. */
 class FakeHubServer(
     private val boundPortValue: Int = 40404,
+    private val failOnRead: Boolean = false,
 ) : HubServer {
     var startCalls: Int = 0
         private set
@@ -49,9 +52,15 @@ class FakeHubServer(
         running = false
     }
 
-    override fun isRunning(): Boolean = running
+    override fun isRunning(): Boolean {
+        if (failOnRead) throw IllegalStateException("hub unavailable")
+        return running
+    }
 
-    override fun boundPort(): Int = if (running) boundPortValue else 0
+    override fun boundPort(): Int {
+        if (failOnRead) throw IllegalStateException("hub unavailable")
+        return if (running) boundPortValue else 0
+    }
 }
 
 /**
@@ -68,6 +77,7 @@ class FakeHotspotController(
             gatewayIp = "192.168.43.1",
         ),
     private val failWith: HotspotFailure? = null,
+    private val failOnDetect: Boolean = false,
 ) : HotspotController {
     private var active: Boolean = false
 
@@ -87,7 +97,10 @@ class FakeHotspotController(
 
     override fun isActive(): Boolean = active
 
-    override fun detectManualTether(): HotspotInfo? = if (active) info else null
+    override fun detectManualTether(): HotspotInfo? {
+        if (failOnDetect) throw IllegalStateException("hotspot unavailable")
+        return if (active) info else null
+    }
 }
 
 /**
@@ -99,6 +112,7 @@ class FakePairingService(
     private val pinSequence: List<String> = listOf("428193", "999999"),
     private val clock: () -> Long = { 1_000_000L },
     seed: List<Device> = emptyList(),
+    private val failOnList: Boolean = false,
 ) : PairingService {
     private val rows: MutableMap<String, Device> = linkedMapOf()
 
@@ -160,7 +174,10 @@ class FakePairingService(
         rows.remove(deviceId)
     }
 
-    override fun listPaired(): List<Device> = rows.values.toList()
+    override fun listPaired(): List<Device> {
+        if (failOnList) throw IllegalStateException("pairing store unavailable")
+        return rows.values.toList()
+    }
 }
 
 /**
@@ -179,6 +196,7 @@ class FakePairingService(
  */
 class FakeStreamService(
     private val sessionIds: List<String> = listOf("s-1", "s-2", "s-3"),
+    private val failStats: Boolean = false,
 ) : StreamService {
     private val resultsFlow = MutableSharedFlow<RelayResult>(replay = 1)
 
@@ -254,7 +272,10 @@ class FakeStreamService(
         liveSessions = (liveSessions - 1).coerceAtLeast(0)
     }
 
-    override fun stats(): RelayStats = statsValue.copy(liveSessions = liveSessions)
+    override fun stats(): RelayStats {
+        if (failStats) throw IllegalStateException("relay unavailable")
+        return statsValue.copy(liveSessions = liveSessions)
+    }
 }
 
 /**
@@ -332,6 +353,7 @@ class FakeAppConfig(
     engine: SttEngine = SttEngine.MOCK,
     regionValue: String = AppConfig.DEFAULT_REGION,
     mode: HotspotMode = HotspotMode.MANUAL,
+    private val failReads: Boolean = false,
 ) : AppConfig {
     private var keyValue: String = storedKey
     private var engineValue: SttEngine = engine
@@ -347,7 +369,10 @@ class FakeAppConfig(
     var setHotspotModeCalls: Int = 0
         private set
 
-    override fun sttEngine(): SttEngine = engineValue
+    override fun sttEngine(): SttEngine {
+        if (failReads) throw IllegalStateException("config store unavailable")
+        return engineValue
+    }
 
     override fun setSttEngine(kind: SttEngine) {
         setSttAdapterCalls += 1
@@ -394,3 +419,16 @@ class FakeBatteryExemption(
         requestCalls += 1
     }
 }
+
+/**
+ * A [ViewModelProvider.Factory] over explicitly-constructed ViewModels, keyed by
+ * runtime class. The screen tests build the ViewModel they want to exercise and
+ * hand it to the screen through this factory, so the failure-path cases can inject
+ * a port that FAILS rather than an absent one (a missing port is impossible under
+ * compile-time DI).
+ */
+fun viewModelFactory(vararg models: ViewModel): ViewModelProvider.Factory =
+    object : ViewModelProvider.Factory {
+        @Suppress("UNCHECKED_CAST")
+        override fun <T : ViewModel> create(modelClass: Class<T>): T = models.first { modelClass.isInstance(it) } as T
+    }
