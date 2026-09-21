@@ -46,6 +46,15 @@ import java.util.Collections
  *    be observed, so the recording double is required to prove the relay handed the
  *    bytes over unchanged.
  *
+ * ## The E2E override pattern (shared with the JVM harness, deliberately)
+ *
+ * The loopback [HubServerAdapter] + recording [FrameSink] composition above is the
+ * same shape `:transport:grpc`'s `FullE2eTest` uses: both E2E suites inject the two
+ * test-only collaborators (the safe bind and the observable sink) by CONSTRUCTION,
+ * never by a component override (Dagger forbids per-instance binding overrides).
+ * The production component still supplies every real port here; only the listener
+ * and the sink are chosen for the test. Keep the two suites consistent.
+ *
  * No emulator, no device: Robolectric only, as issues.md R2 mandates.
  */
 @RunWith(RobolectricTestRunner::class)

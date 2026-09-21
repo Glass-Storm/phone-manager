@@ -1,5 +1,6 @@
 package com.glassstorm.phonemanager.transport.grpc
 
+import com.glassstorm.phonemanager.core.domain.adapter.transport.HubServer
 import com.glassstorm.phonemanager.core.service.PairingServiceImpl
 import com.glassstorm.phonemanager.core.service.StreamServiceImpl
 import com.glassstorm.phonemanager.testing.testkit.MockPeerDriver
@@ -11,14 +12,12 @@ import com.glassstorm.phonemanager.testing.testkit.syntheticVideoNal
 import com.glassstorm.phonemanager.transport.grpc.security.AuthInterceptor
 import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
-import io.grpc.netty.shaded.io.grpc.netty.NettyServerBuilder
 import org.junit.After
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.Timeout
 import java.io.File
-import java.net.InetSocketAddress
 
 /**
  * T18 harness (a): the FULL scenario against the plain-JVM hub.
@@ -26,6 +25,18 @@ import java.net.InetSocketAddress
  * Same real-socket posture as T6's [HubServerE2ETest] — a REAL netty-shaded
  * listener on `127.0.0.1:0` driven by the REAL Go peer — but now over the WHOLE
  * protocol, including the two legs T6 never covered:
+ *
+ * ## The E2E override pattern (shared with the `:app` harness, deliberately)
+ *
+ * Both E2E suites construct the listener through the production [HubServerAdapter]
+ * with an explicit [HubServerAdapter.LOOPBACK_ADDRESS] bind, and hand it a
+ * RECORDING [FrameSink]. This is the correct Dagger approach: a component binding
+ * can never be overridden per-instance, so the two test-only collaborators (the
+ * wildcard-vs-loopback bind and the observable sink) are injected by COMPOSITION,
+ * not by a second graph. The production component supplies the real ports on the
+ * `:app` side; this module hand-wires the same ports. `:app`'s `FullE2eTest` uses
+ * the identical shape over its component, so the two are directly comparable.
+ *
  *
  *  1. the ordered success transcript `pair-ok` / `heartbeat-ok` /
  *     `session-ok frames=N` / `video-bytes-match`, where byte-equality is a REAL
@@ -41,7 +52,7 @@ class FullE2eTest {
     @get:Rule
     val deadline: Timeout = Timeout.seconds(300)
 
-    private lateinit var hub: GrpcHubServer
+    private lateinit var hub: HubServer
     private lateinit var pairing: PairingServiceImpl
     private lateinit var repo: FakeDeviceRepository
     private lateinit var stt: FakeSttPort
@@ -62,14 +73,16 @@ class FullE2eTest {
         pairing = PairingServiceImpl(repo)
         val stream = StreamServiceImpl(stt, sink)
 
+        // The PRODUCTION adapter with an explicit loopback bind, exactly as the
+        // `:app` harness composes it. The wildcard production bind is never used
+        // in a test; only the bind address differs from `TransportModule`.
         hub =
-            GrpcHubServer { port ->
-                NettyServerBuilder
-                    .forAddress(InetSocketAddress("127.0.0.1", port))
-                    .addService(PairingGrpcService(pairing))
-                    .addService(StreamGrpcService(stream))
-                    .intercept(AuthInterceptor(pairing))
-            }
+            HubServerAdapter(
+                pairingService = PairingGrpcService(pairing),
+                streamService = StreamGrpcService(stream),
+                authInterceptor = AuthInterceptor(pairing),
+                bindAddress = HubServerAdapter.LOOPBACK_ADDRESS,
+            )
         hub.start(0)
         port = hub.boundPort()
         assertThat(port).isGreaterThan(0)
