@@ -75,11 +75,11 @@ class NsdDiscoveryAdapter(
 
         try {
             nsd.registerService(info, NsdManager.PROTOCOL_DNS_SD, listener)
-        } catch (goFailure: RuntimeException) {
+        } catch (failure: RuntimeException) {
             machine.accept(
                 DiscoveryEvent.ADVERTISE_FAILED,
                 DiscoveryFailure.AdvertiseFailed(
-                    goFailure.message ?: "registerService threw",
+                    failure.message ?: "registerService threw",
                 ),
             )
             registrationListener = null
@@ -97,9 +97,9 @@ class NsdDiscoveryAdapter(
         registrationListener = null
         try {
             nsd.unregisterService(listener)
-        } catch (goFailure: RuntimeException) {
+        } catch (failure: RuntimeException) {
             registrationListener = listener
-            throw goFailure
+            throw failure
         }
         releaseMulticastLock()
         machine.accept(DiscoveryEvent.STOP_REQUESTED)
@@ -117,7 +117,7 @@ class NsdDiscoveryAdapter(
             try {
                 nsd.discoverServices(DEFAULT_SERVICE_TYPE, NsdManager.PROTOCOL_DNS_SD, discoveryListener)
                 true
-            } catch (goFailure: RuntimeException) {
+            } catch (failure: RuntimeException) {
                 false
             }
 
@@ -188,27 +188,27 @@ class NsdDiscoveryAdapter(
     }
 
     private inner class RegistrationListenerImpl : NsdManager.RegistrationListener {
-        override fun onServiceRegistered(goInfo: NsdServiceInfo) {
+        override fun onServiceRegistered(info: NsdServiceInfo) {
             machine.accept(DiscoveryEvent.ADVERTISE_REGISTERED)
         }
 
         override fun onRegistrationFailed(
-            goInfo: NsdServiceInfo,
-            goCode: Int,
+            info: NsdServiceInfo,
+            code: Int,
         ) {
             machine.accept(
                 DiscoveryEvent.ADVERTISE_FAILED,
                 DiscoveryFailure.AdvertiseFailed(
-                    "onRegistrationFailed code=$goCode",
+                    "onRegistrationFailed code=$code",
                 ),
             )
         }
 
-        override fun onServiceUnregistered(goInfo: NsdServiceInfo) = Unit
+        override fun onServiceUnregistered(info: NsdServiceInfo) = Unit
 
         override fun onUnregistrationFailed(
-            goInfo: NsdServiceInfo,
-            goCode: Int,
+            info: NsdServiceInfo,
+            code: Int,
         ) = Unit
     }
 
@@ -216,62 +216,62 @@ class NsdDiscoveryAdapter(
         private val latch: CountDownLatch,
         private val resolved: AtomicReference<PeerAddress?>,
     ) : NsdManager.DiscoveryListener {
-        override fun onDiscoveryStarted(goServiceType: String) = Unit
+        override fun onDiscoveryStarted(serviceType: String) = Unit
 
-        override fun onServiceFound(goInfo: NsdServiceInfo) {
-            resolve(goInfo, latch, resolved)
+        override fun onServiceFound(info: NsdServiceInfo) {
+            resolve(info, latch, resolved)
         }
 
-        override fun onServiceLost(goInfo: NsdServiceInfo) = Unit
+        override fun onServiceLost(info: NsdServiceInfo) = Unit
 
-        override fun onDiscoveryStopped(goServiceType: String) = Unit
+        override fun onDiscoveryStopped(serviceType: String) = Unit
 
         override fun onStartDiscoveryFailed(
-            goServiceType: String,
-            goCode: Int,
+            serviceType: String,
+            code: Int,
         ) {
             latch.countDown()
         }
 
         override fun onStopDiscoveryFailed(
-            goServiceType: String,
-            goCode: Int,
+            serviceType: String,
+            code: Int,
         ) = Unit
     }
 
     private fun resolve(
-        goInfo: NsdServiceInfo,
-        goLatch: CountDownLatch,
-        goResolved: AtomicReference<PeerAddress?>,
+        info: NsdServiceInfo,
+        latch: CountDownLatch,
+        resolved: AtomicReference<PeerAddress?>,
     ) {
         if (usesServiceInfoCallback(Build.VERSION.SDK_INT)) {
-            resolveViaServiceInfoCallback(goInfo, goLatch, goResolved)
+            resolveViaServiceInfoCallback(info, latch, resolved)
         } else {
-            resolveViaDeprecatedPath(goInfo, goLatch, goResolved)
+            resolveViaDeprecatedPath(info, latch, resolved)
         }
     }
 
     private fun resolveViaDeprecatedPath(
-        goInfo: NsdServiceInfo,
-        goLatch: CountDownLatch,
-        goResolved: AtomicReference<PeerAddress?>,
+        info: NsdServiceInfo,
+        latch: CountDownLatch,
+        resolved: AtomicReference<PeerAddress?>,
     ) {
         @Suppress("DEPRECATION")
         val listener =
             object : NsdManager.ResolveListener {
-                override fun onServiceResolved(goResolvedInfo: NsdServiceInfo) {
-                    publishResolved(goResolvedInfo, goResolved, goLatch)
+                override fun onServiceResolved(resolvedInfo: NsdServiceInfo) {
+                    publishResolved(resolvedInfo, resolved, latch)
                 }
 
                 override fun onResolveFailed(
-                    goFailedInfo: NsdServiceInfo,
-                    goCode: Int,
+                    failedInfo: NsdServiceInfo,
+                    code: Int,
                 ) {
-                    goLatch.countDown()
+                    latch.countDown()
                 }
             }
         @Suppress("DEPRECATION")
-        nsd.resolveService(goInfo, listener)
+        nsd.resolveService(info, listener)
     }
 
     /**
@@ -287,40 +287,40 @@ class NsdDiscoveryAdapter(
      */
     @SuppressLint("NewApi") // Guarded by usesServiceInfoCallback(): only reachable at sdkInt >= 35.
     private fun resolveViaServiceInfoCallback(
-        goInfo: NsdServiceInfo,
-        goLatch: CountDownLatch,
-        goResolved: AtomicReference<PeerAddress?>,
+        info: NsdServiceInfo,
+        latch: CountDownLatch,
+        resolved: AtomicReference<PeerAddress?>,
     ) {
         val callback =
             object : NsdManager.ServiceInfoCallback {
-                override fun onServiceUpdated(goResolvedInfo: NsdServiceInfo) {
-                    publishResolved(goResolvedInfo, goResolved, goLatch)
+                override fun onServiceUpdated(resolvedInfo: NsdServiceInfo) {
+                    publishResolved(resolvedInfo, resolved, latch)
                 }
 
                 override fun onServiceLost() {
-                    goLatch.countDown()
+                    latch.countDown()
                 }
 
-                override fun onServiceInfoCallbackRegistrationFailed(goCode: Int) {
-                    goLatch.countDown()
+                override fun onServiceInfoCallbackRegistrationFailed(code: Int) {
+                    latch.countDown()
                 }
 
                 override fun onServiceInfoCallbackUnregistered() = Unit
             }
-        nsd.registerServiceInfoCallback(goInfo, context.mainExecutor, callback)
+        nsd.registerServiceInfoCallback(info, context.mainExecutor, callback)
     }
 
     private fun publishResolved(
-        goInfo: NsdServiceInfo,
-        goResolved: AtomicReference<PeerAddress?>,
-        goLatch: CountDownLatch,
+        info: NsdServiceInfo,
+        resolved: AtomicReference<PeerAddress?>,
+        latch: CountDownLatch,
     ) {
-        val host = goInfo.host?.hostAddress ?: return
-        goResolved.compareAndSet(
+        val host = info.host?.hostAddress ?: return
+        resolved.compareAndSet(
             null,
-            PeerAddress(host, goInfo.port, PeerAddress.SOURCE_MDNS),
+            PeerAddress(host, info.port, PeerAddress.SOURCE_MDNS),
         )
-        goLatch.countDown()
+        latch.countDown()
     }
 
     companion object {

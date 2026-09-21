@@ -95,8 +95,8 @@ class HubBringUp(
 
         return try {
             HotspotBringUp.Hotspot(hotspot.startHotspot())
-        } catch (goRefused: HotspotUnavailableException) {
-            HotspotBringUp.Unavailable(goRefused.failure.toString())
+        } catch (refused: HotspotUnavailableException) {
+            HotspotBringUp.Unavailable(refused.failure.toString())
         }
     }
 

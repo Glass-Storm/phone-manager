@@ -221,16 +221,16 @@ class DiscoveryStateMachine(
  * always below API 33, and on API 33 until the Tiramisu SDK extension reaches 7.
  * From API 34 the platform handles mDNS multicast without the app holding a lock.
  *
- * The Tiramisu extension version is only queried on API 33 — [goTiramisuExtensionVersion]
+ * The Tiramisu extension version is only queried on API 33 — [tiramisuExtensionVersion]
  * is never invoked below 33 or from 34 (it must not be, since the extension is a 33 construct).
  */
 fun needsMulticastLock(
-    goSdkInt: Int,
-    goTiramisuExtensionVersion: () -> Int,
+    sdkInt: Int,
+    tiramisuExtensionVersion: () -> Int,
 ): Boolean =
     when {
-        goSdkInt < 33 -> true
-        goSdkInt == 33 -> goTiramisuExtensionVersion() < 7
+        sdkInt < 33 -> true
+        sdkInt == 33 -> tiramisuExtensionVersion() < 7
         else -> false
     }
 
@@ -245,4 +245,4 @@ fun needsMulticastLock(
  * the conservative API-35 boundary is kept deliberately, since it matches the
  * plan and never loses a working path.)
  */
-fun usesServiceInfoCallback(goSdkInt: Int): Boolean = goSdkInt >= 35
+fun usesServiceInfoCallback(sdkInt: Int): Boolean = sdkInt >= 35

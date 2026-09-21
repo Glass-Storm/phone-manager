@@ -98,11 +98,11 @@ class LocalOnlyHotspotAdapter(
      * [HotspotFailure.PermissionDenied] and land the machine in `ERROR`, never
      * `ACTIVE`. Every other code is a genuine platform refusal.
      */
-    private fun failureForReason(goReasonCode: Int): HotspotFailure =
-        if (goReasonCode == REASON_PERMISSION_DENIED) {
+    private fun failureForReason(reasonCode: Int): HotspotFailure =
+        if (reasonCode == REASON_PERMISSION_DENIED) {
             HotspotFailure.PermissionDenied
         } else {
-            HotspotFailure.StartFailed("platform refused, reason=$goReasonCode")
+            HotspotFailure.StartFailed("platform refused, reason=$reasonCode")
         }
 
     override fun stopHotspot() {

@@ -37,11 +37,11 @@ object BatteryOptimization {
      * `false` also covers a device that exposes no [PowerManager] at all — an
      * unoptimizable platform is not reported as exempt.
      */
-    fun isExempt(goContext: Context): Boolean {
+    fun isExempt(context: Context): Boolean {
         val power =
-            goContext.getSystemService(Context.POWER_SERVICE) as? PowerManager
+            context.getSystemService(Context.POWER_SERVICE) as? PowerManager
                 ?: return false
-        return power.isIgnoringBatteryOptimizations(goContext.packageName)
+        return power.isIgnoringBatteryOptimizations(context.packageName)
     }
 
     /**
@@ -51,9 +51,9 @@ object BatteryOptimization {
      * request to this app; without it the system activity has no target and the
      * request is meaningless on API 23+.
      */
-    fun requestIntent(goContext: Context): Intent =
+    fun requestIntent(context: Context): Intent =
         Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
-            .setData(packageUri(goContext))
+            .setData(packageUri(context))
 
     /**
      * The `package:` URI the exemption activity expects for this app.
@@ -61,5 +61,5 @@ object BatteryOptimization {
      * `Uri.fromParts` is used rather than string concatenation so the scheme and
      * the opaque part are built by the platform parser.
      */
-    fun packageUri(goContext: Context): Uri = Uri.fromParts("package", goContext.packageName, null)
+    fun packageUri(context: Context): Uri = Uri.fromParts("package", context.packageName, null)
 }
