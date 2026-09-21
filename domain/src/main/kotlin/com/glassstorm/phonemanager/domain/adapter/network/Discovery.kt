@@ -1,6 +1,6 @@
 package com.glassstorm.phonemanager.domain.adapter.network
 
-import com.glassstorm.phonemanager.domain.dto.PeerAddress
+import com.glassstorm.phonemanager.core.model.PeerAddress
 
 /**
  * Port (interface) for local-network peer discovery.

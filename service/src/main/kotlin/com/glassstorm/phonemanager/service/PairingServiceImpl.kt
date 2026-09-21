@@ -1,11 +1,11 @@
 package com.glassstorm.phonemanager.service
 
+import com.glassstorm.phonemanager.core.model.Device
+import com.glassstorm.phonemanager.core.model.PairOutcome
+import com.glassstorm.phonemanager.core.model.Pairing
 import com.glassstorm.phonemanager.domain.adapter.repository.DeviceRepository
 import com.glassstorm.phonemanager.domain.context.Context
 import com.glassstorm.phonemanager.domain.context.fromContext
-import com.glassstorm.phonemanager.domain.dto.Device
-import com.glassstorm.phonemanager.domain.dto.PairOutcome
-import com.glassstorm.phonemanager.domain.dto.Pairing
 import com.glassstorm.phonemanager.domain.service.PairingService
 import com.glassstorm.phonemanager.service.security.TokenCodec
 import com.glassstorm.phonemanager.service.security.TokenVerifier

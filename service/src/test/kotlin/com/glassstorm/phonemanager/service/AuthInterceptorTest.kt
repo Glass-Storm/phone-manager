@@ -1,6 +1,6 @@
 package com.glassstorm.phonemanager.service
 
-import com.glassstorm.phonemanager.domain.dto.Device
+import com.glassstorm.phonemanager.core.model.Device
 import com.glassstorm.phonemanager.service.security.AuthInterceptor
 import com.glassstorm.phonemanager.service.security.TokenVerifier
 import com.google.common.truth.Truth.assertThat

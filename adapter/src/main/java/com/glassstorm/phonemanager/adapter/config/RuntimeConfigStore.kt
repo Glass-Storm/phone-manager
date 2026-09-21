@@ -2,9 +2,9 @@ package com.glassstorm.phonemanager.adapter.config
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.glassstorm.phonemanager.core.model.HotspotMode
+import com.glassstorm.phonemanager.core.model.SttEngine
 import com.glassstorm.phonemanager.domain.adapter.config.AppConfig
-import com.glassstorm.phonemanager.domain.dto.HotspotMode
-import com.glassstorm.phonemanager.domain.dto.SttEngine
 import java.util.Locale
 
 /** Which speech engine the composition root should build. */

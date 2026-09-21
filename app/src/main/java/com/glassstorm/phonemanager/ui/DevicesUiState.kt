@@ -1,6 +1,6 @@
 package com.glassstorm.phonemanager.ui
 
-import com.glassstorm.phonemanager.domain.dto.Device
+import com.glassstorm.phonemanager.core.model.Device
 
 /**
  * Everything the Devices screen renders, derived only from the `DeviceRepository`

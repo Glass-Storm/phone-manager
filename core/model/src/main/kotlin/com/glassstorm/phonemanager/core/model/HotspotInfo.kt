@@ -1,4 +1,4 @@
-package com.glassstorm.phonemanager.domain.dto
+package com.glassstorm.phonemanager.core.model
 
 /**
  * Everything a peer needs to join the phone-hosted access point.

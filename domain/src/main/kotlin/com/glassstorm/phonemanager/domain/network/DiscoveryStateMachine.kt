@@ -1,6 +1,6 @@
 package com.glassstorm.phonemanager.domain.network
 
-import com.glassstorm.phonemanager.domain.dto.PeerAddress
+import com.glassstorm.phonemanager.core.model.PeerAddress
 
 /**
  * Lifecycle of hub peer discovery.

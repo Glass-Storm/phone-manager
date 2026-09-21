@@ -2,12 +2,12 @@ package com.glassstorm.phonemanager.ui
 
 import androidx.lifecycle.ViewModel
 import com.glassstorm.phonemanager.battery.BatteryExemption
+import com.glassstorm.phonemanager.core.model.HotspotMode
+import com.glassstorm.phonemanager.core.model.SttEngine
 import com.glassstorm.phonemanager.domain.adapter.config.AppConfig
 import com.glassstorm.phonemanager.domain.adapter.transport.HubServer
 import com.glassstorm.phonemanager.domain.context.Context
 import com.glassstorm.phonemanager.domain.context.fromContextOrNull
-import com.glassstorm.phonemanager.domain.dto.HotspotMode
-import com.glassstorm.phonemanager.domain.dto.SttEngine
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow

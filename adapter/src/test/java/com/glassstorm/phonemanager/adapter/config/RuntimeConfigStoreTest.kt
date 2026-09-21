@@ -132,7 +132,7 @@ class RuntimeConfigStoreTest {
 
         // Then the domain vocabulary is returned, not the adapter enum
         assertThat(port.sttEngine())
-            .isEqualTo(com.glassstorm.phonemanager.domain.dto.SttEngine.SPEECHMATICS)
+            .isEqualTo(com.glassstorm.phonemanager.core.model.SttEngine.SPEECHMATICS)
     }
 
     @Test
@@ -140,22 +140,22 @@ class RuntimeConfigStoreTest {
         val port: com.glassstorm.phonemanager.domain.adapter.config.AppConfig = store
 
         assertThat(port.sttEngine())
-            .isEqualTo(com.glassstorm.phonemanager.domain.dto.SttEngine.MOCK)
+            .isEqualTo(com.glassstorm.phonemanager.core.model.SttEngine.MOCK)
         assertThat(port.hotspotMode())
-            .isEqualTo(com.glassstorm.phonemanager.domain.dto.HotspotMode.MANUAL)
+            .isEqualTo(com.glassstorm.phonemanager.core.model.HotspotMode.MANUAL)
     }
 
     @Test
     fun `the hotspot mode round-trips through the domain port`() {
         val port: com.glassstorm.phonemanager.domain.adapter.config.AppConfig = store
 
-        port.setHotspotMode(com.glassstorm.phonemanager.domain.dto.HotspotMode.AUTO)
+        port.setHotspotMode(com.glassstorm.phonemanager.core.model.HotspotMode.AUTO)
         assertThat(port.hotspotMode())
-            .isEqualTo(com.glassstorm.phonemanager.domain.dto.HotspotMode.AUTO)
+            .isEqualTo(com.glassstorm.phonemanager.core.model.HotspotMode.AUTO)
 
-        port.setHotspotMode(com.glassstorm.phonemanager.domain.dto.HotspotMode.MANUAL)
+        port.setHotspotMode(com.glassstorm.phonemanager.core.model.HotspotMode.MANUAL)
         assertThat(port.hotspotMode())
-            .isEqualTo(com.glassstorm.phonemanager.domain.dto.HotspotMode.MANUAL)
+            .isEqualTo(com.glassstorm.phonemanager.core.model.HotspotMode.MANUAL)
     }
 
     @Test
@@ -167,7 +167,7 @@ class RuntimeConfigStoreTest {
             .commit()
 
         assertThat(RuntimeConfigStore(context).hotspotMode())
-            .isEqualTo(com.glassstorm.phonemanager.domain.dto.HotspotMode.MANUAL)
+            .isEqualTo(com.glassstorm.phonemanager.core.model.HotspotMode.MANUAL)
     }
 
     @Test

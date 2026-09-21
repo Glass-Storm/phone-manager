@@ -1,6 +1,6 @@
 package com.glassstorm.phonemanager.domain.adapter.repository
 
-import com.glassstorm.phonemanager.domain.dto.Device
+import com.glassstorm.phonemanager.core.model.Device
 
 /**
  * Persistent store for paired devices.

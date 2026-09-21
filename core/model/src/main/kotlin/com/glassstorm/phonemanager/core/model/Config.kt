@@ -1,4 +1,4 @@
-package com.glassstorm.phonemanager.domain.dto
+package com.glassstorm.phonemanager.core.model
 
 /**
  * The speech-recognition engines the hub can be configured to use.

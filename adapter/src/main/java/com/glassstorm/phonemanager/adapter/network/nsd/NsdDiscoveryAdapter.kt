@@ -7,8 +7,8 @@ import android.net.nsd.NsdServiceInfo
 import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.ext.SdkExtensions
+import com.glassstorm.phonemanager.core.model.PeerAddress
 import com.glassstorm.phonemanager.domain.adapter.network.Discovery
-import com.glassstorm.phonemanager.domain.dto.PeerAddress
 import com.glassstorm.phonemanager.domain.network.DiscoveryEvent
 import com.glassstorm.phonemanager.domain.network.DiscoveryFailure
 import com.glassstorm.phonemanager.domain.network.DiscoverySelection

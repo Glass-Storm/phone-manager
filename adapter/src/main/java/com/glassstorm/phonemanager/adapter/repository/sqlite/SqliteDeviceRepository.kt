@@ -5,8 +5,8 @@ import android.content.Context
 import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
+import com.glassstorm.phonemanager.core.model.Device
 import com.glassstorm.phonemanager.domain.adapter.repository.DeviceRepository
-import com.glassstorm.phonemanager.domain.dto.Device
 
 /**
  * SQLite-backed [DeviceRepository], built directly on [SQLiteOpenHelper]

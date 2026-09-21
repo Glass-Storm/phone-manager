@@ -4,7 +4,7 @@ import android.content.Context
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.net.wifi.WifiManager
-import com.glassstorm.phonemanager.domain.dto.PeerAddress
+import com.glassstorm.phonemanager.core.model.PeerAddress
 import com.glassstorm.phonemanager.domain.network.DiscoveryState
 import com.google.common.truth.Truth.assertThat
 import org.junit.After

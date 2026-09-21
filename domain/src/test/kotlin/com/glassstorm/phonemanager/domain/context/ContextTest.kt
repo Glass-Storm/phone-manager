@@ -1,6 +1,6 @@
 package com.glassstorm.phonemanager.domain.context
 
-import com.glassstorm.phonemanager.domain.dto.Device
+import com.glassstorm.phonemanager.core.model.Device
 import com.google.common.truth.Truth.assertThat
 import org.junit.Assert.assertThrows
 import org.junit.Test

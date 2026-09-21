@@ -1,8 +1,8 @@
 package com.glassstorm.phonemanager.domain.service
 
-import com.glassstorm.phonemanager.domain.dto.RelayResult
-import com.glassstorm.phonemanager.domain.dto.RelaySession
-import com.glassstorm.phonemanager.domain.dto.RelayStats
+import com.glassstorm.phonemanager.core.model.RelayResult
+import com.glassstorm.phonemanager.core.model.RelaySession
+import com.glassstorm.phonemanager.core.model.RelayStats
 import kotlinx.coroutines.flow.Flow
 
 /**

@@ -1,4 +1,4 @@
-package com.glassstorm.phonemanager.domain.dto
+package com.glassstorm.phonemanager.core.model
 
 /**
  * A reachable hub endpoint on the local network.

@@ -1,4 +1,4 @@
-package com.glassstorm.phonemanager.domain.dto
+package com.glassstorm.phonemanager.core.model
 
 /**
  * A device paired with this phone hub.

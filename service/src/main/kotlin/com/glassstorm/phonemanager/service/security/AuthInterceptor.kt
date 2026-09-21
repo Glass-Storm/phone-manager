@@ -1,6 +1,6 @@
 package com.glassstorm.phonemanager.service.security
 
-import com.glassstorm.phonemanager.domain.dto.Device
+import com.glassstorm.phonemanager.core.model.Device
 import ecosys.v1.PairingServiceGrpc
 import io.grpc.Context
 import io.grpc.Contexts

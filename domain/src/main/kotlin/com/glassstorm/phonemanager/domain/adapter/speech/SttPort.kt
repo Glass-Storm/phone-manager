@@ -11,7 +11,7 @@ package com.glassstorm.phonemanager.domain.adapter.speech
  * a chunk carries no complete utterance.
  *
  * A recognition session is identified by the relay [sessionId] the hub minted
- * ([com.glassstorm.phonemanager.domain.dto.RelaySession.sessionId]) so engines
+ * ([com.glassstorm.phonemanager.core.model.RelaySession.sessionId]) so engines
  * that stream state internally can correlate and release it. [close] is the
  * deterministic teardown: it MUST be idempotent and MUST be called exactly once
  * per session by the relay.

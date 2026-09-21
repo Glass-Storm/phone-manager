@@ -78,7 +78,7 @@ class PairingViewModel(
             )
     }
 
-    private fun com.glassstorm.phonemanager.domain.dto.Pairing.remainingSeconds(): Long =
+    private fun com.glassstorm.phonemanager.core.model.Pairing.remainingSeconds(): Long =
         ((expiresAtMs - nowMs()) / 1_000L).coerceAtLeast(0L)
 
     companion object {

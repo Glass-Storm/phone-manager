@@ -1,6 +1,6 @@
 package com.glassstorm.phonemanager.domain.service
 
-import com.glassstorm.phonemanager.domain.dto.Device
+import com.glassstorm.phonemanager.core.model.Device
 
 /**
  * Device management use-cases.

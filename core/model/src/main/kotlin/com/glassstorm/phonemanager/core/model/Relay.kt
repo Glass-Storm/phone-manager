@@ -1,4 +1,4 @@
-package com.glassstorm.phonemanager.domain.dto
+package com.glassstorm.phonemanager.core.model
 
 /**
  * A live media relay session bound to one paired device. Pure data.

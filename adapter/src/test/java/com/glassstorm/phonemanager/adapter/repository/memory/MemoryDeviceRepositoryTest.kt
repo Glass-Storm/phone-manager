@@ -1,7 +1,7 @@
 package com.glassstorm.phonemanager.adapter.repository.memory
 
+import com.glassstorm.phonemanager.core.model.Device
 import com.glassstorm.phonemanager.domain.adapter.repository.DeviceRepository
-import com.glassstorm.phonemanager.domain.dto.Device
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 

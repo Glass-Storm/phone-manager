@@ -2,9 +2,9 @@ package com.glassstorm.phonemanager.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.glassstorm.phonemanager.core.model.RelayStats
 import com.glassstorm.phonemanager.domain.context.Context
 import com.glassstorm.phonemanager.domain.context.fromContextOrNull
-import com.glassstorm.phonemanager.domain.dto.RelayStats
 import com.glassstorm.phonemanager.domain.service.PairingService
 import com.glassstorm.phonemanager.domain.service.StreamService
 import kotlinx.coroutines.Job

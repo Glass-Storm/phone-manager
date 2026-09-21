@@ -7,7 +7,7 @@ import android.location.LocationManager
 import android.net.wifi.WifiConfiguration
 import android.net.wifi.WifiManager
 import androidx.test.core.app.ApplicationProvider
-import com.glassstorm.phonemanager.domain.dto.HotspotInfo
+import com.glassstorm.phonemanager.core.model.HotspotInfo
 import com.glassstorm.phonemanager.domain.network.HotspotState
 import com.glassstorm.phonemanager.domain.network.HotspotUnavailableException
 import com.google.common.truth.Truth.assertThat

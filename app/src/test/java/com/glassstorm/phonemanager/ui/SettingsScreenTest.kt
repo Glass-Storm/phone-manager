@@ -11,12 +11,12 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import com.glassstorm.phonemanager.battery.BatteryExemption
+import com.glassstorm.phonemanager.core.model.HotspotMode
+import com.glassstorm.phonemanager.core.model.SttEngine
 import com.glassstorm.phonemanager.domain.adapter.config.AppConfig
 import com.glassstorm.phonemanager.domain.adapter.transport.HubServer
 import com.glassstorm.phonemanager.domain.context.Context
 import com.glassstorm.phonemanager.domain.context.register
-import com.glassstorm.phonemanager.domain.dto.HotspotMode
-import com.glassstorm.phonemanager.domain.dto.SttEngine
 import com.google.common.truth.Truth.assertThat
 import org.junit.Rule
 import org.junit.Test

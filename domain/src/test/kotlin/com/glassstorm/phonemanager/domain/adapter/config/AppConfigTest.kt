@@ -1,7 +1,7 @@
 package com.glassstorm.phonemanager.domain.adapter.config
 
-import com.glassstorm.phonemanager.domain.dto.HotspotMode
-import com.glassstorm.phonemanager.domain.dto.SttEngine
+import com.glassstorm.phonemanager.core.model.HotspotMode
+import com.glassstorm.phonemanager.core.model.SttEngine
 import org.junit.Assert.assertEquals
 import org.junit.Test
 

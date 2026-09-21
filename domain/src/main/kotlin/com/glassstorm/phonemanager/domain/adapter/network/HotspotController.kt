@@ -1,6 +1,6 @@
 package com.glassstorm.phonemanager.domain.adapter.network
 
-import com.glassstorm.phonemanager.domain.dto.HotspotInfo
+import com.glassstorm.phonemanager.core.model.HotspotInfo
 
 /**
  * Port (interface) for the phone-hosted access point.

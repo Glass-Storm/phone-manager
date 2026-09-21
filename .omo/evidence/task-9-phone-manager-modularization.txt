@@ -1,0 +1,82 @@
+T9 — extract :core:model module with hand-written DTOs
+=======================================================
+Repo: /home/chaos/workplace/fyp/phone-manager
+Base HEAD: 6488b0e (T7 KSP/Dagger)
+
+WHAT WAS DONE
+-------------
+1. settings.gradle.kts: added include(":core:model").
+2. core/model/build.gradle.kts: created with
+   phonemanager.kotlin.library + phonemanager.ktlint. NO dependencies block
+   at all — zero main deps, zero project deps.
+3. git mv'd all 7 DTOs (history follows):
+   domain/src/main/kotlin/.../domain/dto/{Config,Device,HotspotInfo,Pairing,
+   PairOutcome,PeerAddress,Relay}.kt
+   -> core/model/src/main/kotlin/com/glassstorm/phonemanager/core/model/*.kt
+   Only the `package` line changed in each file. domain/dto/ no longer exists.
+4. domain/build.gradle.kts: added api(project(":core:model")) — api, NOT
+   implementation, so :domain's public port/DTO signatures resolve transitively.
+5. Updated all 48 importer files (grep -rl 'domain.dto') from
+   com.glassstorm.phonemanager.domain.dto -> com.glassstorm.phonemanager.core.model.
+   Note: "55" in the task brief counted the 7 DTO package lines themselves too;
+   the actual importer count is 48. 48 + 7 = 55. All updated.
+6. Ran ktlintFormat: the new core.model package sorts lexicographically before
+   other com.glassstorm imports, so 10 files needed an import reorder. Verified
+   the diff is a pure import-line swap (no logic/field changes).
+
+DTO TESTS — FINDING
+-------------------
+There are NO DTO-focused tests. domain/src/test contains exactly:
+  AppConfigTest.kt, ContextTest.kt, DiscoveryStateMachineTest.kt,
+  HotspotStateMachineTest.kt
+All four test state machines / the Context registry / config parsing, which stay
+in :domain. The plan's instruction to move DTO tests was based on a false
+premise; nothing was moved. domain's tests are untouched.
+
+RENAME PROOF (git show --numstat -M)
+------------------------------------
+Each DTO shows 1 insertion / 1 deletion — the package line only:
+  1  1  {.../domain/dto => .../core/model}/Config.kt
+  1  1  {.../domain/dto => .../core/model}/Device.kt
+  1  1  {.../domain/dto => .../core/model}/HotspotInfo.kt
+  1  1  {.../domain/dto => .../core/model}/PairOutcome.kt
+  1  1  {.../domain/dto => .../core/model}/Pairing.kt
+  1  1  {.../domain/dto => .../core/model}/PeerAddress.kt
+  1  1  {.../domain/dto => .../core/model}/Relay.kt
+No DTO field, type, default, or companion constant was altered.
+
+MANUAL QA
+---------
+$ grep -rn 'domain\.dto' --include='*.kt' contract/src domain/src service/src adapter/src app/src testkit/src | wc -l
+0
+
+$ ./gradlew :core:model:dependencies --configuration compileClasspath
+compileClasspath - Compile classpath for 'main'.
+(no `project :` lines — ZERO project dependencies)
+
+$ ./gradlew :core:model:test
+BUILD SUCCESSFUL
+:core:model:compileTestKotlin NO-SOURCE
+:core:model:test NO-SOURCE
+(0 tests by design — module configures and builds)
+
+FULL GATE (XML-parsed from build/test-results/**/*.xml)
+-------------------------------------------------------
+contract   tests=   8 failures=0 errors=0 skipped=0
+domain     tests=  45 failures=0 errors=0 skipped=0
+service    tests=  55 failures=0 errors=0 skipped=0
+adapter    tests=  96 failures=0 errors=0 skipped=0
+app        tests= 107 failures=0 errors=0 skipped=0
+TOTAL      tests= 311 failures=0 errors=0 skipped=0
+
+$ ./gradlew ktlintCheck :app:assembleRelease
+BUILD SUCCESSFUL in 1m 36s
+
+COMMIT
+------
+refactor(core): extract core model module with dtos
+
+NOTE
+----
+.gitignore carried a pre-existing unrelated modification (bin/, .vscode/, out/)
+with mtime 11:15, predating this task (14:37). Left uncommitted.

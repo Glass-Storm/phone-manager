@@ -1,8 +1,8 @@
 package com.glassstorm.phonemanager.service
 
+import com.glassstorm.phonemanager.core.model.PairOutcome
 import com.glassstorm.phonemanager.domain.context.Context
 import com.glassstorm.phonemanager.domain.context.fromContext
-import com.glassstorm.phonemanager.domain.dto.PairOutcome
 import com.glassstorm.phonemanager.domain.service.PairingService
 import com.glassstorm.phonemanager.service.security.AuthInterceptor
 import ecosys.v1.HeartbeatRequest

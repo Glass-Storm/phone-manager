@@ -1,8 +1,8 @@
 package com.glassstorm.phonemanager.domain.service
 
-import com.glassstorm.phonemanager.domain.dto.Device
-import com.glassstorm.phonemanager.domain.dto.PairOutcome
-import com.glassstorm.phonemanager.domain.dto.Pairing
+import com.glassstorm.phonemanager.core.model.Device
+import com.glassstorm.phonemanager.core.model.PairOutcome
+import com.glassstorm.phonemanager.core.model.Pairing
 
 /**
  * Pairing + token authority use-cases.

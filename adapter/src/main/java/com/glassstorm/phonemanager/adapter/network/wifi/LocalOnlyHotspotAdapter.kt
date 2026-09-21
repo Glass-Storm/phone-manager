@@ -6,8 +6,8 @@ import android.content.pm.PackageManager
 import android.location.LocationManager
 import android.net.wifi.WifiManager
 import android.os.Build
+import com.glassstorm.phonemanager.core.model.HotspotInfo
 import com.glassstorm.phonemanager.domain.adapter.network.HotspotController
-import com.glassstorm.phonemanager.domain.dto.HotspotInfo
 import com.glassstorm.phonemanager.domain.network.HotspotEvent
 import com.glassstorm.phonemanager.domain.network.HotspotFailure
 import com.glassstorm.phonemanager.domain.network.HotspotState

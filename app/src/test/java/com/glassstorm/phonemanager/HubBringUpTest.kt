@@ -1,12 +1,12 @@
 package com.glassstorm.phonemanager
 
+import com.glassstorm.phonemanager.core.model.HotspotInfo
+import com.glassstorm.phonemanager.core.model.PeerAddress
 import com.glassstorm.phonemanager.domain.adapter.network.Discovery
 import com.glassstorm.phonemanager.domain.adapter.network.HotspotController
 import com.glassstorm.phonemanager.domain.adapter.transport.HubServer
 import com.glassstorm.phonemanager.domain.context.Context
 import com.glassstorm.phonemanager.domain.context.register
-import com.glassstorm.phonemanager.domain.dto.HotspotInfo
-import com.glassstorm.phonemanager.domain.dto.PeerAddress
 import com.glassstorm.phonemanager.domain.network.HotspotFailure
 import com.glassstorm.phonemanager.domain.network.HotspotUnavailableException
 import com.google.common.truth.Truth.assertThat

@@ -1,6 +1,6 @@
 package com.glassstorm.phonemanager.ui
 
-import com.glassstorm.phonemanager.domain.dto.HotspotInfo
+import com.glassstorm.phonemanager.core.model.HotspotInfo
 
 /**
  * Everything the Dashboard renders, derived only from domain ports.
