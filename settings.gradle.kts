@@ -56,3 +56,8 @@ include(":contract")
 // are consumed by both suites' `testImplementation`. It stays runtime-dependency-
 // free so an Android module can consume it without dragging anything onto the APK.
 include(":testing:testkit")
+// The architecture gate: Konsist rules that fail the build when one of the
+// module-boundary laws is violated (contract isolation, gRPC-free use-cases,
+// annotation-free domain, nobody importing `app`). Pure Kotlin/JVM — it reads
+// the other modules' SOURCES from disk, so it needs no Android or project edge.
+include(":testing:architecture")

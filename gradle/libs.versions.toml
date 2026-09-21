@@ -33,6 +33,10 @@ ksp = "2.1.0-1.0.29"
 # Dagger 2.57.1 supports KSP2 + Kotlin 2.1 without requiring Kotlin 2.2, and needs
 # no Hilt (whose Gradle plugin hard-fails on the pure-JVM `:core:domain`/`:service`).
 dagger = "2.57.1"
+# Konsist is a TEST-TIME architecture-linter library, not a Gradle plugin: there
+# is no `konsist-gradle-plugin` artifact. `:testing:architecture` depends on it as
+# a `testImplementation` and parses the project's Kotlin sources from disk.
+konsist = "0.17.3"
 
 [libraries]
 core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -80,6 +84,9 @@ grpc-testing = { group = "io.grpc", name = "grpc-testing", version.ref = "grpc" 
 # would nest as `libs.dagger.*` and shadow the leaf accessor.
 dagger = { group = "com.google.dagger", name = "dagger", version.ref = "dagger" }
 dagger-compiler = { group = "com.google.dagger", name = "dagger-compiler", version.ref = "dagger" }
+
+# The architecture-boundary linter used only by `:testing:architecture`'s tests.
+konsist = { group = "com.lemonappdev", name = "konsist", version.ref = "konsist" }
 
 annotations-api = { group = "org.apache.tomcat", name = "annotations-api", version.ref = "annotationsApi" }
 desugar_jdk_libs = { group = "com.android.tools", name = "desugar_jdk_libs", version.ref = "desugarJdkLibs" }
