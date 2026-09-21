@@ -9,7 +9,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.lifecycle.ViewModelStore
 import com.glassstorm.phonemanager.domain.context.Context
-import com.glassstorm.phonemanager.domain.context.Register
+import com.glassstorm.phonemanager.domain.context.register
 import com.glassstorm.phonemanager.domain.service.StreamService
 import com.google.common.truth.Truth.assertThat
 import org.junit.Rule
@@ -50,7 +50,7 @@ class StreamScreenTest {
 
     @Test
     fun `a session starts idle with every counter at zero`() {
-        val ctx = Context().also { Register<StreamService>(it, FakeStreamService()) }
+        val ctx = Context().also { register<StreamService>(it, FakeStreamService()) }
 
         composeRule.setStreamContent(ctx)
 
@@ -65,7 +65,7 @@ class StreamScreenTest {
     @Test
     fun `counters update while a session is live`() {
         val peer = FakeStreamService()
-        val ctx = Context().also { Register<StreamService>(it, peer) }
+        val ctx = Context().also { register<StreamService>(it, peer) }
 
         composeRule.setStreamContent(ctx)
         composeRule.click("Start session")
@@ -93,7 +93,7 @@ class StreamScreenTest {
     @Test
     fun `the latest transcript renders with its speaker label`() {
         val peer = FakeStreamService()
-        val ctx = Context().also { Register<StreamService>(it, peer) }
+        val ctx = Context().also { register<StreamService>(it, peer) }
 
         composeRule.setStreamContent(ctx)
         composeRule.click("Start session")
@@ -111,7 +111,7 @@ class StreamScreenTest {
     @Test
     fun `a later transcript replaces the earlier one`() {
         val peer = FakeStreamService()
-        val ctx = Context().also { Register<StreamService>(it, peer) }
+        val ctx = Context().also { register<StreamService>(it, peer) }
 
         composeRule.setStreamContent(ctx)
         composeRule.click("Start session")
@@ -131,7 +131,7 @@ class StreamScreenTest {
     @Test
     fun `stopping the session zeroes the counters and drops the transcript`() {
         val peer = FakeStreamService()
-        val ctx = Context().also { Register<StreamService>(it, peer) }
+        val ctx = Context().also { register<StreamService>(it, peer) }
 
         composeRule.setStreamContent(ctx)
         composeRule.click("Start session")
@@ -162,7 +162,7 @@ class StreamScreenTest {
     @Test
     fun `stopping without starting is a no-op and never crashes`() {
         val peer = FakeStreamService()
-        val ctx = Context().also { Register<StreamService>(it, peer) }
+        val ctx = Context().also { register<StreamService>(it, peer) }
         val viewModel = StreamViewModel(ctx)
 
         // The Stop control is disabled while idle, so the idempotent path is driven
@@ -177,7 +177,7 @@ class StreamScreenTest {
     @Test
     fun `a stopped session can be started again on a fresh session id`() {
         val peer = FakeStreamService(sessionIds = listOf("s-1", "s-2"))
-        val ctx = Context().also { Register<StreamService>(it, peer) }
+        val ctx = Context().also { register<StreamService>(it, peer) }
 
         composeRule.setStreamContent(ctx)
         composeRule.click("Start session")
@@ -201,7 +201,7 @@ class StreamScreenTest {
     @Test
     fun `clearing the ViewModel mid-refresh leaves no live coroutine behind`() {
         val peer = FakeStreamService()
-        val ctx = Context().also { Register<StreamService>(it, peer) }
+        val ctx = Context().also { register<StreamService>(it, peer) }
         val store = ViewModelStore()
         val viewModel = StreamViewModel(ctx)
         store.put("stream", viewModel)

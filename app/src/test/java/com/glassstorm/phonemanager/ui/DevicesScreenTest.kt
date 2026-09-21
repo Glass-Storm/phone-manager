@@ -8,7 +8,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import com.glassstorm.phonemanager.domain.adapter.repository.DeviceRepository
 import com.glassstorm.phonemanager.domain.context.Context
-import com.glassstorm.phonemanager.domain.context.Register
+import com.glassstorm.phonemanager.domain.context.register
 import com.google.common.truth.Truth.assertThat
 import org.junit.Rule
 import org.junit.Test
@@ -41,7 +41,7 @@ class DevicesScreenTest {
 
     @Test
     fun `an empty store shows the no-devices line`() {
-        val ctx = Context().also { Register<DeviceRepository>(it, FakeDeviceRepository()) }
+        val ctx = Context().also { register<DeviceRepository>(it, FakeDeviceRepository()) }
 
         composeRule.setDevicesContent(ctx)
 
@@ -55,7 +55,7 @@ class DevicesScreenTest {
                 it.seedDevice("d-1", "Glass One", role = "GLASS", lastSeenMs = 1_700_000_000_000L)
                 it.seedDevice("d-2", "Ubuntu Daemon", role = "DAEMON")
             }
-        val ctx = Context().also { Register<DeviceRepository>(it, repo) }
+        val ctx = Context().also { register<DeviceRepository>(it, repo) }
 
         composeRule.setDevicesContent(ctx)
 
@@ -72,7 +72,7 @@ class DevicesScreenTest {
             FakeDeviceRepository().also {
                 it.seedDevice("d-1", "Glass One", lastSeenMs = null)
             }
-        val ctx = Context().also { Register<DeviceRepository>(it, repo) }
+        val ctx = Context().also { register<DeviceRepository>(it, repo) }
 
         composeRule.setDevicesContent(ctx)
 
@@ -86,7 +86,7 @@ class DevicesScreenTest {
                 it.seedDevice("d-1", "Glass One", role = "GLASS")
                 it.seedDevice("d-2", "Ubuntu Daemon", role = "DAEMON")
             }
-        val ctx = Context().also { Register<DeviceRepository>(it, repo) }
+        val ctx = Context().also { register<DeviceRepository>(it, repo) }
 
         composeRule.setDevicesContent(ctx)
         composeRule.assertText("Glass One")
@@ -101,7 +101,7 @@ class DevicesScreenTest {
     @Test
     fun `revoking the last device falls back to the empty line`() {
         val repo = FakeDeviceRepository().also { it.seedDevice("d-1", "Glass One") }
-        val ctx = Context().also { Register<DeviceRepository>(it, repo) }
+        val ctx = Context().also { register<DeviceRepository>(it, repo) }
 
         composeRule.setDevicesContent(ctx)
         composeRule.click("Revoke Glass One")
@@ -116,7 +116,7 @@ class DevicesScreenTest {
         // database would do: the screen must degrade, not take the shell down.
         val ctx =
             Context().also {
-                Register<DeviceRepository>(it, FakeDeviceRepository(failOnList = true))
+                register<DeviceRepository>(it, FakeDeviceRepository(failOnList = true))
             }
 
         composeRule.setDevicesContent(ctx)
@@ -129,7 +129,7 @@ class DevicesScreenTest {
         // A double tap (or a revoke that races another) must not crash and must
         // leave the store in the same shape: the second delete is a harmless no-op.
         val repo = FakeDeviceRepository().also { it.seedDevice("d-1", "Glass One") }
-        val ctx = Context().also { Register<DeviceRepository>(it, repo) }
+        val ctx = Context().also { register<DeviceRepository>(it, repo) }
         val viewModel = DevicesViewModel(ctx)
 
         viewModel.onRevoke("d-1")

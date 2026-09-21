@@ -128,8 +128,7 @@ class LocalOnlyHotspotAdapter(
         throw HotspotUnavailableException(failure)
     }
 
-    private fun hasRequiredPermission(): Boolean =
-        context.checkSelfPermission(requiredPermission()) == PackageManager.PERMISSION_GRANTED
+    private fun hasRequiredPermission(): Boolean = context.checkSelfPermission(requiredPermission()) == PackageManager.PERMISSION_GRANTED
 
     private fun requiredPermission(): String =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {

@@ -4,7 +4,7 @@ import com.glassstorm.phonemanager.domain.adapter.network.Discovery
 import com.glassstorm.phonemanager.domain.adapter.network.HotspotController
 import com.glassstorm.phonemanager.domain.adapter.transport.HubServer
 import com.glassstorm.phonemanager.domain.context.Context
-import com.glassstorm.phonemanager.domain.context.Register
+import com.glassstorm.phonemanager.domain.context.register
 import com.glassstorm.phonemanager.domain.dto.HotspotInfo
 import com.glassstorm.phonemanager.domain.dto.PeerAddress
 import com.glassstorm.phonemanager.domain.network.HotspotFailure
@@ -94,10 +94,10 @@ class HubBringUpTest {
     private fun wired(): Triple<Context, CallLog, RecordingDiscovery> {
         val log = CallLog()
         val ctx = Context()
-        Register<HubServer>(ctx, RecordingHubServer(log))
-        Register<HotspotController>(ctx, RecordingHotspot(log))
+        register<HubServer>(ctx, RecordingHubServer(log))
+        register<HotspotController>(ctx, RecordingHotspot(log))
         val discovery = RecordingDiscovery(log)
-        Register<Discovery>(ctx, discovery)
+        register<Discovery>(ctx, discovery)
         return Triple(ctx, log, discovery)
     }
 
@@ -199,15 +199,15 @@ class HubBringUpTest {
         // Given an OEM-blocked device whose user enabled the system hotspot
         val log = CallLog()
         val ctx = Context()
-        Register<HubServer>(ctx, RecordingHubServer(log))
-        Register<HotspotController>(
+        register<HubServer>(ctx, RecordingHubServer(log))
+        register<HotspotController>(
             ctx,
             RecordingHotspot(
                 log,
                 manual = HotspotInfo("manual-tether", "", "192.168.43.1"),
             ),
         )
-        Register<Discovery>(ctx, RecordingDiscovery(log))
+        register<Discovery>(ctx, RecordingDiscovery(log))
 
         // When the hub is brought up
         val report = HubBringUp(ctx) { null }.bringUp(requestedPort = 0)
@@ -222,12 +222,12 @@ class HubBringUpTest {
         // Given the platform refuses LocalOnlyHotspot
         val log = CallLog()
         val ctx = Context()
-        Register<HubServer>(ctx, RecordingHubServer(log))
-        Register<HotspotController>(
+        register<HubServer>(ctx, RecordingHubServer(log))
+        register<HotspotController>(
             ctx,
             RecordingHotspot(log, fail = HotspotFailure.StartFailed("OEM refused")),
         )
-        Register<Discovery>(ctx, RecordingDiscovery(log))
+        register<Discovery>(ctx, RecordingDiscovery(log))
 
         // When the hub is brought up
         val report = HubBringUp(ctx) { null }.bringUp(requestedPort = 0)
@@ -255,8 +255,8 @@ class HubBringUpTest {
         // Given a Context without a Discovery adapter
         val log = CallLog()
         val ctx = Context()
-        Register<HubServer>(ctx, RecordingHubServer(log))
-        Register<HotspotController>(ctx, RecordingHotspot(log))
+        register<HubServer>(ctx, RecordingHubServer(log))
+        register<HotspotController>(ctx, RecordingHotspot(log))
 
         // When the hub is brought up
         val report = HubBringUp(ctx) { null }.bringUp(requestedPort = 0)

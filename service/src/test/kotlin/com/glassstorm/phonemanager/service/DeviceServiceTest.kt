@@ -2,9 +2,9 @@ package com.glassstorm.phonemanager.service
 
 import com.glassstorm.phonemanager.domain.adapter.repository.DeviceRepository
 import com.glassstorm.phonemanager.domain.context.Context
-import com.glassstorm.phonemanager.domain.context.FromContext
 import com.glassstorm.phonemanager.domain.context.MissingFromContextException
-import com.glassstorm.phonemanager.domain.context.Register
+import com.glassstorm.phonemanager.domain.context.fromContext
+import com.glassstorm.phonemanager.domain.context.register
 import com.glassstorm.phonemanager.domain.dto.Device
 import com.glassstorm.phonemanager.domain.service.DeviceService
 import com.google.common.truth.Truth.assertThat
@@ -47,7 +47,7 @@ class DeviceServiceTest {
     fun `service works with a fake adapter registered under the domain interface`() {
         // Given a Context holding a DeviceRepository under the domain port type
         val ctx = Context()
-        Register<DeviceRepository>(ctx, FakeDeviceRepository())
+        register<DeviceRepository>(ctx, FakeDeviceRepository())
         val service = DeviceServiceImpl(ctx)
         val device =
             Device(
@@ -64,16 +64,16 @@ class DeviceServiceTest {
 
         // Then it delegated to the registered interface implementation
         assertThat(service.listDevices()).containsExactly(device)
-        assertThat(FromContext<DeviceRepository>(ctx).get("d-1")).isEqualTo(device)
+        assertThat(fromContext<DeviceRepository>(ctx).get("d-1")).isEqualTo(device)
     }
 
     @Test
     fun `service resolves the interface type, so any implementation is interchangeable`() {
         // Given a Context holding only the interface binding
         val ctx = Context()
-        Register<DeviceRepository>(ctx, FakeDeviceRepository())
+        register<DeviceRepository>(ctx, FakeDeviceRepository())
         val serviceA = DeviceServiceImpl(ctx)
-        val serviceB = DeviceServiceImpl(Context().also { Register<DeviceRepository>(it, FakeDeviceRepository()) })
+        val serviceB = DeviceServiceImpl(Context().also { register<DeviceRepository>(it, FakeDeviceRepository()) })
 
         // When each service registers a distinct device
         serviceA.registerDevice(
@@ -118,11 +118,11 @@ class DeviceServiceTest {
     fun `registry can hold the service itself under its domain interface`() {
         // Given a wired Context (the composition-root pattern)
         val ctx = Context()
-        Register<DeviceRepository>(ctx, FakeDeviceRepository())
-        Register<DeviceService>(ctx, DeviceServiceImpl(ctx))
+        register<DeviceRepository>(ctx, FakeDeviceRepository())
+        register<DeviceService>(ctx, DeviceServiceImpl(ctx))
 
         // When the app resolves the service by interface
-        val resolved = FromContext<DeviceService>(ctx)
+        val resolved = fromContext<DeviceService>(ctx)
         resolved.registerDevice(
             Device(
                 deviceId = "x",

@@ -3,7 +3,7 @@ package com.glassstorm.phonemanager.ui
 import androidx.lifecycle.ViewModel
 import com.glassstorm.phonemanager.domain.adapter.repository.DeviceRepository
 import com.glassstorm.phonemanager.domain.context.Context
-import com.glassstorm.phonemanager.domain.context.FromContextOrNull
+import com.glassstorm.phonemanager.domain.context.fromContextOrNull
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -25,7 +25,7 @@ import kotlinx.coroutines.flow.asStateFlow
 class DevicesViewModel(
     private val context: Context,
 ) : ViewModel() {
-    private val repo: DeviceRepository? = FromContextOrNull<DeviceRepository>(context)
+    private val repo: DeviceRepository? = fromContextOrNull<DeviceRepository>(context)
 
     private val state = MutableStateFlow(DevicesUiState())
 

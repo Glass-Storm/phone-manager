@@ -21,20 +21,20 @@ kotlin {
 // (`libs.protoc.get()` and `libs.protoc.protoc` are both unresolved). So the
 // VERSIONS (never shadowed) are read from the catalog and the coordinates are
 // assembled explicitly — the catalog stays the single source of truth for pins.
-val GoProtocVersion = libs.versions.protoc.get()
-val GoGrpcVersion = libs.versions.grpc.get()
-val GoGrpcKotlinVersion = libs.versions.grpcKotlin.get()
+val protocVersion = libs.versions.protoc.get()
+val grpcVersion = libs.versions.grpc.get()
+val grpcKotlinVersion = libs.versions.grpcKotlin.get()
 
 protobuf {
     // protoc 3.25.9 — the catalog pin, matching protobuf-javalite /
     // protobuf-kotlin-lite and grpc-protobuf-lite 1.84.0.
     protoc {
-        artifact = "com.google.protobuf:protoc:$GoProtocVersion"
+        artifact = "com.google.protobuf:protoc:$protocVersion"
     }
     plugins {
         // io.grpc:protoc-gen-grpc-java:1.84.0
         create("grpc") {
-            artifact = "io.grpc:protoc-gen-grpc-java:$GoGrpcVersion"
+            artifact = "io.grpc:protoc-gen-grpc-java:$grpcVersion"
         }
         // io.grpc:protoc-gen-grpc-kotlin:1.5.0 ONLY ships the `jdk8` classifier jar
         // (verified live against Maven Central). Gradle 8.13 version catalogs
@@ -42,7 +42,7 @@ protobuf {
         // HERE, at declaration time, via the `group:name:version:classifier@jar`
         // notation.
         create("grpckt") {
-            artifact = "io.grpc:protoc-gen-grpc-kotlin:$GoGrpcKotlinVersion:jdk8@jar"
+            artifact = "io.grpc:protoc-gen-grpc-kotlin:$grpcKotlinVersion:jdk8@jar"
         }
     }
     generateProtoTasks {

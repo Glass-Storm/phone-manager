@@ -1,0 +1,247 @@
+TASK 4 - phone-manager-modularization
+Enable ktlint naming rules and remove the three convention disables from .editorconfig
+HEAD before: 8061fae (T3). Date: 2026-09-21.
+
+===============================================================================
+0. PREMISE CORRECTION (important — the dispatch premise was falsified)
+===============================================================================
+The dispatch said: "./gradlew ktlintCheck currently FAILS with exactly 2
+violations, both standard:function-signature". That was observed with the three
+naming disables STILL IN PLACE, so naming violations were invisible.
+
+Removing the disables proved T1-T3 were INCOMPLETE. ktlintCheck then reported
+36 real violations across all four modules (not 2):
+  standard:filename        x22  (file name != primary class — T1 missed these)
+  standard:function-naming x10  (Context API Register/FromContext*, 6 @Composable screens)
+  standard:import-ordering x4   (pre-existing)
+
+The acceptance criteria (ktlintCheck green with naming ENABLED, no baseline,
+no re-disable) are unsatisfiable without completing the migration. The parent
+plan's Wave 1 is "Naming normalisation (T1->T4)", so completing it is the
+plan's intent. This todo therefore finished the migration T1-T3 left behind.
+
+===============================================================================
+1. .editorconfig — BEFORE (HEAD 8061fae)
+===============================================================================
+# ktlint configuration for phone-manager.
+#
+# The repo's naming convention is deliberate and documented in README.md under
+# "Repo conventions" -> "Naming": snake_case files, and Go-style PascalCase
+# members. ktlint's default naming rules assume Kotlin/Java idiom instead
+# (PascalCase `ClassName.kt` files, camelCase members), so the two cannot both
+# be satisfied at once. Rather than fight the convention with ktlint, the three
+# naming rules below are disabled — and ONLY those three. Every code-correctness
+# rule (indentation, unused/wildcard imports, import ordering, final newline,
+# blank lines, spacing, wrapping, …) stays ENABLED and is genuinely enforced.
+#
+# The rule ids are the ktlint 1.5.0 standard-rule ids — the version
+# ktlint-gradle 14.2.0 pulls (verified with
+# `./gradlew :domain:dependencies --configuration ktlint`), so the `disabled`
+# keys resolve against the real ruleset. No baseline file is used.
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+[*.{kt,kts}]
+# CONVENTION: "Go-style PascalCase members (`GoStart`, `GoBoundPort`)"
+# ... (comment block) ...
+ktlint_standard_property-naming = disabled
+
+# CONVENTION: functions are Go-style PascalCase too (`GoStart`, `GoBoundPort`,
+# `FromContext`, `Register`). ...
+ktlint_standard_function-naming = disabled
+
+# CONVENTION: "snake_case files" (README.md, Repo conventions -> Naming), e.g.
+# `device_repository.kt`, `context.kt`, `dashboard_screen.kt`. ...
+ktlint_standard_filename = disabled
+
+===============================================================================
+1b. .editorconfig — AFTER
+===============================================================================
+# ktlint configuration for phone-manager.
+#
+# The repo follows the standard Kotlin naming convention, as documented in
+# README.md under "Repo conventions" -> "Naming": PascalCase `ClassName.kt`
+# files, lowerCamelCase functions and properties, and UPPER_SNAKE_CASE
+# `const val`s. ktlint's default naming rules already assume this convention,
+# so they are ENABLED here and genuinely enforced — nothing is disabled.
+#
+# Every code-correctness rule (indentation, unused/wildcard imports, import
+# ordering, final newline, blank lines, spacing, wrapping, …) is likewise
+# ENABLED. No baseline file is used.
+#
+# The rule ids are the ktlint 1.5.0 standard-rule ids — the version
+# ktlint-gradle 14.2.0 pulls (verified with
+# `./gradlew :domain:dependencies --configuration ktlint`), so any keys below
+# resolve against the real ruleset.
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+[*.{kt,kts}]
+# No rule is disabled: the Kotlin naming convention IS the ktlint default
+# (PascalCase files, lowerCamelCase members, UPPER_SNAKE_CASE constants), so
+# the standard naming rules run unmodified and fail the build on violation.
+#
+# The one rule parameter is the documented Compose carve-out. Compose names a
+# function that emits UI in PascalCase (it is treated like a factory/type), which
+# is the opposite of the camelCase a plain function takes; ktlint's own guidance
+# is to exempt `@Composable` functions from function-naming rather than lowercase
+# them. The rule stays ENABLED — it still enforces camelCase on every other
+# function, and only skips functions annotated `@Composable`.
+ktlint_function_naming_ignore_when_annotated_with = Composable
+
+DISABLES GONE:
+  grep -c 'ktlint_standard_.*-naming\|ktlint_standard_filename' .editorconfig
+  -> 0
+ALL OTHER RULES UNCHANGED: charset/end_of_line/insert_final_newline/
+trim_trailing_whitespace/indent_style/indent_size=4 all still present.
+
+NOTE on the Composable carve-out: this is NOT a re-disable. ktlint 1.5.0's
+function-naming rule (verified in the rule bytecode: only factory methods and
+test methods are exempt — there is NO built-in @Composable exemption) honours
+`ktlint_function_naming_ignore_when_annotated_with`. The rule remains enabled
+for every non-@Composable function; the parameter only skips UI-emitting
+composables, matching Compose convention (the repo's own Lumo kit does the
+same). Renaming `@Composable fun AppShell()` to `appShell()` would be wrong.
+
+===============================================================================
+2. MIGRATION COMPLETION (to make the now-live rules pass, no re-disable)
+===============================================================================
+2a. 22 file renames (T1 missed; file name must match primary class), all git mv:
+  adapter/.../repository/memory/DeviceRepository.kt    -> MemoryDeviceRepository.kt
+  adapter/.../repository/sqlite/DeviceRepository.kt    -> SqliteDeviceRepository.kt
+  adapter/.../test/repository/memory/DeviceRepositoryTest.kt -> MemoryDeviceRepositoryTest.kt
+  adapter/.../test/repository/sqlite/DeviceRepositoryTest.kt -> SqliteDeviceRepositoryTest.kt
+  app/.../ui/DashboardState.kt     -> DashboardUiState.kt
+  app/.../ui/DashboardViewmodel.kt -> DashboardViewModel.kt
+  app/.../ui/DevicesState.kt       -> DevicesUiState.kt
+  app/.../ui/DevicesViewmodel.kt   -> DevicesViewModel.kt
+  app/.../ui/PairingState.kt       -> PairingUiState.kt
+  app/.../ui/PairingViewmodel.kt   -> PairingViewModel.kt
+  app/.../ui/SettingsState.kt      -> SettingsUiState.kt
+  app/.../ui/SettingsViewmodel.kt  -> SettingsViewModel.kt
+  app/.../ui/StreamState.kt        -> StreamUiState.kt
+  app/.../ui/StreamViewmodel.kt    -> StreamViewModel.kt
+  domain/.../dto/Hotspot.kt        -> HotspotInfo.kt
+  domain/.../dto/Outcome.kt        -> PairOutcome.kt
+  domain/.../dto/Peer.kt           -> PeerAddress.kt
+  service/.../DeviceService.kt     -> DeviceServiceImpl.kt
+  service/.../HubServer.kt         -> GrpcHubServer.kt
+  service/.../PairingService.kt    -> PairingServiceImpl.kt
+  service/.../StreamService.kt     -> StreamServiceImpl.kt
+  service/test/.../HubServerE2eTest.kt -> HubServerE2ETest.kt
+  (class names were already correct — only the file names changed; git detects
+   all 22 as renames, content edits are the Context API rename below)
+
+2b. Context API functions renamed to lowerCamelCase (T2 missed these):
+  Register         -> register          (Context member + top-level inline fun)
+  FromContext      -> fromContext
+  FromContextOrNull-> fromContextOrNull
+  Call sites updated across 34 files (domain/service/adapter/app/testkit).
+  Compound identifiers preserved: MissingFromContextException, unregister.
+
+2c. Two standard:function-signature violations (the ones the dispatch named):
+  HotspotLauncher.kt:64        pickTetherGateway — body expression moved onto signature line
+  LocalOnlyHotspotAdapter.kt:131 hasRequiredPermission — same
+
+2d. service/build.gradle.kts: 3 build-script vals still PascalCase
+    (GoProtocVersion/GoGrpcVersion/GoGrpcKotlinVersion) renamed to
+    protocVersion/grpcVersion/grpcKotlinVersion (property-naming is now live).
+
+2e. ktlintFormat run ONCE: only import reordering + the two signature-line
+    joins above. No semantic change (inspected diff).
+
+===============================================================================
+3. ktlintCheck — GREEN (naming rules enabled)
+===============================================================================
+Command:
+JAVA_HOME=/home/chaos/.jdk/jdk-21.0.12.1+1 ANDROID_HOME=/home/chaos/Android/Sdk \
+  ./gradlew ktlintCheck --console=plain --rerun-tasks
+
+> Task :app:ktlintTestSourceSetCheck
+> Task :app:ktlintCheck
+> Task :adapter:ktlintTestSourceSetCheck
+> Task :adapter:ktlintCheck
+> Task :service:ktlintTestSourceSetCheck
+> Task :service:ktlintCheck
+
+BUILD SUCCESSFUL in 9s
+38 actionable tasks: 38 executed
+
+===============================================================================
+4. LIVE-RULE PROOF (real-surface QA) — naming rules are genuinely enforced
+===============================================================================
+Two untracked scratch files were written under
+domain/.../domain/context/ deliberately violating all three naming rules:
+
+  NamingRuleProbe.kt:  private val BadMember = 1 ; fun BadFunction(): Int = ...
+  snake_probe.kt:      class SnakeProbe
+
+Command: ./gradlew :domain:ktlintCheck --console=plain
+RESULT: BUILD FAILED. Report (domain/build/reports/ktlint/ktlintMainSourceSetCheck):
+  NamingRuleProbe.kt:4:9: Property name should start with a lowercase letter ... (standard:property-naming)
+  NamingRuleProbe.kt:6:9: Function name should start with a lowercase letter ... (standard:function-naming)
+  snake_probe.kt:1:1: File 'snake_probe.kt' ... should be named same after that class 'SnakeProbe.kt' (standard:filename)
+  Summary error count (descending) by rule:
+    standard:filename: 1
+    standard:function-naming: 1
+    standard:property-naming: 1
+
+=> All three formerly-disabled rules fire on a deliberate violation.
+
+REVERT PROOF (byte-identical / clean):
+  rm -f NamingRuleProbe.kt snake_probe.kt
+  find domain/src -iname '*probe*'  -> (none)
+  GIT_MASTER=1 git diff -- domain/.../NamingRuleProbe.kt domain/.../snake_probe.kt | wc -l -> 0
+  ./gradlew :domain:ktlintCheck --console=plain --rerun-tasks -> BUILD SUCCESSFUL
+  (an earlier cached-report read showed stale entries; --rerun-tasks after the
+   physical deletion confirms green)
+
+===============================================================================
+5. NO BASELINE
+===============================================================================
+find . -name '*ktlint*baseline*' -o -name '.editorconfig.baseline' | wc -l
+(excluding /build/ reports) -> 0
+No baseline file created anywhere.
+
+===============================================================================
+6. FULL TEST SUITE (parsed XML, --rerun-tasks)
+===============================================================================
+Command:
+JAVA_HOME=... ANDROID_HOME=... ./gradlew :domain:test :service:test \
+  :adapter:testDebugUnitTest :app:testDebugUnitTest --rerun-tasks --console=plain
+-> BUILD SUCCESSFUL in 32s ; 79 actionable tasks: 79 executed
+
+Parsed from */build/test-results/**/*.xml:
+  domain   tests=  45 failures=0 errors=0 skipped=0
+  service  tests=  63 failures=0 errors=0 skipped=0
+  adapter  tests=  96 failures=0 errors=0 skipped=0
+  app      tests= 107 failures=0 errors=0 skipped=0
+  TOTAL    tests= 311 failures=0 errors=0 skipped=0
+Matches the expected baseline exactly (311 / 0).
+
+===============================================================================
+7. SCOPE NOTES
+===============================================================================
+- build.gradle.kts: only the stale comment referencing "the rules deliberately
+  disabled" was corrected; the ktlint filter block (generated/** + vendored Lumo)
+  is untouched.
+- .gitignore modification (bin/ .vscode/ out/) was ALREADY dirty before this
+  task and is unrelated; it is NOT part of this commit.
+- Vendored Lumo files and generated sources untouched.
+- No dependency changes, no baseline, no re-disabled rule.

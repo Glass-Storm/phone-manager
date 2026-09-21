@@ -1,7 +1,7 @@
 package com.glassstorm.phonemanager.service
 
 import com.glassstorm.phonemanager.domain.context.Context
-import com.glassstorm.phonemanager.domain.context.FromContext
+import com.glassstorm.phonemanager.domain.context.fromContext
 import com.glassstorm.phonemanager.domain.dto.PairOutcome
 import com.glassstorm.phonemanager.domain.service.PairingService
 import com.glassstorm.phonemanager.service.security.AuthInterceptor
@@ -24,7 +24,7 @@ import io.grpc.StatusException
 class PairingGrpcService(
     ctx: Context,
 ) : PairingServiceGrpcKt.PairingServiceCoroutineImplBase() {
-    private val pairing: PairingService = FromContext<PairingService>(ctx)
+    private val pairing: PairingService = fromContext<PairingService>(ctx)
 
     /** The one unauthenticated RPC: redeem the open-window PIN for a token. */
     override suspend fun pair(request: PairRequest): PairResponse {

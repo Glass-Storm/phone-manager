@@ -2,7 +2,7 @@ package com.glassstorm.phonemanager.service
 
 import com.glassstorm.phonemanager.domain.adapter.repository.DeviceRepository
 import com.glassstorm.phonemanager.domain.context.Context
-import com.glassstorm.phonemanager.domain.context.FromContext
+import com.glassstorm.phonemanager.domain.context.fromContext
 import com.glassstorm.phonemanager.domain.dto.Device
 import com.glassstorm.phonemanager.domain.service.DeviceService
 
@@ -17,7 +17,7 @@ import com.glassstorm.phonemanager.domain.service.DeviceService
 class DeviceServiceImpl(
     private val ctx: Context,
 ) : DeviceService {
-    private fun repo(): DeviceRepository = FromContext<DeviceRepository>(ctx)
+    private fun repo(): DeviceRepository = fromContext<DeviceRepository>(ctx)
 
     override fun registerDevice(device: Device): Device {
         repo().upsert(device)

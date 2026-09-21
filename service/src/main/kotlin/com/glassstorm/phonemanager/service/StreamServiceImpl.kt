@@ -3,7 +3,7 @@ package com.glassstorm.phonemanager.service
 import com.glassstorm.phonemanager.domain.adapter.relay.FrameSink
 import com.glassstorm.phonemanager.domain.adapter.speech.SttPort
 import com.glassstorm.phonemanager.domain.context.Context
-import com.glassstorm.phonemanager.domain.context.FromContext
+import com.glassstorm.phonemanager.domain.context.fromContext
 import com.glassstorm.phonemanager.domain.dto.RelayResult
 import com.glassstorm.phonemanager.domain.dto.RelaySession
 import com.glassstorm.phonemanager.domain.dto.RelayStats
@@ -110,7 +110,7 @@ class StreamServiceImpl(
         state.queue.close()
         state.pump.join()
         state.results.close()
-        FromContext<SttPort>(ctx).close(sessionId)
+        fromContext<SttPort>(ctx).close(sessionId)
     }
 
     override fun stats(): RelayStats =
@@ -129,7 +129,7 @@ class StreamServiceImpl(
     ) {
         for (pcm in queue.audio) {
             val text =
-                FromContext<SttPort>(ctx)
+                fromContext<SttPort>(ctx)
                     .transcribe(sessionId, pcm, StreamService.AUDIO_SAMPLE_RATE_HZ)
             if (text != null) {
                 transcripts.incrementAndGet()
@@ -144,7 +144,7 @@ class StreamServiceImpl(
     ) {
         for (nal in queue.video) {
             // Opaque by contract: the exact bytes are handed on, never decoded.
-            FromContext<FrameSink>(ctx).acceptVideo(sessionId, nal)
+            fromContext<FrameSink>(ctx).acceptVideo(sessionId, nal)
         }
     }
 

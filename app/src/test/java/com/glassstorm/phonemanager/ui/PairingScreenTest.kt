@@ -9,7 +9,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.glassstorm.phonemanager.domain.context.Context
-import com.glassstorm.phonemanager.domain.context.Register
+import com.glassstorm.phonemanager.domain.context.register
 import com.glassstorm.phonemanager.domain.service.PairingService
 import com.google.common.truth.Truth.assertThat
 import org.junit.Rule
@@ -39,7 +39,7 @@ class PairingScreenTest {
     @Test
     fun `no pin is shown until the window is opened`() {
         val pairing = FakePairingService(pinSequence = listOf("428193"))
-        val ctx = Context().also { Register<PairingService>(it, pairing) }
+        val ctx = Context().also { register<PairingService>(it, pairing) }
 
         composeRule.setPairingContent(ctx)
 
@@ -50,7 +50,7 @@ class PairingScreenTest {
     @Test
     fun `the pin renders after the window opens`() {
         val pairing = FakePairingService(pinSequence = listOf("428193"))
-        val ctx = Context().also { Register<PairingService>(it, pairing) }
+        val ctx = Context().also { register<PairingService>(it, pairing) }
 
         composeRule.setPairingContent(ctx)
         composeRule.onNodeWithText("Open pairing window").performClick()
@@ -65,7 +65,7 @@ class PairingScreenTest {
         // The fake replaces its window and returns a DIFFERENT pin the second time,
         // exactly like the real service. Two live PINs would therefore be visible.
         val pairing = FakePairingService(pinSequence = listOf("428193", "999999"))
-        val ctx = Context().also { Register<PairingService>(it, pairing) }
+        val ctx = Context().also { register<PairingService>(it, pairing) }
 
         composeRule.setPairingContent(ctx)
         composeRule.onNodeWithText("Open pairing window").performClick()
@@ -87,7 +87,7 @@ class PairingScreenTest {
                 it.seedDevice(deviceId = "d-1", deviceName = "Glass One")
                 it.seedDevice(deviceId = "d-2", deviceName = "Ubuntu Daemon", role = "DAEMON")
             }
-        val ctx = Context().also { Register<PairingService>(it, pairing) }
+        val ctx = Context().also { register<PairingService>(it, pairing) }
 
         composeRule.setPairingContent(ctx)
         composeRule.onNodeWithText("Glass One").assertIsDisplayed()
@@ -103,7 +103,7 @@ class PairingScreenTest {
     @Test
     fun `closing the window hides the pin again`() {
         val pairing = FakePairingService(pinSequence = listOf("428193"))
-        val ctx = Context().also { Register<PairingService>(it, pairing) }
+        val ctx = Context().also { register<PairingService>(it, pairing) }
 
         composeRule.setPairingContent(ctx)
         composeRule.onNodeWithText("Open pairing window").performClick()

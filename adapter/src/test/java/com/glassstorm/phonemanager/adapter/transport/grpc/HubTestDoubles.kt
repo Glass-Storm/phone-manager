@@ -5,7 +5,7 @@ import com.glassstorm.phonemanager.domain.adapter.relay.FrameSink
 import com.glassstorm.phonemanager.domain.adapter.repository.DeviceRepository
 import com.glassstorm.phonemanager.domain.adapter.speech.SttPort
 import com.glassstorm.phonemanager.domain.context.Context
-import com.glassstorm.phonemanager.domain.context.Register
+import com.glassstorm.phonemanager.domain.context.register
 import com.glassstorm.phonemanager.domain.service.PairingService
 import com.glassstorm.phonemanager.domain.service.StreamService
 import com.glassstorm.phonemanager.service.PairingServiceImpl
@@ -26,12 +26,12 @@ fun hubContext(): Context {
     // ONE pairing instance, registered twice: the service surface and the
     // interceptor's token verifier must observe the same pairing state.
     val pairing = PairingServiceImpl(ctx)
-    Register<DeviceRepository>(ctx, MemoryDeviceRepository())
-    Register<PairingService>(ctx, pairing)
-    Register<TokenVerifier>(ctx, pairing)
-    Register<StreamService>(ctx, StreamServiceImpl(ctx))
-    Register<SttPort>(ctx, NoopSttPort())
-    Register<FrameSink>(ctx, NoopFrameSink())
+    register<DeviceRepository>(ctx, MemoryDeviceRepository())
+    register<PairingService>(ctx, pairing)
+    register<TokenVerifier>(ctx, pairing)
+    register<StreamService>(ctx, StreamServiceImpl(ctx))
+    register<SttPort>(ctx, NoopSttPort())
+    register<FrameSink>(ctx, NoopFrameSink())
     return ctx
 }
 

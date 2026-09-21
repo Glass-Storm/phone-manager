@@ -6,15 +6,15 @@ import com.glassstorm.phonemanager.adapter.transport.grpc.HubServerAdapter
 import com.glassstorm.phonemanager.domain.adapter.relay.FrameSink
 import com.glassstorm.phonemanager.domain.adapter.transport.HubServer
 import com.glassstorm.phonemanager.domain.context.Context
-import com.glassstorm.phonemanager.domain.context.FromContext
-import com.glassstorm.phonemanager.domain.context.Register
+import com.glassstorm.phonemanager.domain.context.fromContext
+import com.glassstorm.phonemanager.domain.context.register
 import com.glassstorm.phonemanager.domain.service.PairingService
+import com.glassstorm.phonemanager.testkit.MockPeerDriver
+import com.glassstorm.phonemanager.testkit.MockPeerTranscript
 import com.glassstorm.phonemanager.testkit.goBinary
 import com.glassstorm.phonemanager.testkit.repoRoot
 import com.glassstorm.phonemanager.testkit.run
 import com.glassstorm.phonemanager.testkit.syntheticVideoNal
-import com.glassstorm.phonemanager.testkit.MockPeerDriver
-import com.glassstorm.phonemanager.testkit.MockPeerTranscript
 import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
 import org.junit.After
@@ -85,9 +85,9 @@ class FullE2eTest {
         // When the loopback listener and the recording sink are bound over it
         hub = HubServerAdapter(ctx)
         assertThat((hub as HubServerAdapter).bindAddress()).isEqualTo("127.0.0.1")
-        Register<HubServer>(ctx, hub)
+        register<HubServer>(ctx, hub)
         sink = RecordingFrameSink()
-        Register<FrameSink>(ctx, sink)
+        register<FrameSink>(ctx, sink)
         hub.start(0)
         assertThat(hub.boundPort()).isGreaterThan(0)
     }
@@ -102,7 +102,7 @@ class FullE2eTest {
     @Test
     fun `the full scenario passes against the robolectric app hub with byte exact video`() {
         // Given a driver bound to the app hub's ephemeral port
-        val pairing = FromContext<PairingService>(ctx)
+        val pairing = fromContext<PairingService>(ctx)
         driver =
             MockPeerDriver(
                 port = hub.boundPort(),

@@ -10,7 +10,7 @@ class MissingFromContextException(
 /**
  * Type-keyed service registry, sing-box style.
  *
- * Usage: `Register(ctx, myImpl)` then `FromContext<MyPort>(ctx)`.
+ * Usage: `register(ctx, myImpl)` then `fromContext<MyPort>(ctx)`.
  *
  * A public `inline fun <reified T>` cannot touch a `private` member, so the
  * backing map is exposed as `@PublishedApi internal` for the reified helpers.
@@ -19,7 +19,7 @@ class Context {
     @PublishedApi
     internal val registry: MutableMap<KClass<*>, Any> = mutableMapOf()
 
-    fun <T : Any> Register(
+    fun <T : Any> register(
         type: KClass<T>,
         instance: T,
     ) {
@@ -35,16 +35,16 @@ class Context {
 }
 
 /** Register [instance] under its reified static type. */
-inline fun <reified T : Any> Register(
+inline fun <reified T : Any> register(
     ctx: Context,
     instance: T,
-): Unit = ctx.Register(T::class, instance)
+): Unit = ctx.register(T::class, instance)
 
 /** Resolve the registered instance of [T], or throw [MissingFromContextException]. */
-inline fun <reified T : Any> FromContext(ctx: Context): T =
+inline fun <reified T : Any> fromContext(ctx: Context): T =
     ctx.lookup(T::class) ?: throw MissingFromContextException(
         "no ${T::class.qualifiedName} registered in Context",
     )
 
 /** Resolve the registered instance of [T], or `null` when absent. */
-inline fun <reified T : Any> FromContextOrNull(ctx: Context): T? = ctx.lookup(T::class)
+inline fun <reified T : Any> fromContextOrNull(ctx: Context): T? = ctx.lookup(T::class)

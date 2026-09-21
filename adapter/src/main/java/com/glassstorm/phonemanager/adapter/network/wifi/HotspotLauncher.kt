@@ -61,8 +61,7 @@ private val AP_INTERFACE_PREFIXES = listOf("ap", "swlan", "softap", "wlan1")
  * soft-AP interfaces (`ap0`, `swlan0`, `softap0`, `wlan1`) are matched by name.
  * Station (`wlan0`) and loopback interfaces are never treated as a tether.
  */
-fun pickTetherGateway(candidates: List<TetherCandidate>): TetherCandidate? =
-    candidates.firstOrNull { isAccessPointInterface(it.name) }
+fun pickTetherGateway(candidates: List<TetherCandidate>): TetherCandidate? = candidates.firstOrNull { isAccessPointInterface(it.name) }
 
 private fun isAccessPointInterface(name: String): Boolean = AP_INTERFACE_PREFIXES.any { name.startsWith(it, ignoreCase = true) }
 

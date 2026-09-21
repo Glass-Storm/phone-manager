@@ -4,7 +4,7 @@ import androidx.lifecycle.ViewModel
 import com.glassstorm.phonemanager.domain.adapter.network.HotspotController
 import com.glassstorm.phonemanager.domain.adapter.transport.HubServer
 import com.glassstorm.phonemanager.domain.context.Context
-import com.glassstorm.phonemanager.domain.context.FromContextOrNull
+import com.glassstorm.phonemanager.domain.context.fromContextOrNull
 import com.glassstorm.phonemanager.domain.network.HotspotFailure
 import com.glassstorm.phonemanager.domain.network.HotspotUnavailableException
 import com.glassstorm.phonemanager.domain.service.PairingService
@@ -30,9 +30,9 @@ import kotlinx.coroutines.flow.asStateFlow
 class DashboardViewModel(
     private val context: Context,
 ) : ViewModel() {
-    private val hub: HubServer? = FromContextOrNull<HubServer>(context)
-    private val hotspot: HotspotController? = FromContextOrNull<HotspotController>(context)
-    private val pairing: PairingService? = FromContextOrNull<PairingService>(context)
+    private val hub: HubServer? = fromContextOrNull<HubServer>(context)
+    private val hotspot: HotspotController? = fromContextOrNull<HotspotController>(context)
+    private val pairing: PairingService? = fromContextOrNull<PairingService>(context)
 
     private val state =
         MutableStateFlow(

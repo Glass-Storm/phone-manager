@@ -7,7 +7,7 @@ import com.glassstorm.phonemanager.adapter.repository.sqlite.SqliteDeviceReposit
 import com.glassstorm.phonemanager.domain.adapter.config.AppConfig
 import com.glassstorm.phonemanager.domain.adapter.repository.DeviceRepository
 import com.glassstorm.phonemanager.domain.context.Context
-import com.glassstorm.phonemanager.domain.context.FromContext
+import com.glassstorm.phonemanager.domain.context.fromContext
 import com.glassstorm.phonemanager.domain.dto.HotspotMode
 import com.glassstorm.phonemanager.domain.dto.SttEngine
 import com.google.common.truth.Truth.assertThat
@@ -38,7 +38,7 @@ class AppCompositionWiringTest {
         val ctx: Context = AppComposition.buildContext(android)
 
         // When the repository port is resolved
-        val repo = FromContext<DeviceRepository>(ctx)
+        val repo = fromContext<DeviceRepository>(ctx)
 
         // Then the persistent adapter is the one bound, not the in-memory fake
         assertThat(repo).isInstanceOf(SqliteDeviceRepository::class.java)
@@ -50,7 +50,7 @@ class AppCompositionWiringTest {
         val ctx: Context = AppComposition.buildContext(null)
 
         // Then the in-memory fallback is bound, so the JVM-only tests keep working
-        assertThat(FromContext<DeviceRepository>(ctx))
+        assertThat(fromContext<DeviceRepository>(ctx))
             .isInstanceOf(MemoryDeviceRepository::class.java)
     }
 
@@ -60,7 +60,7 @@ class AppCompositionWiringTest {
         val ctx = AppComposition.buildContext(android)
 
         // When the config port is resolved and a non-default engine is stored
-        val config = FromContext<AppConfig>(ctx)
+        val config = fromContext<AppConfig>(ctx)
         config.setSttEngine(SttEngine.SPEECHMATICS)
         config.setRegion("eu")
         config.setHotspotMode(HotspotMode.AUTO)
@@ -80,7 +80,7 @@ class AppCompositionWiringTest {
         // Then the config port degrades to absent rather than crashing construction
         assertThat(
             com.glassstorm.phonemanager.domain.context
-                .FromContextOrNull<AppConfig>(ctx),
+                .fromContextOrNull<AppConfig>(ctx),
         ).isNull()
     }
 }

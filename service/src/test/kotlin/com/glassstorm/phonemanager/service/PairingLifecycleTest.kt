@@ -2,7 +2,7 @@ package com.glassstorm.phonemanager.service
 
 import com.glassstorm.phonemanager.domain.adapter.repository.DeviceRepository
 import com.glassstorm.phonemanager.domain.context.Context
-import com.glassstorm.phonemanager.domain.context.Register
+import com.glassstorm.phonemanager.domain.context.register
 import com.glassstorm.phonemanager.domain.dto.PairOutcome
 import com.glassstorm.phonemanager.domain.dto.Pairing
 import com.glassstorm.phonemanager.domain.service.PairingService
@@ -33,7 +33,7 @@ class PairingLifecycleTest {
         // Given a Context wired with a domain-port fake only (never an :adapter type)
         ctx = Context()
         repo = FakeDeviceRepository()
-        Register<DeviceRepository>(ctx, repo)
+        register<DeviceRepository>(ctx, repo)
         pairing = PairingServiceImpl(ctx, clock = { nowMs })
         nowMs = 1_000_000L
     }

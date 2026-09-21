@@ -2,7 +2,7 @@ package com.glassstorm.phonemanager.adapter.transport.grpc
 
 import com.glassstorm.phonemanager.domain.adapter.transport.HubServer
 import com.glassstorm.phonemanager.domain.context.Context
-import com.glassstorm.phonemanager.domain.context.FromContext
+import com.glassstorm.phonemanager.domain.context.fromContext
 import com.glassstorm.phonemanager.service.GrpcHubServer
 import com.glassstorm.phonemanager.service.PairingGrpcService
 import com.glassstorm.phonemanager.service.StreamGrpcService
@@ -77,7 +77,7 @@ class HubServerAdapter(
      * implementation under BOTH [com.glassstorm.phonemanager.domain.service.PairingService]
      * and [TokenVerifier].
      */
-    private fun tokenVerifier(): TokenVerifier = FromContext<TokenVerifier>(ctx)
+    private fun tokenVerifier(): TokenVerifier = fromContext<TokenVerifier>(ctx)
 
     companion object {
         /** IPv4 loopback — tests only. */

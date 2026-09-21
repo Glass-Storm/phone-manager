@@ -5,7 +5,7 @@ import com.glassstorm.phonemanager.battery.BatteryExemption
 import com.glassstorm.phonemanager.domain.adapter.config.AppConfig
 import com.glassstorm.phonemanager.domain.adapter.transport.HubServer
 import com.glassstorm.phonemanager.domain.context.Context
-import com.glassstorm.phonemanager.domain.context.FromContextOrNull
+import com.glassstorm.phonemanager.domain.context.fromContextOrNull
 import com.glassstorm.phonemanager.domain.dto.HotspotMode
 import com.glassstorm.phonemanager.domain.dto.SttEngine
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -33,9 +33,9 @@ import kotlinx.coroutines.flow.asStateFlow
 class SettingsViewModel(
     private val context: Context,
 ) : ViewModel() {
-    private val config: AppConfig? = FromContextOrNull<AppConfig>(context)
-    private val hub: HubServer? = FromContextOrNull<HubServer>(context)
-    private val battery: BatteryExemption? = FromContextOrNull<BatteryExemption>(context)
+    private val config: AppConfig? = fromContextOrNull<AppConfig>(context)
+    private val hub: HubServer? = fromContextOrNull<HubServer>(context)
+    private val battery: BatteryExemption? = fromContextOrNull<BatteryExemption>(context)
 
     private val state = MutableStateFlow(SettingsUiState())
 

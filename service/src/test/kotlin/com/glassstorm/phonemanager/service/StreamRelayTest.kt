@@ -4,7 +4,7 @@ import com.glassstorm.phonemanager.domain.adapter.relay.FrameSink
 import com.glassstorm.phonemanager.domain.adapter.repository.DeviceRepository
 import com.glassstorm.phonemanager.domain.adapter.speech.SttPort
 import com.glassstorm.phonemanager.domain.context.Context
-import com.glassstorm.phonemanager.domain.context.Register
+import com.glassstorm.phonemanager.domain.context.register
 import com.glassstorm.phonemanager.domain.service.PairingService
 import com.glassstorm.phonemanager.domain.service.StreamService
 import com.glassstorm.phonemanager.service.security.AuthInterceptor
@@ -231,11 +231,11 @@ class StreamRelayTest {
         val sink = FakeFrameSink()
         val pairing = PairingServiceImpl(ctx, clock = { System.currentTimeMillis() })
         val stream = StreamServiceImpl(ctx, scope = scope)
-        Register<DeviceRepository>(ctx, FakeDeviceRepository())
-        Register<PairingService>(ctx, pairing)
-        Register<StreamService>(ctx, stream)
-        Register<SttPort>(ctx, stt)
-        Register<FrameSink>(ctx, sink)
+        register<DeviceRepository>(ctx, FakeDeviceRepository())
+        register<PairingService>(ctx, pairing)
+        register<StreamService>(ctx, stream)
+        register<SttPort>(ctx, stt)
+        register<FrameSink>(ctx, sink)
 
         val name = InProcessServerBuilder.generateName()
         val server: Server =
@@ -290,8 +290,8 @@ class StreamRelayTest {
         val ctx = Context()
         val stt = FakeSttPort("relay utterance")
         val sink = FakeFrameSink()
-        Register<SttPort>(ctx, stt)
-        Register<FrameSink>(ctx, sink)
+        register<SttPort>(ctx, stt)
+        register<FrameSink>(ctx, sink)
         return Wired(ctx, stt, sink)
     }
 

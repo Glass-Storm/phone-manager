@@ -1,7 +1,7 @@
 package com.glassstorm.phonemanager.service
 
 import com.glassstorm.phonemanager.domain.context.Context
-import com.glassstorm.phonemanager.domain.context.FromContext
+import com.glassstorm.phonemanager.domain.context.fromContext
 import com.glassstorm.phonemanager.domain.service.StreamService
 import com.glassstorm.phonemanager.service.security.AuthInterceptor
 import ecosys.v1.StreamFrame
@@ -35,7 +35,7 @@ import kotlinx.coroutines.withContext
 class StreamGrpcService(
     ctx: Context,
 ) : StreamServiceGrpcKt.StreamServiceCoroutineImplBase() {
-    private val stream: StreamService = FromContext<StreamService>(ctx)
+    private val stream: StreamService = fromContext<StreamService>(ctx)
 
     override fun openStream(requests: Flow<StreamFrame>): Flow<StreamFrame> =
         channelFlow {

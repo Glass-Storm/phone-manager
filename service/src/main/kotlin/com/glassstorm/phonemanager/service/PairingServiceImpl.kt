@@ -2,7 +2,7 @@ package com.glassstorm.phonemanager.service
 
 import com.glassstorm.phonemanager.domain.adapter.repository.DeviceRepository
 import com.glassstorm.phonemanager.domain.context.Context
-import com.glassstorm.phonemanager.domain.context.FromContext
+import com.glassstorm.phonemanager.domain.context.fromContext
 import com.glassstorm.phonemanager.domain.dto.Device
 import com.glassstorm.phonemanager.domain.dto.PairOutcome
 import com.glassstorm.phonemanager.domain.dto.Pairing
@@ -59,7 +59,7 @@ class PairingServiceImpl(
     private var windowConsumed: Boolean = false
     private var failedAttempts: Int = 0
 
-    private fun repo(): DeviceRepository = FromContext<DeviceRepository>(ctx)
+    private fun repo(): DeviceRepository = fromContext<DeviceRepository>(ctx)
 
     @Synchronized
     override fun openWindow(ttlMs: Long): Pairing {

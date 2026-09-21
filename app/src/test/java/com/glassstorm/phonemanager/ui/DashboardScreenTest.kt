@@ -7,7 +7,7 @@ import androidx.compose.ui.test.performClick
 import com.glassstorm.phonemanager.domain.adapter.network.HotspotController
 import com.glassstorm.phonemanager.domain.adapter.transport.HubServer
 import com.glassstorm.phonemanager.domain.context.Context
-import com.glassstorm.phonemanager.domain.context.Register
+import com.glassstorm.phonemanager.domain.context.register
 import com.glassstorm.phonemanager.domain.network.HotspotFailure
 import com.glassstorm.phonemanager.domain.service.PairingService
 import org.junit.Rule
@@ -49,8 +49,8 @@ class DashboardScreenTest {
             }
         val ctx =
             Context().also {
-                Register<HubServer>(it, FakeHubServer(boundPortValue = 40404))
-                Register<PairingService>(it, pairing)
+                register<HubServer>(it, FakeHubServer(boundPortValue = 40404))
+                register<PairingService>(it, pairing)
             }
 
         composeRule.setDashboardContent(ctx)
@@ -70,7 +70,7 @@ class DashboardScreenTest {
     fun `starting the hotspot shows the credentials and the gateway ip`() {
         val ctx =
             Context().also {
-                Register<HotspotController>(it, FakeHotspotController())
+                register<HotspotController>(it, FakeHotspotController())
             }
 
         composeRule.setDashboardContent(ctx)
@@ -86,7 +86,7 @@ class DashboardScreenTest {
     fun `a failing hotspot start renders the typed reason instead of crashing`() {
         val ctx =
             Context().also {
-                Register<HotspotController>(
+                register<HotspotController>(
                     it,
                     FakeHotspotController(failWith = HotspotFailure.StartFailed(reason = "denied")),
                 )

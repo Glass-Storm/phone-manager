@@ -2,7 +2,7 @@ package com.glassstorm.phonemanager.ui
 
 import androidx.lifecycle.ViewModel
 import com.glassstorm.phonemanager.domain.context.Context
-import com.glassstorm.phonemanager.domain.context.FromContextOrNull
+import com.glassstorm.phonemanager.domain.context.fromContextOrNull
 import com.glassstorm.phonemanager.domain.service.PairingService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -29,7 +29,7 @@ class PairingViewModel(
     private val context: Context,
     private val nowMs: () -> Long = { System.currentTimeMillis() },
 ) : ViewModel() {
-    private val pairing: PairingService? = FromContextOrNull<PairingService>(context)
+    private val pairing: PairingService? = fromContextOrNull<PairingService>(context)
 
     private val state = MutableStateFlow(PairingUiState(available = pairing != null))
 

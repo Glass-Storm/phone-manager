@@ -4,7 +4,7 @@ import com.glassstorm.phonemanager.domain.adapter.network.Discovery
 import com.glassstorm.phonemanager.domain.adapter.network.HotspotController
 import com.glassstorm.phonemanager.domain.adapter.transport.HubServer
 import com.glassstorm.phonemanager.domain.context.Context
-import com.glassstorm.phonemanager.domain.context.FromContextOrNull
+import com.glassstorm.phonemanager.domain.context.fromContextOrNull
 import com.glassstorm.phonemanager.domain.dto.HotspotInfo
 import com.glassstorm.phonemanager.domain.network.HotspotUnavailableException
 
@@ -69,7 +69,7 @@ class HubBringUp(
     /** Bring the hub up in dependency order and report what actually came up. */
     fun bringUp(requestedPort: Int): HubBringUpReport {
         val hub =
-            FromContextOrNull<HubServer>(ctx)
+            fromContextOrNull<HubServer>(ctx)
                 ?: throw MissingComponentException("HubServer")
 
         val hotspot = bringUpHotspot()
@@ -91,7 +91,7 @@ class HubBringUp(
 
     private fun bringUpHotspot(): HotspotBringUp {
         val controller =
-            FromContextOrNull<HotspotController>(ctx)
+            fromContextOrNull<HotspotController>(ctx)
                 ?: return HotspotBringUp.Unavailable("no HotspotController registered")
 
         detectManualTether(controller)?.let { return it }
@@ -124,7 +124,7 @@ class HubBringUp(
     }
 
     private fun advertiseDiscovery(port: Int): Boolean {
-        val discovery = FromContextOrNull<Discovery>(ctx) ?: return false
+        val discovery = fromContextOrNull<Discovery>(ctx) ?: return false
         if (port <= 0) return false
         return runCatching {
             discovery.advertise(DISCOVERY_NAME, port)
@@ -133,15 +133,15 @@ class HubBringUp(
     }
 
     private fun stopAdvertisingDiscovery() {
-        FromContextOrNull<Discovery>(ctx)?.let { runCatching { it.stopAdvertise() } }
+        fromContextOrNull<Discovery>(ctx)?.let { runCatching { it.stopAdvertise() } }
     }
 
     private fun stopListener() {
-        FromContextOrNull<HubServer>(ctx)?.let { runCatching { it.stop() } }
+        fromContextOrNull<HubServer>(ctx)?.let { runCatching { it.stop() } }
     }
 
     private fun stopHotspot() {
-        val controller = FromContextOrNull<HotspotController>(ctx) ?: return
+        val controller = fromContextOrNull<HotspotController>(ctx) ?: return
         if (!controller.isActive()) return
         runCatching { controller.stopHotspot() }
     }

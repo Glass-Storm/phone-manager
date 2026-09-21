@@ -3,7 +3,7 @@ package com.glassstorm.phonemanager
 import com.glassstorm.phonemanager.domain.adapter.repository.DeviceRepository
 import com.glassstorm.phonemanager.domain.adapter.transport.HubServer
 import com.glassstorm.phonemanager.domain.context.Context
-import com.glassstorm.phonemanager.domain.context.FromContext
+import com.glassstorm.phonemanager.domain.context.fromContext
 import com.glassstorm.phonemanager.domain.dto.Device
 import com.glassstorm.phonemanager.domain.service.DeviceService
 import com.glassstorm.phonemanager.domain.service.PairingService
@@ -14,7 +14,7 @@ import org.junit.Test
 
 /**
  * Proves the `:app` composition root wires the vertical slice end-to-end:
- * domain port -> adapter fake -> service, all resolved through `FromContext`.
+ * domain port -> adapter fake -> service, all resolved through `fromContext`.
  *
  * The hub additions are asserted too: the gRPC services and the auth interceptor
  * resolve their collaborators EAGERLY when a server is built, so a Context that
@@ -27,8 +27,8 @@ class AppCompositionTest {
         val ctx: Context = AppComposition.buildContext()
 
         // When each layer is resolved by its domain type
-        val repo = FromContext<DeviceRepository>(ctx)
-        val service = FromContext<DeviceService>(ctx)
+        val repo = fromContext<DeviceRepository>(ctx)
+        val service = fromContext<DeviceService>(ctx)
 
         // Then all three registrations are present and usable
         assertThat(repo).isNotNull()
@@ -52,7 +52,7 @@ class AppCompositionTest {
         val ctx = AppComposition.buildContext()
 
         // When the service registers through the port
-        val service = FromContext<DeviceService>(ctx)
+        val service = fromContext<DeviceService>(ctx)
         service.registerDevice(
             Device(
                 deviceId = "d-2",
@@ -65,7 +65,7 @@ class AppCompositionTest {
         )
 
         // Then the adapter bound under the port type sees the same write
-        val repo = FromContext<DeviceRepository>(ctx)
+        val repo = fromContext<DeviceRepository>(ctx)
         assertThat(repo.get("d-2")?.deviceName).isEqualTo("daemon")
     }
 
@@ -75,7 +75,7 @@ class AppCompositionTest {
         val ctx = AppComposition.buildContext()
 
         // When the transport port is resolved by its domain type
-        val hub = FromContext<HubServer>(ctx)
+        val hub = fromContext<HubServer>(ctx)
 
         // Then a real, stopped listener comes back (resolved without starting it)
         assertThat(hub).isNotNull()
@@ -90,9 +90,9 @@ class AppCompositionTest {
 
         // When every collaborator the gRPC services and interceptor need is resolved
         // Then none throws MissingFromContextException — a missing one is a start crash
-        assertThat(FromContext<PairingService>(ctx)).isNotNull()
-        assertThat(FromContext<StreamService>(ctx)).isNotNull()
-        assertThat(FromContext<TokenVerifier>(ctx)).isNotNull()
+        assertThat(fromContext<PairingService>(ctx)).isNotNull()
+        assertThat(fromContext<StreamService>(ctx)).isNotNull()
+        assertThat(fromContext<TokenVerifier>(ctx)).isNotNull()
     }
 
     @Test
@@ -101,8 +101,8 @@ class AppCompositionTest {
         val ctx = AppComposition.buildContext()
 
         // When both the service surface and the interceptor's verifier are resolved
-        val pairing = FromContext<PairingService>(ctx)
-        val verifier = FromContext<TokenVerifier>(ctx)
+        val pairing = fromContext<PairingService>(ctx)
+        val verifier = fromContext<TokenVerifier>(ctx)
 
         // Then they are identical, so the interceptor can never verify against a
         // different pairing state than the one Pair mints tokens into.

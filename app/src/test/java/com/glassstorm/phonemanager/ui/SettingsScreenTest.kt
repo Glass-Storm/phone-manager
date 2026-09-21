@@ -14,7 +14,7 @@ import com.glassstorm.phonemanager.battery.BatteryExemption
 import com.glassstorm.phonemanager.domain.adapter.config.AppConfig
 import com.glassstorm.phonemanager.domain.adapter.transport.HubServer
 import com.glassstorm.phonemanager.domain.context.Context
-import com.glassstorm.phonemanager.domain.context.Register
+import com.glassstorm.phonemanager.domain.context.register
 import com.glassstorm.phonemanager.domain.dto.HotspotMode
 import com.glassstorm.phonemanager.domain.dto.SttEngine
 import com.google.common.truth.Truth.assertThat
@@ -55,7 +55,7 @@ class SettingsScreenTest {
                 engine = SttEngine.SPEECHMATICS,
                 regionValue = "eu",
             )
-        val ctx = Context().also { Register<AppConfig>(it, config) }
+        val ctx = Context().also { register<AppConfig>(it, config) }
 
         composeRule.setSettingsContent(ctx)
 
@@ -67,7 +67,7 @@ class SettingsScreenTest {
     @Test
     fun `selecting the cloud engine persists it through the port`() {
         val config = FakeAppConfig(engine = SttEngine.MOCK)
-        val ctx = Context().also { Register<AppConfig>(it, config) }
+        val ctx = Context().also { register<AppConfig>(it, config) }
 
         composeRule.setSettingsContent(ctx)
         composeRule.assertText("Current engine: Mock (offline)")
@@ -81,7 +81,7 @@ class SettingsScreenTest {
     @Test
     fun `selecting a region persists it through the port`() {
         val config = FakeAppConfig(regionValue = "us")
-        val ctx = Context().also { Register<AppConfig>(it, config) }
+        val ctx = Context().also { register<AppConfig>(it, config) }
 
         composeRule.setSettingsContent(ctx)
         composeRule.assertText("Current region: us")
@@ -95,7 +95,7 @@ class SettingsScreenTest {
     @Test
     fun `selecting the automatic hotspot mode persists it through the port`() {
         val config = FakeAppConfig(mode = HotspotMode.MANUAL)
-        val ctx = Context().also { Register<AppConfig>(it, config) }
+        val ctx = Context().also { register<AppConfig>(it, config) }
 
         composeRule.setSettingsContent(ctx)
         composeRule.assertText("Hotspot mode: Manual")
@@ -110,7 +110,7 @@ class SettingsScreenTest {
     fun `a stored api key is never rendered in cleartext by default`() {
         // Given a store holding a recognizable key
         val config = FakeAppConfig(storedKey = "sk-SECRET-SENTINEL-1234")
-        val ctx = Context().also { Register<AppConfig>(it, config) }
+        val ctx = Context().also { register<AppConfig>(it, config) }
 
         composeRule.setSettingsContent(ctx)
 
@@ -124,7 +124,7 @@ class SettingsScreenTest {
     @Test
     fun `a fresh install with no key renders the not-configured state and stays masked`() {
         val config = FakeAppConfig(storedKey = "")
-        val ctx = Context().also { Register<AppConfig>(it, config) }
+        val ctx = Context().also { register<AppConfig>(it, config) }
 
         composeRule.setSettingsContent(ctx)
 
@@ -138,7 +138,7 @@ class SettingsScreenTest {
     @Test
     fun `an empty api key submission never crashes and keeps the unconfigured state`() {
         val config = FakeAppConfig(storedKey = "")
-        val ctx = Context().also { Register<AppConfig>(it, config) }
+        val ctx = Context().also { register<AppConfig>(it, config) }
 
         composeRule.setSettingsContent(ctx)
         composeRule.click("Set API key")
@@ -150,7 +150,7 @@ class SettingsScreenTest {
     @Test
     fun `a newly typed api key is persisted and reported as configured`() {
         val config = FakeAppConfig(storedKey = "")
-        val ctx = Context().also { Register<AppConfig>(it, config) }
+        val ctx = Context().also { register<AppConfig>(it, config) }
 
         composeRule.setSettingsContent(ctx)
         composeRule.typeIntoField("sk-typed-777")
@@ -165,7 +165,7 @@ class SettingsScreenTest {
     @Test
     fun `revealing the api key takes an explicit action`() {
         val config = FakeAppConfig(storedKey = "sk-SECRET-SENTINEL-1234")
-        val ctx = Context().also { Register<AppConfig>(it, config) }
+        val ctx = Context().also { register<AppConfig>(it, config) }
 
         composeRule.setSettingsContent(ctx)
         composeRule.assertText("Show API key")
@@ -183,8 +183,8 @@ class SettingsScreenTest {
         val battery = FakeBatteryExemption(exempt = false)
         val ctx =
             Context().also {
-                Register<AppConfig>(it, config)
-                Register<BatteryExemption>(it, battery)
+                register<AppConfig>(it, config)
+                register<BatteryExemption>(it, battery)
             }
 
         composeRule.setSettingsContent(ctx)
@@ -199,8 +199,8 @@ class SettingsScreenTest {
     fun `an already exempt app renders the exempt state`() {
         val ctx =
             Context().also {
-                Register<AppConfig>(it, FakeAppConfig())
-                Register<BatteryExemption>(it, FakeBatteryExemption(exempt = true))
+                register<AppConfig>(it, FakeAppConfig())
+                register<BatteryExemption>(it, FakeBatteryExemption(exempt = true))
             }
 
         composeRule.setSettingsContent(ctx)
@@ -212,8 +212,8 @@ class SettingsScreenTest {
     fun `the protocol and the bound hub port are displayed`() {
         val ctx =
             Context().also {
-                Register<AppConfig>(it, FakeAppConfig())
-                Register<HubServer>(it, FakeHubServer(boundPortValue = 40404).also { it.start(0) })
+                register<AppConfig>(it, FakeAppConfig())
+                register<HubServer>(it, FakeHubServer(boundPortValue = 40404).also { it.start(0) })
             }
 
         composeRule.setSettingsContent(ctx)
@@ -226,8 +226,8 @@ class SettingsScreenTest {
     fun `a stopped hub renders a zero port without crashing`() {
         val ctx =
             Context().also {
-                Register<AppConfig>(it, FakeAppConfig())
-                Register<HubServer>(it, FakeHubServer(boundPortValue = 40404))
+                register<AppConfig>(it, FakeAppConfig())
+                register<HubServer>(it, FakeHubServer(boundPortValue = 40404))
             }
 
         composeRule.setSettingsContent(ctx)

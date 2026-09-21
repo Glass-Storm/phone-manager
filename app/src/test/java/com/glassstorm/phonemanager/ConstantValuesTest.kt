@@ -17,12 +17,12 @@ import com.glassstorm.phonemanager.domain.service.StreamService
 import com.glassstorm.phonemanager.service.security.AuthInterceptor
 import com.glassstorm.phonemanager.service.security.TokenCodec
 import com.glassstorm.phonemanager.ui.PairingViewModel
+import com.glassstorm.phonemanager.ui.ROUTES
 import com.glassstorm.phonemanager.ui.ROUTE_DASHBOARD
 import com.glassstorm.phonemanager.ui.ROUTE_DEVICES
 import com.glassstorm.phonemanager.ui.ROUTE_PAIRING
 import com.glassstorm.phonemanager.ui.ROUTE_SETTINGS
 import com.glassstorm.phonemanager.ui.ROUTE_STREAM
-import com.glassstorm.phonemanager.ui.ROUTES
 import com.glassstorm.phonemanager.ui.SettingsViewModel
 import com.glassstorm.phonemanager.ui.StreamViewModel
 import com.google.common.truth.Truth.assertThat

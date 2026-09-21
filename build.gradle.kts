@@ -8,7 +8,8 @@ plugins {
     alias(libs.plugins.lumo) apply false
     // ktlint is declared here so the plugin lands on the build classpath once, and
     // applied by each module that owns Kotlin sources (all five). See .editorconfig
-    // for the rules deliberately disabled to coexist with the repo naming convention.
+    // for the shared style config; all standard rules, including the naming rules,
+    // are enabled.
     alias(libs.plugins.ktlint) apply false
 }
 

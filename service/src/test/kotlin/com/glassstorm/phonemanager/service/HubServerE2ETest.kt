@@ -4,13 +4,13 @@ import com.glassstorm.phonemanager.domain.adapter.relay.FrameSink
 import com.glassstorm.phonemanager.domain.adapter.repository.DeviceRepository
 import com.glassstorm.phonemanager.domain.adapter.speech.SttPort
 import com.glassstorm.phonemanager.domain.context.Context
-import com.glassstorm.phonemanager.domain.context.Register
+import com.glassstorm.phonemanager.domain.context.register
 import com.glassstorm.phonemanager.domain.service.PairingService
 import com.glassstorm.phonemanager.domain.service.StreamService
 import com.glassstorm.phonemanager.service.security.AuthInterceptor
+import com.glassstorm.phonemanager.testkit.ProcessRun
 import com.glassstorm.phonemanager.testkit.REAP_SECONDS
 import com.glassstorm.phonemanager.testkit.goBinary
-import com.glassstorm.phonemanager.testkit.ProcessRun
 import com.glassstorm.phonemanager.testkit.repoRoot
 import com.glassstorm.phonemanager.testkit.run
 import com.glassstorm.phonemanager.testkit.syntheticVideoNal
@@ -76,11 +76,11 @@ class HubServerE2ETest {
         stt = FakeSttPort("mockpeer recognized utterance")
         sink = FakeFrameSink()
         pairing = PairingServiceImpl(ctx, clock = { System.currentTimeMillis() })
-        Register<DeviceRepository>(ctx, repo)
-        Register<PairingService>(ctx, pairing)
-        Register<StreamService>(ctx, StreamServiceImpl(ctx))
-        Register<SttPort>(ctx, stt)
-        Register<FrameSink>(ctx, sink)
+        register<DeviceRepository>(ctx, repo)
+        register<PairingService>(ctx, pairing)
+        register<StreamService>(ctx, StreamServiceImpl(ctx))
+        register<SttPort>(ctx, stt)
+        register<FrameSink>(ctx, sink)
 
         // The transport under test: netty-shaded NIO, IPv4 explicit, ephemeral port.
         hub =

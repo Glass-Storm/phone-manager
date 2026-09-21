@@ -89,7 +89,7 @@ class HubForegroundServiceTest {
                 .create()
                 .startCommand(0, 0)
         val hub =
-            com.glassstorm.phonemanager.domain.context.FromContext<
+            com.glassstorm.phonemanager.domain.context.fromContext<
                 com.glassstorm.phonemanager.domain.adapter.transport.HubServer,
             >(AppComposition.appContext())
         assertThat(hub.isRunning()).isTrue()
@@ -116,7 +116,7 @@ class HubForegroundServiceTest {
                 .create()
                 .startCommand(0, 0)
         val hub =
-            com.glassstorm.phonemanager.domain.context.FromContext<
+            com.glassstorm.phonemanager.domain.context.fromContext<
                 com.glassstorm.phonemanager.domain.adapter.transport.HubServer,
             >(AppComposition.appContext())
         val port = hub.boundPort()
@@ -147,7 +147,7 @@ class HubForegroundServiceTest {
                 ).create()
                 .startCommand(0, 0)
         val hotspot =
-            com.glassstorm.phonemanager.domain.context.FromContext<
+            com.glassstorm.phonemanager.domain.context.fromContext<
                 com.glassstorm.phonemanager.domain.adapter.network.HotspotController,
             >(AppComposition.appContext())
 
@@ -156,7 +156,7 @@ class HubForegroundServiceTest {
         // peers stay reachable
         assertThat(hotspot.isActive()).isFalse()
         val hub =
-            com.glassstorm.phonemanager.domain.context.FromContext<
+            com.glassstorm.phonemanager.domain.context.fromContext<
                 com.glassstorm.phonemanager.domain.adapter.transport.HubServer,
             >(AppComposition.appContext())
         assertThat(hub.isRunning()).isTrue()
@@ -173,11 +173,11 @@ class HubForegroundServiceTest {
 
         // When the network ports are resolved by their domain types
         val hotspot =
-            com.glassstorm.phonemanager.domain.context.FromContextOrNull<
+            com.glassstorm.phonemanager.domain.context.fromContextOrNull<
                 com.glassstorm.phonemanager.domain.adapter.network.HotspotController,
             >(ctx)
         val discovery =
-            com.glassstorm.phonemanager.domain.context.FromContextOrNull<
+            com.glassstorm.phonemanager.domain.context.fromContextOrNull<
                 com.glassstorm.phonemanager.domain.adapter.network.Discovery,
             >(ctx)
 
