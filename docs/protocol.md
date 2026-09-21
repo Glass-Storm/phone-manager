@@ -275,7 +275,7 @@ treating the fallback as a failure. The advertised port is the hub's gRPC port.
 ## 8. Transport and port
 
 - Transport: **plaintext gRPC (h2c) over the LAN.** No TLS in v1.
-- Default hub port: **9000** (`AppComposition.GO_DEFAULT_HUB_PORT`). Tests bind
+- Default hub port: **9000** (`AppComposition.DEFAULT_HUB_PORT`). Tests bind
   an ephemeral port (`0`) and read back the bound port.
 - Bind address: the app binds all interfaces (`0.0.0.0`) in production, because
   the phone hosts the AP and its LAN peers must be able to dial in. Tests bind

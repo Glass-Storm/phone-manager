@@ -195,7 +195,7 @@ suite as evidence that on-device behaviour works.
   `:adapter`, so importing an adapter class from `:service` fails to compile.
   Only the `:app` composition root wires implementations to ports.
 - **The Context registry is the only DI.** Collaborators are registered as types
-  and resolved with `FromContext<T>(ctx)` against the domain INTERFACE, never by
+  and resolved with `fromContext<T>(ctx)` against the domain INTERFACE, never by
   a concrete class. There is no Hilt, Koin, or Room anywhere in this repo.
 - **Naming.** Standard Kotlin convention. Files are PascalCase and match their
   primary class (`PairingService.kt`, `Context.kt`, `Device.kt`); functions,
