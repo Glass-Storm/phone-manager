@@ -1,6 +1,9 @@
 plugins {
     alias(libs.plugins.phonemanager.kotlin.library)
     alias(libs.plugins.phonemanager.ktlint)
+    // KSP2 + Dagger annotation processing. T15 introduces the bindings; this only
+    // wires the toolchain, so the module compiles unchanged.
+    alias(libs.plugins.phonemanager.ksp)
 }
 
 dependencies {

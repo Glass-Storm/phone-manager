@@ -11,6 +11,10 @@ plugins {
     // module applies, directly or transitively), together with its shared
     // generated-code / vendored-Lumo exclusions.
     alias(libs.plugins.ktlint) apply false
+    // KSP (Kotlin Symbol Processing) drives Dagger's annotation processing. Declared
+    // here so the plugin is on the build classpath once; modules enable it through
+    // the `phonemanager.ksp` convention plugin.
+    alias(libs.plugins.ksp) apply false
 
     // This repository's convention plugins (from the `build-logic` composite build).
     // Declared `apply false` so they are on the build classpath and their ids

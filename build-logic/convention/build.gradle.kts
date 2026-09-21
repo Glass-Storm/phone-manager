@@ -36,5 +36,9 @@ gradlePlugin {
             id = "phonemanager.ktlint"
             implementationClass = "com.glassstorm.phonemanager.buildlogic.KtlintConventionPlugin"
         }
+        register("ksp") {
+            id = "phonemanager.ksp"
+            implementationClass = "com.glassstorm.phonemanager.buildlogic.KspConventionPlugin"
+        }
     }
 }
