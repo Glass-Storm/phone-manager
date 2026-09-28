@@ -74,6 +74,8 @@ private fun hubCard(
             Text(text = "Port: ${state.boundPort}")
             Text(text = "Paired devices: ${state.pairedCount}")
 
+            state.startError?.let { Text(text = it) }
+
             HorizontalDivider()
 
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {

@@ -420,23 +420,34 @@ class FakeBatteryExemption(
 }
 
 /**
- * [HubStarter] fake: every start is counted and [onStart] runs as the production
- * [HubServer] start would.
+ * [HubStarter] fake: every start/stop is counted and [onStart]/[onStop] run as the
+ * production service would.
  *
- * The default `onStart` is a no-op, so a test that only wants to count invocations
- * can assert [startCalls] without bringing a hub up. A test that also renders the
- * bound port passes `{ hub.start(0) }`, which is exactly what the real foreground
- * service ends up doing.
+ * The default hooks are no-ops, so a test that only wants to count invocations can
+ * assert [startCalls]/[stopCalls] without bringing a hub up. A test that also
+ * renders the bound port passes `{ hub.start(0) }`, which is exactly what the real
+ * foreground service ends up doing.
  */
 class FakeHubStarter(
+    private val startFailure: Throwable? = null,
+    private val onStop: () -> Unit = {},
     private val onStart: () -> Unit = {},
 ) : HubStarter {
     var startCalls: Int = 0
         private set
 
+    var stopCalls: Int = 0
+        private set
+
     override fun start() {
         startCalls += 1
+        startFailure?.let { throw it }
         onStart()
+    }
+
+    override fun stop() {
+        stopCalls += 1
+        onStop()
     }
 }
 

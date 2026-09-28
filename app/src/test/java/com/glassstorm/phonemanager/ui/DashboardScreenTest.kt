@@ -5,6 +5,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.lifecycle.ViewModelStore
 import com.glassstorm.phonemanager.core.domain.adapter.network.HotspotController
 import com.glassstorm.phonemanager.core.domain.adapter.transport.HubServer
 import com.glassstorm.phonemanager.core.domain.network.HotspotFailure
@@ -15,6 +16,8 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
+import java.time.Duration
 
 /**
  * Dashboard screen behaviour on the JVM (no emulator exists on this host).
@@ -82,6 +85,72 @@ class DashboardScreenTest {
     }
 
     @Test
+    fun `stopping the hub crosses the same foreground-service seam`() {
+        val hub = FakeHubServer()
+        val starter = FakeHubStarter(onStart = { hub.start(0) }, onStop = { hub.stop() })
+
+        composeRule.setDashboardContent(hub = hub, hubStarter = starter)
+        composeRule.onNodeWithText("Start hub").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("Hub: running").assertIsDisplayed()
+
+        composeRule.onNodeWithText("Stop hub").performClick()
+        composeRule.waitForIdle()
+
+        // Teardown must be delegated to the service too: a direct hub.stop() would
+        // leave the service's bring-up state stale and discovery advertising.
+        assertThat(starter.stopCalls).isEqualTo(1)
+        composeRule.onNodeWithText("Hub: stopped").assertIsDisplayed()
+    }
+
+    @Test
+    fun `a failed start is surfaced instead of silently swallowed`() {
+        val starter = FakeHubStarter(startFailure = IllegalStateException("background start denied"))
+
+        composeRule.setDashboardContent(hub = FakeHubServer(), hubStarter = starter)
+        composeRule.onNodeWithText("Start hub").performClick()
+        composeRule.waitForIdle()
+
+        assertThat(starter.startCalls).isEqualTo(1)
+        composeRule.onNodeWithText("Hub failed to start: background start denied").assertIsDisplayed()
+    }
+
+    @Test
+    fun `the dashboard republishes the running state once the service binds the hub`() {
+        val hub = FakeHubServer(boundPortValue = 40404)
+        // The service does NOT bind synchronously; the poll is what must notice it.
+        composeRule.setDashboardContent(hub = hub, hubStarter = FakeHubStarter())
+
+        composeRule.onNodeWithText("Start hub").performClick()
+        composeRule.onNodeWithText("Hub: stopped").assertIsDisplayed()
+
+        // The foreground service binds the listener on a LATER main-loop turn.
+        hub.start(0)
+        composeRule.advancePollClock()
+
+        composeRule.onNodeWithText("Hub: running").assertIsDisplayed()
+        composeRule.onNodeWithText("Port: 40404").assertIsDisplayed()
+    }
+
+    @Test
+    fun `clearing the dashboard mid-poll leaves no live coroutine behind`() {
+        val hub = FakeHubServer()
+        val store = ViewModelStore()
+        val viewModel = DashboardViewModel(hub, FakeHotspotController(), FakePairingService(), FakeHubStarter())
+        store.put("dashboard", viewModel)
+        assertThat(viewModel.uiState.value.running).isFalse()
+
+        // The service never binds, so the poll stays pending until clear cancels it.
+        viewModel.onStartHub()
+        store.clear()
+
+        // A cleared ViewModel must not keep polling: a later hub bind cannot reach it.
+        hub.start(0)
+        composeRule.advancePollClock()
+        assertThat(viewModel.uiState.value.running).isFalse()
+    }
+
+    @Test
     fun `starting the hotspot shows the credentials and the gateway ip`() {
         composeRule.setDashboardContent(hub = FakeHubServer(), hotspot = FakeHotspotController())
 
@@ -118,5 +187,10 @@ class DashboardScreenTest {
                 DashboardScreen(viewModelFactory = viewModelFactory(viewModel))
             }
         }
+    }
+
+    private fun androidx.compose.ui.test.junit4.ComposeContentTestRule.advancePollClock() {
+        shadowOf(android.os.Looper.getMainLooper()).idleFor(Duration.ofMillis(1_000L))
+        waitForIdle()
     }
 }
