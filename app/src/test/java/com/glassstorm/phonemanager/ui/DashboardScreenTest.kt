@@ -9,6 +9,8 @@ import com.glassstorm.phonemanager.core.domain.adapter.network.HotspotController
 import com.glassstorm.phonemanager.core.domain.adapter.transport.HubServer
 import com.glassstorm.phonemanager.core.domain.network.HotspotFailure
 import com.glassstorm.phonemanager.core.domain.service.PairingService
+import com.glassstorm.phonemanager.hub.HubStarter
+import com.google.common.truth.Truth.assertThat
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -65,6 +67,21 @@ class DashboardScreenTest {
     }
 
     @Test
+    fun `starting the hub invokes the foreground-service seam exactly once`() {
+        val hub = FakeHubServer()
+        val starter = FakeHubStarter()
+
+        composeRule.setDashboardContent(hub = hub, hubStarter = starter)
+        composeRule.onNodeWithText("Start hub").performClick()
+        composeRule.waitForIdle()
+
+        assertThat(starter.startCalls).isEqualTo(1)
+        // The ViewModel must cross the seam rather than start the listener itself:
+        // bring-up belongs to the foreground service, not the UI process.
+        assertThat(hub.startCalls).isEqualTo(0)
+    }
+
+    @Test
     fun `starting the hotspot shows the credentials and the gateway ip`() {
         composeRule.setDashboardContent(hub = FakeHubServer(), hotspot = FakeHotspotController())
 
@@ -93,8 +110,9 @@ class DashboardScreenTest {
         hub: HubServer = FakeHubServer(),
         hotspot: HotspotController = FakeHotspotController(),
         pairing: PairingService = FakePairingService(),
+        hubStarter: HubStarter = FakeHubStarter { hub.start(0) },
     ) {
-        val viewModel = DashboardViewModel(hub, hotspot, pairing)
+        val viewModel = DashboardViewModel(hub, hotspot, pairing, hubStarter)
         setContent {
             AppTheme {
                 DashboardScreen(viewModelFactory = viewModelFactory(viewModel))

@@ -20,6 +20,7 @@ import com.glassstorm.phonemanager.core.model.RelayResult
 import com.glassstorm.phonemanager.core.model.RelaySession
 import com.glassstorm.phonemanager.core.model.RelayStats
 import com.glassstorm.phonemanager.core.model.SttEngine
+import com.glassstorm.phonemanager.hub.HubStarter
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.emptyFlow
@@ -415,6 +416,27 @@ class FakeBatteryExemption(
 
     override fun requestExemption() {
         requestCalls += 1
+    }
+}
+
+/**
+ * [HubStarter] fake: every start is counted and [onStart] runs as the production
+ * [HubServer] start would.
+ *
+ * The default `onStart` is a no-op, so a test that only wants to count invocations
+ * can assert [startCalls] without bringing a hub up. A test that also renders the
+ * bound port passes `{ hub.start(0) }`, which is exactly what the real foreground
+ * service ends up doing.
+ */
+class FakeHubStarter(
+    private val onStart: () -> Unit = {},
+) : HubStarter {
+    var startCalls: Int = 0
+        private set
+
+    override fun start() {
+        startCalls += 1
+        onStart()
     }
 }
 

@@ -6,6 +6,7 @@ import com.glassstorm.phonemanager.core.domain.adapter.transport.HubServer
 import com.glassstorm.phonemanager.core.domain.network.HotspotFailure
 import com.glassstorm.phonemanager.core.domain.network.HotspotUnavailableException
 import com.glassstorm.phonemanager.core.domain.service.PairingService
+import com.glassstorm.phonemanager.hub.HubStarter
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -14,11 +15,13 @@ import javax.inject.Inject
 /**
  * Dashboard state holder.
  *
- * Every collaborator is a CONSTRUCTOR dependency typed as a DOMAIN port. Under
- * compile-time DI a missing port is impossible, so the "not available" flags now
- * describe a port that is PRESENT but FAILING (a listener that cannot report its
- * state, an access point whose driver throws): each read is wrapped, so the
- * failure is a state transition rather than a crash.
+ * Every collaborator is a CONSTRUCTOR dependency. The three reads are typed as
+ * DOMAIN ports; [hubStarter] is the app-owned seam the start action crosses, so
+ * the ViewModel stays Android-free while the listener's lifetime is owned by the
+ * foreground service. Under compile-time DI a missing collaborator is impossible,
+ * so the "not available" flags now describe a port that is PRESENT but FAILING (a
+ * listener that cannot report its state, an access point whose driver throws):
+ * each read is wrapped, so the failure is a state transition rather than a crash.
  *
  * The domain ports are synchronous JVM APIs (the adapter does its own threading),
  * so the actions below stay synchronous: no `viewModelScope` hop means the UI
@@ -31,6 +34,7 @@ class DashboardViewModel
         private val hub: HubServer,
         private val hotspot: HotspotController,
         private val pairing: PairingService,
+        private val hubStarter: HubStarter,
     ) : ViewModel() {
         private val state = MutableStateFlow(DashboardUiState())
 
@@ -40,9 +44,17 @@ class DashboardViewModel
             refresh()
         }
 
-        /** Start the hub listener on an ephemeral port, then refresh the status panel. */
+        /**
+         * Start the hub through its foreground service, then refresh the status
+         * panel.
+         *
+         * The start is DELEGATED rather than performed here: [HubStarter] hands the
+         * job to the foreground service, so the listener outlives this UI process.
+         * The panel still reports the bound port because both share the one
+         * process-wide [HubServer] singleton.
+         */
         fun onStartHub() {
-            runCatching { hub.start(0) }
+            runCatching { hubStarter.start() }
             refresh()
         }
 

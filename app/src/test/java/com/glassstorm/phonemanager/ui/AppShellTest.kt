@@ -80,9 +80,15 @@ class AppShellTest {
 
     private fun ComposeContentTestRule.setShellContent(startRoute: String) {
         val pairing = FakePairingService()
+        val dashboardHub = FakeHubServer()
         val factory: ViewModelProvider.Factory =
             viewModelFactory(
-                DashboardViewModel(FakeHubServer(), FakeHotspotController(), pairing),
+                DashboardViewModel(
+                    dashboardHub,
+                    FakeHotspotController(),
+                    pairing,
+                    FakeHubStarter { dashboardHub.start(0) },
+                ),
                 DevicesViewModel(FakeDeviceRepository()),
                 PairingViewModel(pairing),
                 SettingsViewModel(FakeAppConfig(), FakeHubServer(), FakeBatteryExemption()),
