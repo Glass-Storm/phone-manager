@@ -39,6 +39,9 @@ class HubForegroundService : Service() {
         startId: Int,
     ): Int {
         startForeground(HubNotifier.NOTIFICATION_ID, HubNotifier.foregroundNotification(this))
+        // `bringUp != null` means the hub is already hosted. A deliberate stop is a
+        // `stopService`, which runs onDestroy and clears this field, so a later start
+        // is NOT blocked by a stale bring-up.
         if (bringUp == null) {
             bringUp = newBringUp().also { it.bringUp(requestedPort(intent)) }
         }
