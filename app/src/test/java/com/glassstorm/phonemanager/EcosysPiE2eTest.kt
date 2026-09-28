@@ -247,8 +247,11 @@ class EcosysPiE2eTest {
 
         // And the hub revokes the exact device that token belongs to
         val token = readCachedToken(sharedXdg)
-        val device = pairing.listPaired().first { it.tokenHash == TokenCodec.hashToken(token) }
-        pairing.revoke(device.deviceId)
+        val device = pairing.listPaired().firstOrNull { it.tokenHash == TokenCodec.hashToken(token) }
+        assertWithMessage("no paired device owns the cached token")
+            .that(device)
+            .isNotNull()
+        pairing.revoke(device!!.deviceId)
 
         // When the CLI runs again WITHOUT a PIN, reusing the cached (now revoked) token
         val second =

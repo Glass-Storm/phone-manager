@@ -155,3 +155,9 @@ gradle.projectsEvaluated {
         dependsOn(unitTest.taskDependencies.getDependencies(unitTest))
     }
 }
+
+// Attach the Python E2E to `check` only. It must stay OUT of `test`,
+// `testDebugUnitTest` and `e2e` (those stay green on a host without the Pi repo),
+// but leaving it attached to NOTHING let it rot; `check` is the one lifecycle task
+// that may assume the full host, and the task itself skips loudly when it cannot.
+tasks.matching { it.name == "check" }.configureEach { dependsOn(ecosysPiE2e) }

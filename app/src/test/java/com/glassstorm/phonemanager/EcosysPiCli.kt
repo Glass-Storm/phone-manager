@@ -93,7 +93,6 @@ object EcosysPi {
     const val DRAIN_JOIN_MS: Long = 2_000
     const val TIMED_OUT: Int = 124
     const val SPAWN_ERROR: Int = 1
-    const val EXIT_ERROR: Int = 1
     const val EXIT_REFUSED: Int = 2
     const val EXIT_OK: Int = 0
 }
@@ -120,7 +119,29 @@ fun runEcosysPi(
         } catch (failure: Exception) {
             return CliRun(EcosysPi.SPAWN_ERROR, "", failure.message ?: "spawn failed")
         }
+    return awaitAndDrain(process, deadlineSeconds)
+}
 
+/** A one-shot `uv run python <code>` probe used by the loud skip gate. */
+fun runUvPython(
+    code: String,
+    deadlineSeconds: Long = 60,
+): CliRun {
+    val command = listOf(EcosysPi.UV.absolutePath, "run", "python", "-c", code)
+    val process =
+        try {
+            ProcessBuilder(command).directory(EcosysPi.PROJECT_ROOT).start()
+        } catch (failure: Exception) {
+            return CliRun(EcosysPi.SPAWN_ERROR, "", failure.message ?: "spawn failed")
+        }
+    return awaitAndDrain(process, deadlineSeconds)
+}
+
+/** Drain both pipes and wait out [deadlineSeconds], force-destroying on overrun. */
+private fun awaitAndDrain(
+    process: Process,
+    deadlineSeconds: Long,
+): CliRun {
     val stdout = StringBuilder()
     val stderr = StringBuilder()
     val outThread = drain(process.inputStream.bufferedReader(), stdout)
@@ -142,33 +163,6 @@ fun runEcosysPi(
             "\n[harness] child exceeded ${deadlineSeconds}s and was force-destroyed"
         }
     return CliRun(exit, stdout.toString(), stderr.toString() + suffix)
-}
-
-/** A one-shot `uv run python <code>` probe used by the loud skip gate. */
-fun runUvPython(
-    code: String,
-    deadlineSeconds: Long = 60,
-): CliRun {
-    val command = listOf(EcosysPi.UV.absolutePath, "run", "python", "-c", code)
-    val process =
-        try {
-            ProcessBuilder(command).directory(EcosysPi.PROJECT_ROOT).start()
-        } catch (failure: Exception) {
-            return CliRun(EcosysPi.SPAWN_ERROR, "", failure.message ?: "spawn failed")
-        }
-    val stdout = StringBuilder()
-    val stderr = StringBuilder()
-    val outThread = drain(process.inputStream.bufferedReader(), stdout)
-    val errThread = drain(process.errorStream.bufferedReader(), stderr)
-    val finished = process.waitFor(deadlineSeconds, TimeUnit.SECONDS)
-    if (!finished) {
-        process.destroyForcibly()
-        process.waitFor(EcosysPi.REAP_SECONDS, TimeUnit.SECONDS)
-    }
-    outThread.join(EcosysPi.DRAIN_JOIN_MS)
-    errThread.join(EcosysPi.DRAIN_JOIN_MS)
-    val exit = if (finished) process.exitValue() else EcosysPi.TIMED_OUT
-    return CliRun(exit, stdout.toString(), stderr.toString())
 }
 
 /**
@@ -195,7 +189,7 @@ fun ecosysPiUnavailableReason(): String? {
     val probe =
         runUvPython("import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)")
     if (!probe.ok) {
-        return "task-14 SKIPPED: 'uv run python' did not report Python >=3.11 " +
+        return "task-14 SKIPPED: 'uv run python' could not run under the Pi repo " +
             "(exit=${probe.exitCode}; stderr=${probe.stderr.trim().take(300)})"
     }
     return null
