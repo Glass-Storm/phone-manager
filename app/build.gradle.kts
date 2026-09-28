@@ -116,10 +116,11 @@ dependencies {
 // ---------------------------------------------------------------------------
 val ecosysPiE2eTestClass = "com.glassstorm.phonemanager.EcosysPiE2eTest"
 
-// Lazy: matched whenever AGP creates the task, so ordering cannot matter.
-tasks.matching { it.name == "testDebugUnitTest" }.configureEach {
-    (this as Test).filter {
-        excludeTestsMatching(ecosysPiE2eTestClass)
+// Every Test task EXCEPT the dedicated opt-in E2E excludes the Python test;
+// ecosysPiE2e must run ONLY that class.
+tasks.withType<Test>().configureEach {
+    if (name != "ecosysPiE2e") {
+        filter { excludeTestsMatching(ecosysPiE2eTestClass) }
     }
 }
 
