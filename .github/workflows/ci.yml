@@ -97,8 +97,10 @@ jobs:
       # build-tools 36.0.0. Installing these exact packages makes the CI SDK
       # reproducible and mirrors the local SDK (/platforms/android-36,
       # /platforms/android-29, /build-tools/36.0.0).
+      # Pinned to v4.0.4: v3's own setup installs the now-REMOVED 'tools' package
+      # and fails with "Failed to find package 'tools'" before Gradle runs; v4 skips it.
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4.0.4
 
       - name: Install required Android SDK packages
         run: |
@@ -194,8 +196,10 @@ jobs:
 
       # Same explicit SDK provisioning as the `android` job — the e2e alias runs
       # :app:testDebugUnitTest, which needs the Android SDK.
+      # Pinned to v4.0.4: v3's own setup installs the now-REMOVED 'tools' package
+      # and fails with "Failed to find package 'tools'" before Gradle runs; v4 skips it.
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4.0.4
 
       - name: Install required Android SDK packages
         run: |
