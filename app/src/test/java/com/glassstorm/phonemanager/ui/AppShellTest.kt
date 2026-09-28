@@ -6,6 +6,8 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.lifecycle.ViewModelProvider
+import androidx.navigation.NavHostController
+import androidx.navigation.compose.rememberNavController
 import com.google.common.truth.Truth.assertThat
 import org.junit.Rule
 import org.junit.Test
@@ -78,7 +80,28 @@ class AppShellTest {
             .inOrder()
     }
 
-    private fun ComposeContentTestRule.setShellContent(startRoute: String) {
+    @Test
+    fun `repeatedly tapping a tab never stacks duplicate destinations`() {
+        lateinit var navController: NavHostController
+        composeRule.setShellContent(startRoute = "dashboard") { navController = it }
+
+        repeat(3) {
+            composeRule.onNodeWithText("PAIRING").performClick()
+            composeRule.waitForIdle()
+        }
+
+        // A bare navigate() would have pushed pairing three times; the tab contract
+        // keeps exactly the start destination plus the one live tab (the NavGraph
+        // root has a null route, so only leaf routes are compared).
+        assertThat(navController.currentBackStack.value.mapNotNull { it.destination.route })
+            .containsExactly("dashboard", "pairing")
+            .inOrder()
+    }
+
+    private fun ComposeContentTestRule.setShellContent(
+        startRoute: String,
+        onController: ((NavHostController) -> Unit)? = null,
+    ) {
         val pairing = FakePairingService()
         val dashboardHub = FakeHubServer()
         val factory: ViewModelProvider.Factory =
@@ -95,8 +118,10 @@ class AppShellTest {
                 StreamViewModel(FakeStreamService(), pairing),
             )
         setContent {
+            val navController = rememberNavController()
+            onController?.invoke(navController)
             AppTheme {
-                AppShell(viewModelFactory = factory, startRoute = startRoute)
+                AppShell(viewModelFactory = factory, startRoute = startRoute, navController = navController)
             }
         }
     }

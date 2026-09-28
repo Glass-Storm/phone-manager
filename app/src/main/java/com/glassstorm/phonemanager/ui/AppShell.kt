@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
+import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -40,13 +41,16 @@ val ROUTES: List<String> =
  * [viewModelFactory] is the Dagger-backed [ViewModelProvider.Factory] the
  * composition root owns, handed down so each screen can resolve its ViewModel and
  * its domain ports from the compile-time graph.
+ *
+ * [navController] defaults to a remembered controller; a test passes its own so it
+ * can assert the back stack directly.
  */
 @Composable
 fun AppShell(
     viewModelFactory: ViewModelProvider.Factory,
     startRoute: String = ROUTE_DASHBOARD,
+    navController: NavHostController = rememberNavController(),
 ) {
-    val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route ?: startRoute
 
@@ -55,7 +59,7 @@ fun AppShell(
         bottomBar = {
             NavigationBar(
                 currentRoute = currentRoute,
-                onNavigate = { route -> navController.navigate(route) },
+                onNavigate = { route -> navController.navigateToRoute(route, startRoute) },
             )
         },
     ) { insets ->
@@ -124,3 +128,23 @@ private fun routeLabel(route: String): String =
         ROUTE_SETTINGS -> "SETTINGS"
         else -> route
     }
+
+/**
+ * Navigate to a bottom-bar [route] as a tab switch, not a stack push.
+ *
+ * `launchSingleTop` reuses the current entry, `popUpTo` keeps the stack at the
+ * start destination and `saveState`/`restoreState` preserve each tab's state.
+ * Without them a repeated tap stacks duplicate destinations and system-back needs
+ * one pop per tap.
+ */
+private fun NavHostController.navigateToRoute(
+    route: String,
+    startRoute: String,
+) {
+    if (route == currentDestination?.route) return
+    navigate(route) {
+        popUpTo(startRoute) { saveState = true }
+        launchSingleTop = true
+        restoreState = true
+    }
+}
