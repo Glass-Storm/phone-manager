@@ -59,21 +59,8 @@ class AuthInterceptor(
 
     /** Extract and verify `Bearer <token>`, or `null` for any malformed/unknown input. */
     private fun resolveDevice(headers: Metadata): Device? {
-        val header = headers.get(AUTHORIZATION_KEY) ?: return null
-        val token = bearerToken(header) ?: return null
-        if (token.isEmpty()) return null
+        val token = BearerTokenParser.parse(headers.get(AUTHORIZATION_KEY)) ?: return null
         return tokenVerifier.verifyToken(token)
-    }
-
-    /**
-     * Parse ONLY the exact `Bearer <token>` form. Rejects a missing scheme, an
-     * empty token, a different scheme, and any prefix that merely resembles
-     * `Bearer` (the scheme name is case-sensitive and must be followed by a
-     * single space).
-     */
-    private fun bearerToken(header: String): String? {
-        if (!header.startsWith("$BEARER_PREFIX ")) return null
-        return header.removePrefix("$BEARER_PREFIX ")
     }
 
     /** Close the call with UNAUTHENTICATED without invoking the service body. */
@@ -85,8 +72,6 @@ class AuthInterceptor(
     companion object {
         /** The sole unauthenticated method, taken from the generated descriptor. */
         val PAIR_METHOD: String = PairingServiceGrpc.getPairMethod().fullMethodName
-
-        private const val BEARER_PREFIX = "Bearer"
 
         private val AUTHORIZATION_KEY: Metadata.Key<String> =
             Metadata.Key.of("authorization", Metadata.ASCII_STRING_MARSHALLER)
