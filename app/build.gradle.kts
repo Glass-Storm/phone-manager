@@ -92,4 +92,65 @@ dependencies {
     // FullE2eTest to drive the real Go peer against the Robolectric-hosted hub.
     testImplementation(project(":testing:testkit"))
     testImplementation(libs.compose.ui.test.junit4)
+    // `org.json` is already on the `:app` test classpath via `:adapter:jvm`, but
+    // the T14 harness reads the Pi token cache with it directly, so depend on it
+    // explicitly rather than leaning on another module's transitive edge.
+    testImplementation(libs.org.json)
+}
+
+// ---------------------------------------------------------------------------
+// T14: drive the REAL Python `ecosys_pi` CLI against the REAL Robolectric app
+// hub. This is deliberately OPT-IN and lives in its OWN task because it depends
+// on host-only prerequisites (the sibling Pi repo, `uv`, CPython 3.11+) which
+// the plain hub build must NEVER require:
+//
+//  * `testDebugUnitTest` (and therefore `./gradlew test` and `e2e`) EXCLUDES the
+//    T14 class, so a host without `uv` still gets a fully green hub suite;
+//  * `:app:ecosysPiE2e` runs ONLY that class, on the exact same compiled test
+//    classes and classpath as `testDebugUnitTest` (one source set, so the two
+//    can never drift).
+//
+// The class itself calls `Assumptions.assumeTrue` with a NAMED reason when the
+// prerequisites are missing, so the dedicated task SKIPS loudly — it never
+// silently passes and never fails the hub suite.
+// ---------------------------------------------------------------------------
+val ecosysPiE2eTestClass = "com.glassstorm.phonemanager.EcosysPiE2eTest"
+
+// Lazy: matched whenever AGP creates the task, so ordering cannot matter.
+tasks.matching { it.name == "testDebugUnitTest" }.configureEach {
+    (this as Test).filter {
+        excludeTestsMatching(ecosysPiE2eTestClass)
+    }
+}
+
+val ecosysPiE2e =
+    tasks.register<Test>("ecosysPiE2e") {
+        group = "verification"
+        description = "T14 e2e: drive the Python ecosys_pi CLI against the real app hub (opt-in, skips loudly without uv)."
+        filter {
+            includeTestsMatching(ecosysPiE2eTestClass)
+        }
+        testLogging {
+            // The raw CLI stdout/stderr per case IS the evidence, so surface it.
+            showStandardStreams = true
+        }
+        reports {
+            junitXml.required.set(true)
+            html.required.set(true)
+        }
+    }
+
+// AGP creates `testDebugUnitTest` only during final evaluation, so the inputs are
+// copied in `projectsEvaluated`: the dedicated task then tests the SAME compiled
+// classes and classpath as the hub suite (one source set, no drift). The all-tests
+// task itself is never run — only its producer dependencies.
+gradle.projectsEvaluated {
+    val unitTest = tasks.named<Test>("testDebugUnitTest").get()
+    ecosysPiE2e.configure {
+        testClassesDirs = unitTest.testClassesDirs
+        classpath = unitTest.classpath
+        jvmArgs = unitTest.jvmArgs
+        systemProperties = unitTest.systemProperties
+        dependsOn(unitTest.taskDependencies.getDependencies(unitTest))
+    }
 }
