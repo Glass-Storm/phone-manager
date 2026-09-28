@@ -8,7 +8,7 @@ import com.glassstorm.phonemanager.core.model.SttEngine
 import java.util.Locale
 
 /** Which speech engine the composition root should build. */
-enum class SttAdapterKind {
+internal enum class SttAdapterKind {
     /** Fully offline, deterministic pseudo-transcription. The v1 DEFAULT. */
     MOCK,
 
@@ -41,12 +41,12 @@ class RuntimeConfigStore(
     private val context: Context,
 ) : AppConfig {
     /** Persist [kind]; a fresh install with no write at all stays on [SttAdapterKind.MOCK]. */
-    fun setSttAdapterKind(kind: SttAdapterKind) {
+    internal fun setSttAdapterKind(kind: SttAdapterKind) {
         prefs().edit().putString(KEY_STT_ADAPTER, kindToKey(kind)).apply()
     }
 
     /** The configured engine, or [SttAdapterKind.MOCK] when unset or unrecognised. */
-    fun sttAdapterKind(): SttAdapterKind = kindFromKey(prefs().getString(KEY_STT_ADAPTER, null))
+    internal fun sttAdapterKind(): SttAdapterKind = kindFromKey(prefs().getString(KEY_STT_ADAPTER, null))
 
     override fun sttEngine(): SttEngine =
         when (sttAdapterKind()) {
@@ -77,7 +77,7 @@ class RuntimeConfigStore(
     override fun apiKey(): String = prefs().getString(KEY_API_KEY, "").orEmpty()
 
     /** True when a usable key is present (the reference's placeholder does not count). */
-    fun hasApiKey(): Boolean {
+    internal fun hasApiKey(): Boolean {
         val key = apiKey()
         return key.isNotEmpty() && key != PLACEHOLDER_API_KEY
     }

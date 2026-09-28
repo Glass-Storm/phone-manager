@@ -6,7 +6,6 @@ import com.glassstorm.phonemanager.core.domain.adapter.transport.HubServer
 import com.glassstorm.phonemanager.core.domain.network.HotspotFailure
 import com.glassstorm.phonemanager.core.domain.network.HotspotUnavailableException
 import com.glassstorm.phonemanager.core.model.HotspotInfo
-import com.glassstorm.phonemanager.core.model.PeerAddress
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 
@@ -87,8 +86,6 @@ class HubBringUpTest {
         override fun stopAdvertise() {
             log.calls += "discovery.stop"
         }
-
-        override fun resolveFirst(timeoutMs: Long): PeerAddress? = null
     }
 
     private fun wired(): Triple<CallLog, RecordingHubServer, RecordingDiscovery> {

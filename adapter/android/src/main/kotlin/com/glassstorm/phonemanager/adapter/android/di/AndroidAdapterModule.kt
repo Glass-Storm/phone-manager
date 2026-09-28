@@ -8,6 +8,7 @@ import com.glassstorm.phonemanager.adapter.android.repository.sqlite.SqliteDevic
 import com.glassstorm.phonemanager.core.domain.adapter.config.AppConfig
 import com.glassstorm.phonemanager.core.domain.adapter.network.Discovery
 import com.glassstorm.phonemanager.core.domain.adapter.network.HotspotController
+import com.glassstorm.phonemanager.core.domain.adapter.network.PeerResolver
 import com.glassstorm.phonemanager.core.domain.adapter.repository.DeviceRepository
 import dagger.Module
 import dagger.Provides
@@ -65,4 +66,11 @@ object AndroidAdapterModule {
     fun provideDiscovery(
         @ApplicationContext context: Context,
     ): Discovery = NsdDiscoveryAdapter(context, gatewayFallback = null)
+
+    /** Peer resolution, backed by its own NsdManager + state machine. */
+    @Provides
+    @Singleton
+    fun providePeerResolver(
+        @ApplicationContext context: Context,
+    ): PeerResolver = NsdDiscoveryAdapter(context, gatewayFallback = null)
 }

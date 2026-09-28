@@ -8,6 +8,7 @@ import com.glassstorm.phonemanager.adapter.jvm.di.JvmAdapterModule
 import com.glassstorm.phonemanager.core.domain.adapter.config.AppConfig
 import com.glassstorm.phonemanager.core.domain.adapter.network.Discovery
 import com.glassstorm.phonemanager.core.domain.adapter.network.HotspotController
+import com.glassstorm.phonemanager.core.domain.adapter.network.PeerResolver
 import com.glassstorm.phonemanager.core.domain.adapter.repository.DeviceRepository
 import com.glassstorm.phonemanager.core.domain.adapter.transport.HubServer
 import com.glassstorm.phonemanager.core.domain.security.TokenVerifier
@@ -89,6 +90,9 @@ interface AppComponent {
 
     /** The DNS-SD advertiser the foreground service drives bring-up with. */
     fun discovery(): Discovery
+
+    /** The peer resolver over the same NSD-backed adapter. */
+    fun peerResolver(): PeerResolver
 
     /** The ViewModel factory the Compose shell threads down to every screen. */
     fun viewModelFactory(): ViewModelProvider.Factory

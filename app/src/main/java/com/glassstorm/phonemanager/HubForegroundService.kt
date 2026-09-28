@@ -1,12 +1,9 @@
 package com.glassstorm.phonemanager
 
-import android.app.Notification
-import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import android.os.IBinder
 import com.glassstorm.phonemanager.permission.HubPermissions
 
@@ -33,7 +30,7 @@ class HubForegroundService : Service() {
         super.onCreate()
         // The channel MUST exist before startForeground on API 26+, or the OS
         // rejects the notification and the service crashes.
-        ensureChannel()
+        HubNotifier.ensureChannel(getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
     }
 
     override fun onStartCommand(
@@ -41,7 +38,7 @@ class HubForegroundService : Service() {
         flags: Int,
         startId: Int,
     ): Int {
-        startForeground(NOTIFICATION_ID, notification())
+        startForeground(HubNotifier.NOTIFICATION_ID, HubNotifier.foregroundNotification(this))
         if (bringUp == null) {
             bringUp = newBringUp().also { it.bringUp(requestedPort(intent)) }
         }
@@ -71,28 +68,6 @@ class HubForegroundService : Service() {
 
     private fun requestedPort(intent: Intent?): Int = intent?.getIntExtra(EXTRA_PORT, DEFAULT_HUB_PORT) ?: DEFAULT_HUB_PORT
 
-    private fun ensureChannel() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        if (manager.getNotificationChannel(CHANNEL_ID) != null) return
-        manager.createNotificationChannel(
-            NotificationChannel(
-                CHANNEL_ID,
-                CHANNEL_NAME,
-                NotificationManager.IMPORTANCE_LOW,
-            ),
-        )
-    }
-
-    private fun notification(): Notification =
-        Notification
-            .Builder(this, CHANNEL_ID)
-            .setContentTitle(NOTIFICATION_TITLE)
-            .setContentText(NOTIFICATION_TEXT)
-            .setSmallIcon(android.R.drawable.stat_sys_upload)
-            .setOngoing(true)
-            .build()
-
     companion object {
         /**
          * The hub's default listening port. Reachable by hotspot peers via the
@@ -101,16 +76,16 @@ class HubForegroundService : Service() {
         const val DEFAULT_HUB_PORT: Int = 9000
 
         /** Notification channel the hub's ongoing notification lives on. */
-        const val CHANNEL_ID: String = "hub-foreground"
+        const val CHANNEL_ID: String = HubNotifier.CHANNEL_ID
 
         /** Human-readable channel name shown in system settings. */
-        const val CHANNEL_NAME: String = "Ecosystem Hub"
+        const val CHANNEL_NAME: String = HubNotifier.CHANNEL_NAME
 
-        const val NOTIFICATION_ID: Int = 1
+        const val NOTIFICATION_ID: Int = HubNotifier.NOTIFICATION_ID
 
-        const val NOTIFICATION_TITLE: String = "Ecosystem Hub running"
+        const val NOTIFICATION_TITLE: String = HubNotifier.NOTIFICATION_TITLE
 
-        const val NOTIFICATION_TEXT: String = "Waiting for paired devices"
+        const val NOTIFICATION_TEXT: String = HubNotifier.NOTIFICATION_TEXT
 
         /**
          * Optional hub port override. Absent in normal use (the default port is

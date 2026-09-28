@@ -8,6 +8,7 @@ import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.ext.SdkExtensions
 import com.glassstorm.phonemanager.core.domain.adapter.network.Discovery
+import com.glassstorm.phonemanager.core.domain.adapter.network.PeerResolver
 import com.glassstorm.phonemanager.core.domain.network.DiscoveryEvent
 import com.glassstorm.phonemanager.core.domain.network.DiscoveryFailure
 import com.glassstorm.phonemanager.core.domain.network.DiscoverySelection
@@ -21,7 +22,8 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 
 /**
- * Android [Discovery] implementation over [NsdManager].
+ * Android implementation of BOTH narrow network ports — [Discovery] (advertise)
+ * and [PeerResolver] (resolve) — over one [NsdManager] + state machine.
  *
  * Advertises `_ecosys._tcp` and resolves the first peer, with three platform
  * accommodations:
@@ -37,7 +39,8 @@ import java.util.concurrent.atomic.AtomicReference
 class NsdDiscoveryAdapter(
     private val context: Context,
     private val gatewayFallback: PeerAddress?,
-) : Discovery {
+) : Discovery,
+    PeerResolver {
     private val nsd: NsdManager =
         context.getSystemService(Context.NSD_SERVICE) as NsdManager
 
