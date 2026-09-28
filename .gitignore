@@ -6,3 +6,6 @@ build/
 *.iml
 captures/
 .cxx/
+bin/
+.vscode/
+out/
