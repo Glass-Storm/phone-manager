@@ -68,7 +68,7 @@ class HubServerE2ETest {
         repo = FakeDeviceRepository()
         stt = FakeSttPort("mockpeer recognized utterance")
         sink = FakeFrameSink()
-        pairing = PairingServiceImpl(repo)
+        pairing = PairingServiceImpl.withClock(repo, clock = { System.currentTimeMillis() })
         val stream = StreamServiceImpl(stt, sink)
 
         // The transport under test: netty-shaded NIO, IPv4 explicit, ephemeral port.

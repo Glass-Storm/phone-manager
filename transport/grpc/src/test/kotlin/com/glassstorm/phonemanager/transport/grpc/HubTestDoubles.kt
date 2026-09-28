@@ -52,7 +52,7 @@ fun hubParts(): HubParts {
     val repo = FakeDeviceRepository()
     val stt = FakeSttPort()
     val sink = FakeFrameSink()
-    val pairing = PairingServiceImpl(repo)
+    val pairing = PairingServiceImpl.withClock(repo, clock = { System.currentTimeMillis() })
     return HubParts(
         repo = repo,
         stt = stt,

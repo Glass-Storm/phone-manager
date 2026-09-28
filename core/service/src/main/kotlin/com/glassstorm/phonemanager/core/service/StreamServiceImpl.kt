@@ -8,7 +8,6 @@ import com.glassstorm.phonemanager.core.model.RelaySession
 import com.glassstorm.phonemanager.core.model.RelayStats
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ClosedSendChannelException
@@ -17,12 +16,14 @@ import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import java.security.SecureRandom
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 
 /**
  * Audio/video relay use-cases with bounded queues and deterministic teardown.
+ *
+ * Orchestration only: this class owns the pumps and the session lifecycle, while
+ * [RelayStatsRecorder] owns the counters and [RelaySessionRegistry] owns the live
+ * session map.
  *
  * [SttPort] and [FrameSink] are CONSTRUCTOR dependencies, so any engine (offline
  * mock, cloud provider, recorder) can be composed in without `:service` knowing
@@ -41,9 +42,6 @@ import javax.inject.Inject
  * [closeSession] DRAINS rather than discards: it closes the queue, joins the
  * pumps (so already-queued frames still reach STT/sink), closes the result
  * channel, then releases the STT session exactly once. It never cancels.
- *
- * Counters are [AtomicLong] because the pumps run on [scope], not the caller's
- * thread.
  *
  * ## Constructor shape
  *
@@ -75,12 +73,9 @@ class StreamServiceImpl
         )
 
         private val random = SecureRandom()
-        private val sessions: ConcurrentHashMap<String, SessionState> = ConcurrentHashMap()
 
-        private val audioFrames = AtomicLong()
-        private val videoFrames = AtomicLong()
-        private val videoDropped = AtomicLong()
-        private val transcripts = AtomicLong()
+        private val stats = RelayStatsRecorder()
+        private val registry = RelaySessionRegistry()
 
         override fun openSession(deviceId: String): RelaySession {
             val relay = RelaySession(sessionId = newSessionId(), deviceId = deviceId)
@@ -93,7 +88,7 @@ class StreamServiceImpl
                     launch { audioPump(sessionId, queue, results) }
                     launch { videoPump(sessionId, queue) }
                 }
-            sessions[sessionId] = SessionState(relay, queue, results, pump)
+            registry.register(sessionId, SessionState(relay, queue, results, pump))
             return relay
         }
 
@@ -102,7 +97,7 @@ class StreamServiceImpl
             audioPcm16: ByteArray,
             sampleRateHz: Int,
         ) {
-            val state = sessions[sessionId] ?: return
+            val state = registry.find(sessionId) ?: return
             try {
                 // Parks while the audio queue is full — audio is never dropped.
                 state.queue.admitAudio(audioPcm16)
@@ -111,38 +106,30 @@ class StreamServiceImpl
                 // unknown session. Not admitted, so it is not counted.
                 return
             }
-            audioFrames.incrementAndGet()
+            stats.onAudioFrame()
         }
 
         override fun pushVideo(
             sessionId: String,
             h264Nal: ByteArray,
         ) {
-            val state = sessions[sessionId] ?: return
-            videoFrames.incrementAndGet()
-            if (state.queue.admitVideo(h264Nal)) videoDropped.incrementAndGet()
+            val state = registry.find(sessionId) ?: return
+            stats.onVideoOffered(dropped = state.queue.admitVideo(h264Nal))
         }
 
-        override fun results(sessionId: String): Flow<RelayResult> = sessions[sessionId]?.results?.receiveAsFlow() ?: emptyFlow()
+        override fun results(sessionId: String): Flow<RelayResult> = registry.find(sessionId)?.results?.receiveAsFlow() ?: emptyFlow()
 
         override suspend fun closeSession(sessionId: String) {
             // remove FIRST: a concurrent push then sees "closed" and is a no-op, so no
             // frame can be enqueued into a queue that is about to be closed.
-            val state = sessions.remove(sessionId) ?: return
+            val state = registry.remove(sessionId) ?: return
             state.queue.close()
             state.pump.join()
             state.results.close()
             sttPort.close(sessionId)
         }
 
-        override fun stats(): RelayStats =
-            RelayStats(
-                audioFrames = audioFrames.get(),
-                videoFrames = videoFrames.get(),
-                videoDropped = videoDropped.get(),
-                transcripts = transcripts.get(),
-                liveSessions = sessions.size,
-            )
+        override fun stats(): RelayStats = stats.snapshot(registry.size())
 
         private suspend fun audioPump(
             sessionId: String,
@@ -153,7 +140,7 @@ class StreamServiceImpl
                 val text =
                     sttPort.transcribe(sessionId, pcm, StreamService.AUDIO_SAMPLE_RATE_HZ)
                 if (text != null) {
-                    transcripts.incrementAndGet()
+                    stats.onTranscript()
                     results.send(RelayResult(text = text, speakerLabel = "", ptsMs = 0L))
                 }
             }
@@ -173,13 +160,6 @@ class StreamServiceImpl
             val bytes = ByteArray(16).also { random.nextBytes(it) }
             return bytes.joinToString("") { "%02x".format(it) }
         }
-
-        private class SessionState(
-            val relay: RelaySession,
-            val queue: RelayQueue,
-            val results: Channel<RelayResult>,
-            val pump: Job,
-        )
 
         companion object {
             /** Audio buffer depth in frames. Generous: audio must never be dropped. */

@@ -298,8 +298,6 @@ class GrpcMappingTest {
             return outcome
         }
 
-        override fun verifyToken(token: String): Device? = null
-
         override fun touchLastSeen(
             deviceId: String,
             seenAtMs: Long,

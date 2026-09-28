@@ -163,8 +163,6 @@ class FakePairingService(
         role: String,
     ): PairOutcome = PairOutcome.Rejected(reason = PairOutcome.REASON_PIN_INVALID)
 
-    override fun verifyToken(token: String): Device? = null
-
     override fun touchLastSeen(
         deviceId: String,
         seenAtMs: Long,

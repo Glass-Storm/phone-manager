@@ -227,7 +227,7 @@ class StreamRelayTest {
         val repo = FakeDeviceRepository()
         val stt = FakeSttPort("relay utterance")
         val sink = FakeFrameSink()
-        val pairing = PairingServiceImpl(repo)
+        val pairing = PairingServiceImpl.withClock(repo, clock = { System.currentTimeMillis() })
         val stream = StreamServiceImpl.forTesting(stt, sink, scope = scope)
 
         val name = InProcessServerBuilder.generateName()

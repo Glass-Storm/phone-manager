@@ -70,7 +70,7 @@ class FullE2eTest {
         repo = FakeDeviceRepository()
         stt = FakeSttPort("full e2e utterance")
         sink = FakeFrameSink()
-        pairing = PairingServiceImpl(repo)
+        pairing = PairingServiceImpl.withClock(repo, clock = { System.currentTimeMillis() })
         val stream = StreamServiceImpl(stt, sink)
 
         // The PRODUCTION adapter with an explicit loopback bind, exactly as the

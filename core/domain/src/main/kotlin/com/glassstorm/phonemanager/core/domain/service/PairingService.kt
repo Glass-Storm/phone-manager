@@ -7,8 +7,8 @@ import com.glassstorm.phonemanager.core.model.Pairing
 /**
  * Pairing + token authority use-cases.
  *
- * Port (interface) owned by `:core:domain`; implemented in `:service`, which resolves
- * its `DeviceRepository` collaborator through the Context registry.
+ * Port (interface) owned by `:core:domain`; implemented in `:core:service`, which
+ * receives its `DeviceRepository` collaborator by constructor injection.
  *
  * Security contract every implementation MUST honour:
  *  * a PIN is single-use and dies with its window (TTL) or its first success;
@@ -36,14 +36,8 @@ interface PairingService {
     ): PairOutcome
 
     /**
-     * Resolve the device owning [token] AND bump its last-seen instant.
-     *
-     * Returns `null` when the token is unknown, tampered, or belongs to a revoked
-     * device.
+     * Record that [deviceId] was seen at [seenAtMs] without re-deriving its token.
      */
-    fun verifyToken(token: String): Device?
-
-    /** Record that [deviceId] was seen at [seenAtMs] without re-deriving its token. */
     fun touchLastSeen(
         deviceId: String,
         seenAtMs: Long,
