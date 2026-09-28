@@ -4,6 +4,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.ComposeContentTestRule
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.lifecycle.ViewModelProvider
 import com.google.common.truth.Truth.assertThat
 import org.junit.Rule
@@ -57,6 +58,16 @@ class AppShellTest {
     fun `settings route renders its placeholder`() {
         composeRule.setShellContent(startRoute = "settings")
         composeRule.onNodeWithText("Settings").assertIsDisplayed()
+    }
+
+    @Test
+    fun `navigating from dashboard renders the pairing screen`() {
+        composeRule.setShellContent(startRoute = "dashboard")
+        composeRule.onNodeWithText("Dashboard").assertIsDisplayed()
+
+        composeRule.onNodeWithText("PAIRING").performClick()
+
+        composeRule.onNodeWithText("Pairing window").assertIsDisplayed()
     }
 
     @Test
