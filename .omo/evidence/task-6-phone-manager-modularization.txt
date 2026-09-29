@@ -1,0 +1,197 @@
+TASK 6 — build-logic convention plugins (phone-manager-modularization)
+=========================================================================
+Repo: /home/chaos/workplace/fyp/phone-manager
+HEAD at start: 5fc223a
+Date: 2026-09-21
+MANDATORY preamble used on EVERY gradle command:
+  JAVA_HOME=/home/chaos/.jdk/jdk-21.0.12.1+1 ANDROID_HOME=/home/chaos/Android/Sdk ./gradlew <task>
+
+
+1. WHAT WAS CREATED
+-------------------
+A `build-logic/` composite build (Gradle convention plugins), included from the
+root settings via `pluginManagement { includeBuild("build-logic") }`. It is NOT
+`buildSrc`, so editing a convention plugin does not invalidate the whole build.
+
+Files (tracked):
+  build-logic/settings.gradle.kts
+  build-logic/convention/build.gradle.kts
+  build-logic/convention/src/main/kotlin/com/glassstorm/phonemanager/buildlogic/
+      ProjectExtensions.kt
+      KotlinLibraryConventionPlugin.kt
+      AndroidCommon.kt
+      AndroidLibraryConventionPlugin.kt
+      AndroidApplicationConventionPlugin.kt
+      KtlintConventionPlugin.kt
+
+Plugin ids (registered in `gradlePlugin { plugins { register(...) } }`, published
+as marker properties under META-INF/gradle-plugins/):
+  phonemanager.kotlin.library       -> KotlinLibraryConventionPlugin
+  phonemanager.android.library      -> AndroidLibraryConventionPlugin
+  phonemanager.android.application  -> AndroidApplicationConventionPlugin
+  phonemanager.ktlint               -> KtlintConventionPlugin
+
+Marker proof:
+  $ cat build-logic/convention/build/resources/main/META-INF/gradle-plugins/*.properties
+  implementation-class=...AndroidApplicationConventionPlugin
+  implementation-class=...AndroidLibraryConventionPlugin
+  implementation-class=...KotlinLibraryConventionPlugin
+  implementation-class=...KtlintConventionPlugin
+
+`phonemanager.ksp` was DELIBERATELY NOT created: it is T7's scope (KSP2 + Dagger),
+and shipping a non-load-bearing stub would have been cosmetic. The T6 plan text
+permits leaving it to T7.
+
+Catalog wiring (`gradle/libs.versions.toml`) — additions ONLY, no version changed:
+  + kotlin-test = { group = "org.jetbrains.kotlin", name = "kotlin-test", version.ref = "kotlin" }
+  + android-gradlePlugin / kotlin-gradlePlugin / ktlint-gradlePlugin  (compileOnly plugin-build deps)
+  + phonemanager-kotlin-library / -android-library / -android-application / -ktlint  (no version: included build is the source)
+Verified by `git diff gradle/libs.versions.toml`: every hunk is a `+` line. No pin
+was edited (AGP 8.13.0, Kotlin 2.1.0, ktlint 14.2.0, protobuf 0.10.0, protoc 3.25.9,
+grpc 1.84.0, grpcKotlin 1.5.0, robolectric 4.16.1 all unchanged).
+
+Root `build.gradle.kts`: the `phonemanager.*` ids declared `apply false`; the
+`subprojects { plugins.withId("org.jlleitschuh.gradle.ktlint") { ... } }` filter
+block was REMOVED (moved into the convention plugin); the `e2e` task is untouched.
+
+
+2. KTLINT FILTER MOVED VERBATIM (behaviour identical)
+-----------------------------------------------------
+Moved from root build.gradle.kts:28-53 into KtlintConventionPlugin.kt. BOTH
+exclusions preserved:
+  - the absolute-path Spec: `it.file.path.contains("/build/generated/")`
+  - the Lumo globs: `**/ui/Theme.kt`, `**/ui/Color.kt`, `**/ui/Typography.kt`,
+    `**/ui/components/**`, `**/ui/foundation/**`
+`.editorconfig` is UNTOUCHED by this task:
+  $ git diff --stat .editorconfig        -> empty
+  $ grep -c 'ktlint_standard_.*-naming|ktlint_standard_filename' .editorconfig -> 0
+    (0 = the T4 naming rules are still ENABLED; nothing was re-disabled)
+
+
+3. BEFORE / AFTER MODULE SCRIPT LENGTHS  (wc -l)
+-----------------------------------------------
+module      before(HEAD)  after   delta
+domain           26         8     -18
+service         100        84     -16
+adapter          71        44     -27
+app             114        83     -31
+testkit          20        10     -10
+root build       64        32     -32
+root settings    24        26      +2   (the two includeBuild lines)
+TOTAL module scripts: 331 -> 229  (-102 lines)
+Root script: 64 -> 32 (-32; the ktlint block moved into the plugin).
+
+
+4. LOAD-BEARING PROOF — config now lives in exactly ONE place
+-------------------------------------------------------------
+  $ grep -rn 'compileSdk' */build.gradle.kts build.gradle.kts
+    -> 0 matches in any module/root script
+  $ grep -rn 'compileSdk' build-logic/ --include='*.kt'
+    -> build-logic/.../AndroidCommon.kt:28:    extension.compileSdk = 36   (the single definition)
+  $ grep -rn 'minSdk' */build.gradle.kts
+    -> only a comment ("minSdk is 29.") in app/build.gradle.kts; no assignment
+  $ grep -rn 'minSdk' build-logic/ --include='*.kt'
+    -> AndroidCommon.kt:31:        minSdk = 29                       (the single definition)
+
+PROPAGATION PROBE (mutation, restored):
+Temporarily changed `extension.compileSdk = 36` -> `= 99` in AndroidCommon.kt,
+then ran :adapter:compileDebugKotlin. The invalid value surfaced IN THE ADAPTER:
+  WARNING: We recommend using a newer Android Gradle plugin to use compile SDK 99.0
+  ...
+  FAILURE: Build failed with an exception.
+=> editing the ONE convention value flows into every Android module. Restored to
+36 and `:adapter:compileDebugKotlin` -> BUILD SUCCESSFUL.
+
+KTLINT-EXCLUSION PROBE (mutation, restored):
+Removed the `/build/generated/` Spec from KtlintConventionPlugin.kt, then
+`:service:ktlintCheck`:
+  > Task :service:ktlintMainSourceSetCheck FAILED
+  .../service/build/generated/sources/proto/main/kotlin/ecosys/v1/EcosysKt.kt:6:1
+      File annotations should be separated from file contents with a blank line
+  ... (dozens of violations across the generated proto sources)
+=> the exclusion is genuinely load-bearing. Restored; `:service:ktlintCheck`
+-> BUILD SUCCESSFUL.
+
+
+5. ACCEPTANCE GATES
+-------------------
+(a) `./gradlew projects`
+    Root project 'phone-manager'
+    +--- Project ':adapter'
+    +--- Project ':app'
+    +--- Project ':domain'
+    +--- Project ':service'
+    \--- Project ':testkit'
+    Included builds:
+    \--- Included build ':build-logic'
+    BUILD SUCCESSFUL
+    => the same five modules; build-logic appears as an included build, not a module.
+
+(b) `./gradlew build -x test`  -> BUILD SUCCESSFUL
+    (230 actionable tasks; all five modules assembled including :app:assembleRelease
+     with R8 minify+shrink)
+
+(c) FULL TEST GATE:
+    ./gradlew :domain:test :service:test :adapter:testDebugUnitTest :app:testDebugUnitTest
+    -> BUILD SUCCESSFUL
+    Parsed from JUnit XML (NOT the banner):
+      domain  : tests=45  failures=0 errors=0   (4 result files)
+      service : tests=63  failures=0 errors=0   (10 result files)
+      adapter : tests=96  failures=0 errors=0   (14 result files)
+      app     : tests=107 failures=0 errors=0   (18 result files)
+      TOTAL   : tests=311 failures=0 errors=0
+    => EXACT match to the 311 baseline (domain 45 / service 63 / adapter 96 / app 107).
+
+(d) `./gradlew ktlintCheck` -> BUILD SUCCESSFUL (42 tasks, all up-to-date)
+    The same exclusions are active; generated proto + vendored Lumo stay out of scope.
+
+(e) `./gradlew e2e` -> BUILD SUCCESSFUL; the task still exists and is a thin alias:
+    `help --task e2e` -> "End-to-end mockpeer integration suites (JVM harness + Robolectric app hub)".
+    E2E XML confirms real execution:
+      service HubServerE2ETest    tests=4 failures=0 errors=0 skipped=0
+      app     FullE2eTest         tests=1 failures=0 errors=0 skipped=0
+
+
+6. SEMANTICS PRESERVED (no behaviour change)
+--------------------------------------------
+- compileSdk 36 / minSdk 29 / targetSdk 29 (app only) / Java 17 / Kotlin JVM 17:
+  same values, now sourced from the convention plugins.
+- Android modules keep `isIncludeAndroidResources = true` (Robolectric) and
+  `lint { disable += "ExpiredTargetSdkVersion" }` — both moved into AndroidCommon.
+- `:adapter` keeps `namespace = "com.glassstorm.phonemanager.adapter"` and
+  `consumerProguardFiles("transport/grpc/r8-rules.pro")`.
+- `:app` keeps applicationId, versionCode/Name, compose buildFeature,
+  isCoreLibraryDesugaringEnabled, release minify+shrink+proguardFiles.
+- `:service` keeps its ENTIRE protobuf codegen block (protoc/plugins/lite-on-both)
+  and all gRPC deps; the lite-only invariant still holds:
+    grep -rc GeneratedMessageLite service/build/generated/.../PairRequest.java -> 16
+    grep -rn GeneratedMessageV3 service/build/generated | wc -l -> 0
+- No dependency version changed; every main/test dependency from the old scripts
+  is still declared (JVM: coroutines stays per-module, test battery now in the
+  plugin; Android: shared battery in the plugin, module-specific deps retained).
+- No `.proto`, source, or `.editorconfig` change.
+
+
+7. DEVIATIONS
+-------------
+- `phonemanager.ksp` NOT created (T7 owns KSP2+Dagger; a non-functional stub would
+  not compile-verify meaningfully).
+- Namespaces for Android modules are PATH-DERIVED by default in
+  `configureAndroidCommon` (`:adapter` -> com.glassstorm.phonemanager.adapter, and
+  later `:transport:grpc` -> ...transport.grpc). `:adapter` still declares its
+  namespace explicitly, so behaviour is byte-identical today; the derivation exists
+  so T9-T14 can add a module with ~10 lines. `:app` overrides it explicitly.
+- `kotlin-test` was added to the catalog as an alias. Previously modules used
+  `kotlin("test")`; the plugin reads the catalog instead, so the same artifact is
+  resolved from the same Kotlin 2.1.0 pin (`org.jetbrains.kotlin:kotlin-test`).
+
+
+8. CLEANUP
+----------
+- Mutation probes restored from /tmp/opencode backups; verified by grep and by a
+  final green run of the mutated tasks.
+- No *.bak files left in the repo.
+- `build-logic/**/build/` and `build-logic/.gradle/` are covered by the existing
+  root .gitignore (`build/`, `.gradle/`); only source + build scripts are staged.
+- `.gitignore` (+bin/ .vscode/ out/) was already modified before this task started;
+  it is NOT part of this commit.

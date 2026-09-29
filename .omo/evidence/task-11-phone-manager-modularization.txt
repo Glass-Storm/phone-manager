@@ -1,0 +1,127 @@
+T11 — Create :core:service (contract-free, grpc-free) + extract TokenVerifier to :core:domain
+================================================================================================
+
+Repo: /home/chaos/workplace/fyp/phone-manager
+HEAD before: 0bee05b (T10)
+Commit: refactor(core): extract contract-free grpc-free service module
+
+1. WHAT CHANGED
+---------------
+NEW MODULE `:core:service` (settings.gradle.kts `include(":core:service")`),
+package `com.glassstorm.phonemanager.core.service`, plugins
+`phonemanager.kotlin.library` + `phonemanager.ktlint`.
+
+Dependencies declared (core/service/build.gradle.kts):
+    api(project(":core:domain"))
+    implementation(libs.kotlinx.coroutines.core)
+NOTHING else. No contract, no grpc, no protobuf, no Android.
+
+git mv'd MAIN files (package -> ...core.service[.security]):
+    service/.../DeviceServiceImpl.kt   -> core/service/.../core/service/DeviceServiceImpl.kt
+    service/.../PairingServiceImpl.kt  -> core/service/.../core/service/PairingServiceImpl.kt
+    service/.../RelayQueue.kt          -> core/service/.../core/service/RelayQueue.kt
+    service/.../StreamServiceImpl.kt   -> core/service/.../core/service/StreamServiceImpl.kt
+    service/.../security/TokenCodec.kt -> core/service/.../core/service/security/TokenCodec.kt
+
+git mv'd TEST files:
+    DeviceServiceTest.kt, PairingConcurrencyTest.kt, PairingLifecycleTest.kt, TokenCodecTest.kt
+`TestDoubles.kt` was COPIED (not moved): the 5 files that stay in `:service` for T12 also
+use its fakes. Both copies resolve to the same package `...core.service`; `:service`'s copy
+is a duplicate that T14 deletes. (The plan's "5 of 10 test files moved" counts TestDoubles;
+it is a copy plus a move, so both suites compile.)
+
+TOKENVERIFIER EXTRACTION (the cycle-breaker):
+    NEW core/domain/.../core/domain/security/TokenVerifier.kt  (the `fun interface` + doc)
+    DELETED from service/.../security/AuthInterceptor.kt (now only the interceptor class,
+    imports TokenVerifier from `com.glassstorm.phonemanager.core.domain.security`)
+    PairingServiceImpl implements it via the core.domain.security import.
+    Consumers updated: app (AppComposition, AppCompositionTest), adapter
+    (HubServerAdapter, HubTestDoubles), service test (AuthInterceptorTest).
+
+`:service` now: `api(project(":core:service"))` added, keeping `api(project(":contract"))`
+and its grpc deps (it still holds the gRPC classes until T12).
+
+2. VERIFICATION — COMMANDS + PARSED RESULTS
+-------------------------------------------
+Preamble on every Gradle call:
+  JAVA_HOME=/home/chaos/.jdk/jdk-21.0.12.1+1 ANDROID_HOME=/home/chaos/Android/Sdk ./gradlew <task>
+
+(a) `:core:service:test` -> BUILD SUCCESSFUL (6s).
+(b) FULL SUITE with --rerun-tasks -> BUILD SUCCESSFUL in 37s, 95 tasks executed.
+    XML-parsed (python glob over build/test-results):
+        :contract:      tests=8   failures=0 errors=0 skipped=0
+        :core:model:    tests=0   failures=0 errors=0 skipped=0
+        :core:domain:   tests=45  failures=0 errors=0 skipped=0
+        :core:service:  tests=26  failures=0 errors=0 skipped=0
+        :service:       tests=29  failures=0 errors=0 skipped=0
+        :adapter:       tests=96  failures=0 errors=0 skipped=0
+        :app:           tests=107 failures=0 errors=0 skipped=0
+        TOTAL:          tests=311 failures=0 errors=0 skipped=0   (== baseline 311)
+(c) `ktlintCheck` -> BUILD SUCCESSFUL.
+(d) `:app:assembleRelease` -> BUILD SUCCESSFUL in 1m46s.
+
+3. MANUAL QA — PURITY, MODULE GRAPH, EXTRACTION, BYTE-IDENTITY
+--------------------------------------------------------------
+Purity guards (all 0 = good):
+    grep -rn 'ecosys\.v1\|io\.grpc\|protobuf' core/service/src        -> 0
+    grep -rn 'project(":contract")' core/service/build.gradle.kts     -> 0
+    grep -rn 'phonemanager\.\(adapter\|app\)\.' core/service/src      -> 0
+    grep -rn 'transport' core/service (excl /build/)                  -> only 2 COMMENT lines
+        (a KDoc sentence + a build-file comment); zero code/import references.
+
+Module graph:
+    ./gradlew :core:service:dependencies --configuration compileClasspath
+      +--- project :core:domain
+      |    +--- project :core:model
+    No io.grpc, no protobuf. `core:service` mentions `:transport:grpc` NOWHERE as a
+    dependency (module does not exist yet; nothing references it).
+    ./gradlew :service:dependencies --configuration compileClasspath
+      +--- project :core:service          (api edge, visible transitively)
+
+TokenVerifier extraction proof:
+    grep -rln "fun interface TokenVerifier" core service -> ONLY
+        core/domain/src/main/kotlin/com/glassstorm/phonemanager/core/domain/security/TokenVerifier.kt
+    grep -c "fun interface TokenVerifier" AuthInterceptor.kt -> 0
+    git diff AuthInterceptor.kt = +1 import, -11 comment+declaration lines, nothing else.
+    No cycle: core:service implements a core:domain port; core:domain does not depend
+    on core:service, so `core:service -> core:domain` is acyclic.
+
+Byte-identity (moved files, logic-only diff after stripping `package`/`import` lines;
+original from `git show HEAD:<old path>`):
+    DeviceServiceImpl     LOGIC IDENTICAL
+    PairingServiceImpl    LOGIC IDENTICAL
+    RelayQueue            LOGIC IDENTICAL
+    StreamServiceImpl     LOGIC IDENTICAL
+    TokenCodec            LOGIC IDENTICAL
+    DeviceServiceTest     LOGIC IDENTICAL
+    PairingConcurrencyTest LOGIC IDENTICAL
+    TokenCodecTest        LOGIC IDENTICAL
+    TestDoubles (copy)    LOGIC IDENTICAL
+    PairingLifecycleTest  DIFFERENCE == the 2 fully-qualified `...security.TokenCodec`
+                          references repointed to `core.service.security.TokenCodec` (intended).
+    Only package/import lines differ elsewhere (verified by full diff).
+
+Load-bearing logic untouched:
+    PairingServiceImpl `@Synchronized` annotations: 3 (openWindow, stopWindow, pair) + the
+    KDoc mention — unchanged, PIN single-use semantics intact.
+    RelayQueue drop-oldest/ park-on-full backpressure: LOGIC IDENTICAL.
+    StreamServiceImpl drain-on-close teardown: LOGIC IDENTICAL.
+
+NEGATIVE PROBE (the purity grep bites): injected `import io.grpc.Status` into
+core:service DeviceServiceImpl -> `grep -rn 'io\.grpc' core/service/src` = 1; reverted ->
+0. The guard is not vacuous.
+
+4. CLEANUP
+----------
+- Probe import reverted; `grep io.grpc core/service/src` = 0.
+- No temporary artifacts left; only intended source/build-file changes.
+- Untracked `core/service/build.gradle.kts` and the copied TestDoubles file are intended.
+
+5. RISKS
+--------
+- `:service` retains a DUPLICATE `TestDoubles.kt` (package ...core.service) because T12's
+  tests still need it; T14 deletes `:service` entirely. Two copies of the same package in
+  two modules is fine here (no module depends on both).
+- `service/bin/` holds stale pre-rename compiled sources; it is git-ignored and NOT built.
+- R8/minify of `:app:assembleRelease` passed; the gRPC classes still live in `:service`
+  until T12, so no transport behaviour changed in this task.

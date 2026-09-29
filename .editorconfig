@@ -1,18 +1,19 @@
 # ktlint configuration for phone-manager.
 #
-# The repo's naming convention is deliberate and documented in README.md under
-# "Repo conventions" -> "Naming": snake_case files, and Go-style PascalCase
-# members. ktlint's default naming rules assume Kotlin/Java idiom instead
-# (PascalCase `ClassName.kt` files, camelCase members), so the two cannot both
-# be satisfied at once. Rather than fight the convention with ktlint, the three
-# naming rules below are disabled — and ONLY those three. Every code-correctness
-# rule (indentation, unused/wildcard imports, import ordering, final newline,
-# blank lines, spacing, wrapping, …) stays ENABLED and is genuinely enforced.
+# The repo follows the standard Kotlin naming convention, as documented in
+# README.md under "Repo conventions" -> "Naming": PascalCase `ClassName.kt`
+# files, lowerCamelCase functions and properties, and UPPER_SNAKE_CASE
+# `const val`s. ktlint's default naming rules already assume this convention,
+# so they are ENABLED here and genuinely enforced — nothing is disabled.
+#
+# Every code-correctness rule (indentation, unused/wildcard imports, import
+# ordering, final newline, blank lines, spacing, wrapping, …) is likewise
+# ENABLED. No baseline file is used.
 #
 # The rule ids are the ktlint 1.5.0 standard-rule ids — the version
 # ktlint-gradle 14.2.0 pulls (verified with
-# `./gradlew :domain:dependencies --configuration ktlint`), so the `disabled`
-# keys resolve against the real ruleset. No baseline file is used.
+# `./gradlew :domain:dependencies --configuration ktlint`), so any keys below
+# resolve against the real ruleset.
 
 root = true
 
@@ -25,22 +26,14 @@ indent_style = space
 indent_size = 4
 
 [*.{kt,kts}]
-# CONVENTION: "Go-style PascalCase members (`GoStart`, `GoBoundPort`)"
-# (README.md, Repo conventions -> Naming). Members and `const val`s are named
-# with a PascalCase vocabulary (`GoAudio`, `GoVideo`, `GoReasonNoWindow`) instead
-# of camelCase / SCREAMING_SNAKE_CASE. ktlint's property-naming rule enforces the
-# Kotlin default and cannot be told to accept PascalCase for non-constant
-# properties, so it is disabled.
-ktlint_standard_property-naming = disabled
-
-# CONVENTION: functions are Go-style PascalCase too (`GoStart`, `GoBoundPort`,
-# `FromContext`, `Register`). ktlint's function-naming rule demands a lowercase
-# first letter for non-factory functions; the convention requires the opposite.
-# Disabled.
-ktlint_standard_function-naming = disabled
-
-# CONVENTION: "snake_case files" (README.md, Repo conventions -> Naming), e.g.
-# `device_repository.kt`, `context.kt`, `dashboard_screen.kt`. ktlint's filename
-# rule demands `ClassName.kt` PascalCase (and would even flag a snake_case file
-# for a single class). Disabled.
-ktlint_standard_filename = disabled
+# No rule is disabled: the Kotlin naming convention IS the ktlint default
+# (PascalCase files, lowerCamelCase members, UPPER_SNAKE_CASE constants), so
+# the standard naming rules run unmodified and fail the build on violation.
+#
+# The one rule parameter is the documented Compose carve-out. Compose names a
+# function that emits UI in PascalCase (it is treated like a factory/type), which
+# is the opposite of the camelCase a plain function takes; ktlint's own guidance
+# is to exempt `@Composable` functions from function-naming rather than lowercase
+# them. The rule stays ENABLED — it still enforces camelCase on every other
+# function, and only skips functions annotated `@Composable`.
+ktlint_function_naming_ignore_when_annotated_with = Composable

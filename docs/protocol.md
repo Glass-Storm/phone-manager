@@ -6,7 +6,7 @@ smart-glasses app and the Ubuntu daemon. Read it before you write a client. The
 source of truth is the proto file itself; this document explains the semantics
 around it.
 
-Source of truth: [`service/src/main/proto/ecosys/v1/ecosys.proto`](../service/src/main/proto/ecosys/v1/ecosys.proto).
+Source of truth: [`contract/src/main/proto/ecosys/v1/ecosys.proto`](../contract/src/main/proto/ecosys/v1/ecosys.proto).
 
 ---
 
@@ -140,18 +140,18 @@ silently claims a role or a media kind.
 
 1. **The hub opens a pairing window.** At most ONE window exists at a time. It
    carries a 6-digit PIN drawn from `SecureRandom`, and a TTL. The app's default
-   TTL is **120 seconds** (`PairingViewModel.GoWindowTtlMs = 120_000L`).
+   TTL is **120 seconds** (`PairingViewModel.WINDOW_TTL_MS = 120_000L`).
 2. **The peer calls `Pair` with that PIN**, its device name, and its role.
 3. **The hub validates the PIN** in constant time, then:
-   - burns the PIN first (single-use: a successful `Pair` consumes it, and a
-     second attempt with the same PIN is rejected with `pin-consumed`),
-   - derives a bearer token, stores only the token HASH (see below), and returns
-     `token` + `device_id` in `PairResponse`.
+    - burns the PIN first (single-use: a successful `Pair` consumes it, and a
+      second attempt with the same PIN is rejected with `pin-consumed`),
+    - derives a bearer token, stores only the token HASH (see below), and returns
+      `token` + `device_id` in `PairResponse`.
 4. **The peer keeps the token** and sends it on every subsequent call as gRPC
    metadata `authorization: Bearer <token>`.
 
 Wrong PINs are counted. After **5 failed attempts**
-(`PairingService.GoMaxPinAttempts = 5`) the current PIN is locked; only a fresh
+(`PairingService.MAX_PIN_ATTEMPTS = 5`) the current PIN is locked; only a fresh
 window clears the counter and issues a new PIN. The failed-attempt counter lives
 with the window, in memory.
 
@@ -219,7 +219,7 @@ sends media frames; the hub emits `transcript` / `result` frames back on the
 SAME stream.
 
 - **Audio is raw little-endian PCM16, mono, at 16 kHz.** The hub's constant is
-  `StreamService.GoAudioSampleRateHz = 16_000`. The canonical chunk is 20 ms,
+  `StreamService.AUDIO_SAMPLE_RATE_HZ = 16_000`. The canonical chunk is 20 ms,
   which is 320 samples, 640 bytes. The hub never decodes the audio; it forwards
   it to the configured STT engine.
 - **Video is raw H.264 NAL units, OPAQUE.** The hub never decodes, re-encodes,
@@ -235,10 +235,10 @@ SAME stream.
 The relay keeps SEPARATE queues per media kind, because one queue cannot express
 both policies.
 
-| Media | Policy                                                        | Observable effect                                                                          |
-| ----- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| Audio | **NEVER dropped.** The producer PARKS when the queue is full. | The audio counter only ever grows for accepted frames; no audio is silently lost.          |
-| Video | **Drops the OLDEST queued frame** under load.                 | The hub tracks a drop counter (`GoVideoDropped`), so a peer can see that frames were shed. |
+| Media | Policy                                                        | Observable effect                                                                        |
+| ----- | ------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Audio | **NEVER dropped.** The producer PARKS when the queue is full. | The audio counter only ever grows for accepted frames; no audio is silently lost.        |
+| Video | **Drops the OLDEST queued frame** under load.                 | The hub tracks a drop counter (`videoDropped`), so a peer can see that frames were shed. |
 
 Session teardown DRAINS rather than cancels: closing a session joins the pumps,
 then closes the STT session exactly once. A peer cancel or a downstream failure
@@ -275,7 +275,7 @@ treating the fallback as a failure. The advertised port is the hub's gRPC port.
 ## 8. Transport and port
 
 - Transport: **plaintext gRPC (h2c) over the LAN.** No TLS in v1.
-- Default hub port: **9000** (`AppComposition.GO_DEFAULT_HUB_PORT`). Tests bind
+- Default hub port: **9000** (`AppComposition.DEFAULT_HUB_PORT`). Tests bind
   an ephemeral port (`0`) and read back the bound port.
 - Bind address: the app binds all interfaces (`0.0.0.0`) in production, because
   the phone hosts the AP and its LAN peers must be able to dial in. Tests bind
@@ -359,3 +359,54 @@ Field numbers and enum values are permanent. If you retire something, mark it
 reserved; do not hand its number to something else. A peer generated from an
 older revision of this file must keep working against a hub generated from a
 newer one, and vice versa.
+
+### Consuming this contract as an artifact
+
+The `.proto` above lives in the `:contract` Gradle module, which publishes itself
+so a peer does NOT need to clone this repository. The coordinates are:
+
+```
+com.glassstorm.phonemanager:contract:1.0.0
+```
+
+Two JARs are published for that coordinate:
+
+| Artifact                             | Contains                                                       |
+| ------------------------------------ | -------------------------------------------------------------- |
+| `contract-1.0.0.jar`                 | the compiled protobuf/gRPC-lite bindings (Java + Kotlin, lite) |
+| `contract-1.0.0-proto.jar` (`proto`) | the `.proto` source of truth at `ecosys/v1/ecosys.proto`       |
+
+A peer that generates its own client (Go, Swift, another language) needs the
+`proto` classifier JAR — the compiled hub classes are not enough. Extract it and
+point `protoc` at the extracted root:
+
+```bash
+./gradlew :contract:publishToMavenLocal   # run inside phone-manager
+unzip -o ~/.m2/repository/com/glassstorm/phonemanager/contract/1.0.0/contract-1.0.0-proto.jar -d /tmp/contract-proto
+protoc -I /tmp/contract-proto --go_out=... ecosys/v1/ecosys.proto
+```
+
+A JVM peer instead depends on the main coordinate and gets the bindings (plus the
+grpc/protobuf-lite runtime, which the published POM lists as transitive
+dependencies):
+
+```kotlin
+dependencies { implementation("com.glassstorm.phonemanager:contract:1.0.0") }
+```
+
+Publishing targets Maven **local** only: there is no remote repository, no
+signing, and no credentials in this build. To publish to a shared repository,
+add one under `publishing.repositories` in `contract/build.gradle.kts` — the
+coordinates above stay the same.
+
+### Regenerating the bindings
+
+The bindings are generated, never hand-edited. `contract/build.gradle.kts` runs
+`protoc` with the `grpc` and `grpckt` plugins in `lite` mode over
+`contract/src/main/proto/ecosys/v1/ecosys.proto`. The Go half of the same codegen
+is `tools/mockpeer/gen.sh`, which reads this same file:
+
+```bash
+./gradlew :contract:generateProto   # Kotlin/Java + gRPC-lite bindings
+bash tools/mockpeer/gen.sh          # the Go reference peer's bindings
+```

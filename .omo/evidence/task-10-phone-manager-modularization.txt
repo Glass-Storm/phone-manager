@@ -1,0 +1,102 @@
+T10 — phone-manager-modularization
+Create :core:domain (ports + state machines + Context registry)
+HEAD before: a03473d (T9)   Date: 2026-09-21T14:49:00+08:00
+
+===== 1. MODULE CREATED =====
+$ cat core/domain/build.gradle.kts
+plugins {
+    alias(libs.plugins.phonemanager.kotlin.library)
+    alias(libs.plugins.phonemanager.ktlint)
+}
+
+dependencies {
+    // `api`, not `implementation`: the ports, the state machines, and the Context
+    // registry reference the model types in their public signatures, so any
+    // consumer of `:core:domain` needs them on its own compile classpath
+    // transitively.
+    api(project(":core:model"))
+    implementation(libs.kotlinx.coroutines.core)
+}
+
+===== 2. FILES MOVED (git mv, history follows) =====
+$ git status --short | grep -E "^R"
+RM OLD domain/adapter/config/AppConfig.kt -> NEW core/domain/adapter/config/AppConfig.kt
+RM OLD domain/adapter/network/Discovery.kt -> NEW core/domain/adapter/network/Discovery.kt
+RM OLD domain/adapter/network/HotspotController.kt -> NEW core/domain/adapter/network/HotspotController.kt
+RM OLD domain/adapter/relay/FrameSink.kt -> NEW core/domain/adapter/relay/FrameSink.kt
+RM OLD domain/adapter/repository/DeviceRepository.kt -> NEW core/domain/adapter/repository/DeviceRepository.kt
+RM OLD domain/adapter/speech/SttPort.kt -> NEW core/domain/adapter/speech/SttPort.kt
+RM OLD domain/adapter/transport/HubServer.kt -> NEW core/domain/adapter/transport/HubServer.kt
+RM OLD domain/context/Context.kt -> NEW core/domain/context/Context.kt
+RM OLD domain/network/DiscoveryStateMachine.kt -> NEW core/domain/network/DiscoveryStateMachine.kt
+RM OLD domain/network/HotspotStateMachine.kt -> NEW core/domain/network/HotspotStateMachine.kt
+RM OLD domain/service/DeviceService.kt -> NEW core/domain/service/DeviceService.kt
+RM OLD domain/service/PairingService.kt -> NEW core/domain/service/PairingService.kt
+RM OLD domain/service/StreamService.kt -> NEW core/domain/service/StreamService.kt
+RM OLD domain(test)/adapter/config/AppConfigTest.kt -> core/domain/src/test/kotlin/com/glassstorm/phonemanager/core/domain/adapter/config/AppConfigTest.kt
+RM OLD domain(test)/context/ContextTest.kt -> core/domain/src/test/kotlin/com/glassstorm/phonemanager/core/domain/context/ContextTest.kt
+RM OLD domain(test)/network/DiscoveryStateMachineTest.kt -> core/domain/src/test/kotlin/com/glassstorm/phonemanager/core/domain/network/DiscoveryStateMachineTest.kt
+RM OLD domain(test)/network/HotspotStateMachineTest.kt -> core/domain/src/test/kotlin/com/glassstorm/phonemanager/core/domain/network/HotspotStateMachineTest.kt
+
+===== 3. PACKAGE RENAME (byte-identity apart from pkg/FQ/KDoc-module-ref) =====
+17 moved files verified against HEAD via sed of com.glassstorm.phonemanager.domain. -> .core.domain.
+result: ALL 17 FILES byte-identical apart from the pkg/FQ-rename sed and the intended `:domain`->`:core:domain` KDoc module-ref.
+
+===== 4. IMPORTERS UPDATED =====
+source files rewritten (imports + FQ refs): 77
+$ grep -rn "com.glassstorm.phonemanager.domain." --include="*.kt" app/src service/src adapter/src testkit/src core/domain/src | wc -l
+0
+$ grep -rn "com.glassstorm.phonemanager.core.domain." --include="*.kt" app/src service/src adapter/src testkit/src core/domain/src | wc -l
+248
+
+===== 5. PURITY GREPS (all must be 0) =====
+  grep -rn 'import android' core/domain/src -> 0
+  grep -rn 'ecosys\.v1' core/domain/src -> 0
+  grep -rn 'dagger' core/domain/src -> 0
+  grep -rn '@Inject' core/domain/src -> 0
+  grep -rn '@Module' core/domain/src -> 0
+  grep -rn 'io\.grpc' core/domain/src -> 0
+  grep -rn 'protobuf' core/domain/src -> 0
+
+===== 6. MODULE GRAPH (:core:domain compileClasspath) =====
+$ ./gradlew :core:domain:dependencies --configuration compileClasspath | grep "project :"
++--- project :core:model   (ONLY project edge)
+
+===== 7. :domain MODULE REMOVED =====
+$ ls -d domain   -> (absent)
+(absent)
+$ grep -n "include" settings.gradle.kts
+21:include(":app")
+22:include(":service", ":adapter")
+26:include(":core:model")
+30:include(":core:domain")
+34:include(":contract")
+38:include(":testkit")
+domain/build.gradle.kts removed via git rm; domain/ directory deleted.
+
+===== 8. :core:domain:test =====
+
+BUILD SUCCESSFUL in 2s
+10 actionable tasks: 10 up-to-date
+  XML-parsed: tests=45 failures=0 errors=0 skipped=0
+
+===== 9. FULL GATE (XML-parsed) =====
+command: ./gradlew :contract:test :core:model:test :core:domain:test :service:test :adapter:testDebugUnitTest :app:testDebugUnitTest --console=plain
+  contract     tests=   8 failures=0 errors=0 skipped=0
+  core:model   tests=   0 failures=0 errors=0 skipped=0
+  core:domain  tests=  45 failures=0 errors=0 skipped=0
+  service      tests=  55 failures=0 errors=0 skipped=0
+  adapter      tests=  96 failures=0 errors=0 skipped=0
+  app          tests= 107 failures=0 errors=0 skipped=0
+  TOTAL        tests= 311 failures=0 errors=0 skipped=0   (baseline 311/0)
+
+===== 10. KTLINT + RELEASE GATE =====
+ktlintFormat applied: ONLY import lines reordered (0 files with non-import changes; import sets unchanged).
+command: ./gradlew ktlintCheck :app:assembleRelease ... -> BUILD SUCCESSFUL (1m28s)
+
+===== 11. GUARDRAILS =====
+ - No Dagger annotations added to core:domain (grep @Module/@Inject/dagger -> 0).
+ - Context registry PRESERVED (survives until T16).
+ - No ecosys.v1 / io.grpc / Android imports in core:domain.
+ - No service/adapter/app impl package referenced from core:domain.
+ - Port interfaces moved, not their :service implementations.

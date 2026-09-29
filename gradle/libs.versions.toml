@@ -23,9 +23,24 @@ annotationsApi = "6.0.53"
 desugarJdkLibs = "2.1.5"
 lumo = "1.2.5"
 okhttp = "4.12.0"
+# The real `org.json` implementation. Android ships this class in the platform,
+# but the pure-JVM `:adapter:jvm` Speechmatics wire code needs the artifact.
+orgJson = "20240303"
+# The `2.1.0-` prefix IS the Kotlin version KSP is built against: it must move in
+# lockstep with Kotlin. The `1.0.x` patch is the last line still shipping the KSP1
+# task; `ksp.useKSP2=true` selects the KSP2 implementation instead.
+ksp = "2.1.0-1.0.29"
+# Dagger 2.57.1 supports KSP2 + Kotlin 2.1 without requiring Kotlin 2.2, and needs
+# no Hilt (whose Gradle plugin hard-fails on the pure-JVM `:core:domain`/`:service`).
+dagger = "2.57.1"
+# Konsist is a TEST-TIME architecture-linter library, not a Gradle plugin: there
+# is no `konsist-gradle-plugin` artifact. `:testing:architecture` depends on it as
+# a `testImplementation` and parses the project's Kotlin sources from disk.
+konsist = "0.17.3"
 
 [libraries]
 core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+kotlin-test = { group = "org.jetbrains.kotlin", name = "kotlin-test", version.ref = "kotlin" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-test-core = { group = "androidx.test", name = "core", version.ref = "androidxTestCore" }
 robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
@@ -65,11 +80,27 @@ grpc-netty-shaded = { group = "io.grpc", name = "grpc-netty-shaded", version.ref
 grpc-inprocess = { group = "io.grpc", name = "grpc-inprocess", version.ref = "grpc" }
 grpc-testing = { group = "io.grpc", name = "grpc-testing", version.ref = "grpc" }
 
+# Read through the catalog API by `phonemanager.ksp`; `dagger` + `dagger-compiler`
+# would nest as `libs.dagger.*` and shadow the leaf accessor.
+dagger = { group = "com.google.dagger", name = "dagger", version.ref = "dagger" }
+dagger-compiler = { group = "com.google.dagger", name = "dagger-compiler", version.ref = "dagger" }
+
+# The architecture-boundary linter used only by `:testing:architecture`'s tests.
+konsist = { group = "com.lemonappdev", name = "konsist", version.ref = "konsist" }
+
 annotations-api = { group = "org.apache.tomcat", name = "annotations-api", version.ref = "annotationsApi" }
 desugar_jdk_libs = { group = "com.android.tools", name = "desugar_jdk_libs", version.ref = "desugarJdkLibs" }
 okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
+org-json = { group = "org.json", name = "json", version.ref = "orgJson" }
 protoc-gen-grpc-java = { group = "io.grpc", name = "protoc-gen-grpc-java", version.ref = "grpc" }
 protoc-gen-grpc-kotlin = { group = "io.grpc", name = "protoc-gen-grpc-kotlin", version.ref = "grpcKotlin" }
+
+# Plugin-build-only compile dependencies for `build-logic/convention`. These are
+# the Gradle plugin APIs the convention plugins are compiled against; they are
+# `compileOnly` there because the main build already supplies them at runtime.
+android-gradlePlugin = { group = "com.android.tools.build", name = "gradle-api", version.ref = "agp" }
+kotlin-gradlePlugin = { group = "org.jetbrains.kotlin", name = "kotlin-gradle-plugin", version.ref = "kotlin" }
+ktlint-gradlePlugin = { group = "org.jlleitschuh.gradle", name = "ktlint-gradle", version.ref = "ktlint" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
@@ -80,3 +111,15 @@ kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "ko
 protobuf = { id = "com.google.protobuf", version.ref = "protobufPlugin" }
 ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlint" }
 lumo = { id = "com.nomanr.plugin.lumo", version.ref = "lumo" }
+# Applied by the `phonemanager.ksp` convention plugin; declared `apply false` in the
+# root so the plugin lands on the main build's classpath exactly once.
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+
+# This repository's own convention plugins, provided by the `build-logic`
+# composite build (see `pluginManagement { includeBuild("build-logic") }` in
+# settings.gradle.kts). No version: the included build is always the source.
+phonemanager-kotlin-library = { id = "phonemanager.kotlin.library" }
+phonemanager-android-library = { id = "phonemanager.android.library" }
+phonemanager-android-application = { id = "phonemanager.android.application" }
+phonemanager-ktlint = { id = "phonemanager.ktlint" }
+phonemanager-ksp = { id = "phonemanager.ksp" }

@@ -1,0 +1,146 @@
+
+TASK 5 - phone-manager-modularization  (FOLLOW-UP CORRECTION)
+docs: fix stale kotlin symbol references in README and protocol
+
+Wave 1 (T1-T5) naming normalisation, FINAL todo. Docs + evidence only; ZERO source changes.
+First T5 commit: 35f44f9. Follow-up commit: a3d15c6.
+
+================================================================================
+A. WHY THE FIRST PASS MISSED THESE
+================================================================================
+The first guard was `grep -rnE '\bGo[A-Z]'`, which only catches the `Go`-prefix
+spelling. It cannot catch:
+  * PascalCase -> lowerCamelCase renames (T2): FromContext -> fromContext,
+    Register -> register, GoBoundPort -> boundPort.
+  * GO_* -> plain UPPER_SNAKE renames (T3): GO_DEFAULT_HUB_PORT ->
+    DEFAULT_HUB_PORT.
+This follow-up adds a COMPLETE backtick-symbol sweep checking every
+Kotlin-looking identifier in the docs against the current source tree.
+
+================================================================================
+B. THE TWO FAILURES (verified against the tree)
+================================================================================
+
+(1) README.md:198
+    BEFORE: `FromContext<T>(ctx)`
+    `grep -rn '\bFromContext\b' domain/src service/src adapter/src app/src testkit/src --include='*.kt'` -> 0 (GONE)
+    Real API in domain/src/main/kotlin/com/glassstorm/phonemanager/domain/context/Context.kt:
+       22  fun <T : Any> register(
+       29  fun <T : Any> unregister(type: KClass<T>) {
+       38  inline fun <reified T : Any> register(
+       44  inline fun <reified T : Any> fromContext(ctx: Context): T =
+       50  inline fun <reified T : Any> fromContextOrNull(ctx: Context): T? =
+    FIX: `FromContext<T>(ctx)` -> `fromContext<T>(ctx)`
+    (surrounding prose "Collaborators are registered as types" is English, not a
+    `Register` symbol reference, so no further change.)
+
+(2) docs/protocol.md:278
+    BEFORE: `AppComposition.GO_DEFAULT_HUB_PORT`
+    `grep -rn 'DEFAULT_HUB_PORT' app/src/main --include='*.kt'` ->
+      AppComposition.kt:50         const val DEFAULT_HUB_PORT: Int = 9000
+      HubForegroundService.kt:68-69 AppComposition.DEFAULT_HUB_PORT
+    FIX: `AppComposition.GO_DEFAULT_HUB_PORT` -> `AppComposition.DEFAULT_HUB_PORT`
+
+================================================================================
+C. COMPLETE BACKTICK-SYMBOL SWEEP
+================================================================================
+Method: extract every backticked token from README.md + docs/protocol.md; strip
+frozen-wire names / CLI flags / paths / numeric+boolean literals / module names /
+English words; then word-boundary grep each remaining Kotlin-identifier candidate
+across domain/src service/src adapter/src app/src testkit/src (--include *.kt,*.java).
+
+  Total backtick tokens:                          165
+  Classified frozen-wire/literal/CLI/path/module: 139  (audited individually)
+  Kotlin-symbol candidates checked:                23
+  Stale (missing) after fix:                        0
+
+All 23 candidates resolve in code:
+  port
+  Pair
+  LocalOnlyHotspot
+  fromContext<T>(ctx)
+  PairingService.kt
+  Context.kt
+  Device.kt
+  startHotspot
+  boundPort
+  ctx
+  fromContext
+  DEFAULT_HUB_PORT
+  CHANNEL_ID
+  REASON_NO_WINDOW
+  MAX_PIN_ATTEMPTS
+  OpenStream
+  SecureRandom
+  videoDropped
+  MockSttAdapter
+  AppComposition.DEFAULT_HUB_PORT
+  PairingService
+  StreamService
+
+The 139 excluded tokens are exclusively frozen proto/RPC names (PairRequest,
+PairResponse, StreamFrame, Heartbeat, ecosys.v1.PairingService/Pair, device_id,
+audio_pcm16_16k, DEVICE_ROLE_*, STREAM_KIND_*, pin-* reject reasons), JDK/std
+types (SecureRandom, MessageDigest.isEqual), CLI flags (--addr, --pin, ...),
+paths/config (go.work, local.properties, runtime_config), numeric/boolean
+literals, and English words. NONE is a renamed project Kotlin symbol.
+
+Also swept every old identifier removed by T1/T2/T3 commits (748 Go*/GO_* tokens,
+1064 old PascalCase tokens) against the docs text: 0 Go*/GO_* occurrences; no
+stale renamed Kotlin symbol survives.
+
+================================================================================
+D. GREP GUARDS (after)
+================================================================================
+  grep -rnE '\bGo[A-Z]' README.md docs/ | wc -l                       -> 0
+  grep -rn 'FromContext|GO_DEFAULT_HUB_PORT' README.md docs/ | wc -l   -> 0
+
+================================================================================
+E. DIFFS (this follow-up)
+================================================================================
+README.md:
+diff --git a/README.md b/README.md
+index 30c2ab8..2ac81fd 100644
+--- a/README.md
++++ b/README.md
+@@ -195,7 +195,7 @@ suite as evidence that on-device behaviour works.
+   `:adapter`, so importing an adapter class from `:service` fails to compile.
+   Only the `:app` composition root wires implementations to ports.
+ - **The Context registry is the only DI.** Collaborators are registered as types
+-  and resolved with `FromContext<T>(ctx)` against the domain INTERFACE, never by
++  and resolved with `fromContext<T>(ctx)` against the domain INTERFACE, never by
+   a concrete class. There is no Hilt, Koin, or Room anywhere in this repo.
+ - **Naming.** Standard Kotlin convention. Files are PascalCase and match their
+   primary class (`PairingService.kt`, `Context.kt`, `Device.kt`); functions,
+
+docs/protocol.md:
+diff --git a/docs/protocol.md b/docs/protocol.md
+index 815ca15..f050785 100644
+--- a/docs/protocol.md
++++ b/docs/protocol.md
+@@ -275,7 +275,7 @@ treating the fallback as a failure. The advertised port is the hub's gRPC port.
+ ## 8. Transport and port
+ 
+ - Transport: **plaintext gRPC (h2c) over the LAN.** No TLS in v1.
+-- Default hub port: **9000** (`AppComposition.GO_DEFAULT_HUB_PORT`). Tests bind
++- Default hub port: **9000** (`AppComposition.DEFAULT_HUB_PORT`). Tests bind
+   an ephemeral port (`0`) and read back the bound port.
+ - Bind address: the app binds all interfaces (`0.0.0.0`) in production, because
+   the phone hosts the AP and its LAN peers must be able to dial in. Tests bind
+
+================================================================================
+F. NO SOURCE CHANGES
+================================================================================
+git show --name-only a3d15c6 filtered to .kt/.java/.proto -> (none)
+Only docs + evidence changed. Frozen wire content untouched.
+
+================================================================================
+G. VERIFICATION SUMMARY
+================================================================================
+- README fromContext<T>(ctx) matches real Context.kt API.                 PASS
+- docs/protocol.md AppComposition.DEFAULT_HUB_PORT matches code.          PASS
+- Complete backtick sweep: 0 stale project Kotlin symbols.                PASS
+- \bGo[A-Z] guard in README+docs -> 0.                                    PASS
+- FromContext / GO_DEFAULT_HUB_PORT guard -> 0.                           PASS
+- No source code changed (.kt/.java/.proto).                              PASS
+- Frozen wire names untouched.                                            PASS

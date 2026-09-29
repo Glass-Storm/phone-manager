@@ -1,0 +1,130 @@
+# T2 evidence — strip Go prefix + lowerCamelCase members
+# plan: .omo/plans/phone-manager-modularization.md  (TODO 2)
+# HEAD before commit: dfdce89 (T1)
+
+## 0. Baseline (before any change)
+Command:
+  JAVA_HOME=/home/chaos/.jdk/jdk-21.0.12.1+1 ANDROID_HOME=/home/chaos/Android/Sdk \
+    ./gradlew :domain:test :service:test :adapter:testDebugUnitTest :app:testDebugUnitTest \
+    --rerun-tasks --console=plain
+Result: BUILD SUCCESSFUL
+Per-module (parsed from build/test-results/**/*.xml <testsuite tests= failures=>):
+  domain  tests=45  failures=0
+  service tests=63  failures=0
+  adapter tests=96  failures=0
+  app     tests=96  failures=0
+  TOTAL   tests=300 failures=0
+
+Baseline guard greps (pre-change):
+  distinct Go[A-Z] identifiers (non-Lumo)           = 695
+  occurrences \bGo[A-Z] (non-Lumo)                   = 4184
+  const val Go* declarations                         = 27  (task brief said 25; actual is 27 — GoSaltBytes, GoTokenBits are ALSO const val Go*)
+  distinct GO_* names                                = 53
+  GO_* occurrence lines                              = 144
+
+## 1. Scope actually in effect
+- Renamed 664 distinct non-const identifiers (every `\bGo[A-Z][A-Za-z0-9]*` that is NOT one of the 27 const val Go*).
+- Type-position tokens (class/interface/object/typealias/enum-value types) -> PascalCase drop-prefix (e.g. GoOk -> Ok, GoProcessRun -> ProcessRun).
+- Value-position tokens (fun/val/var/param/lambda/loop/catch) -> lowerCamelCase (GoStartHotspot -> startHotspot, GoBoundPort -> boundPort, GoOpenWindow -> openWindow, GoCtx -> ctx, GoRepo -> repo, GoReason -> reason, GoFailure -> failure, GoFrom -> from, GoEvent -> event, GoMoveTo -> moveTo, GoReject -> reject, GoAccept -> accept, GoAudioPump -> audioPump, GoVideoPump -> videoPump, GoUnregister -> unregister, GoLookup -> lookup).
+- Genuinely mixed-role tokens resolved per occurrence: GoOk, GoSession, GoSocketOpener, GoTokenFetcher, GoWired
+  (e.g. `PairOutcome.Ok` type vs local `ok` value; `class Session` vs local `session`).
+- Comments/KDoc references renamed in lockstep; string-literal TEXT left byte-identical.
+- The 27 `const val Go*` (T3-owned) and the 53 `GO_*` names (T3-owned) were NOT touched.
+- 22 vendored Lumo files (ui/components/**, ui/foundation/**, ui/Theme.kt, ui/Color.kt, ui/Typography.kt) NOT touched.
+
+## 2. Post-change guard numbers (non-Lumo, *.kt under domain/src service/src adapter/src testkit/src app/src)
+  GUARD1  grep -rnE '\bGo[A-Z]' ... | grep -v '/ui/components/\|/ui/foundation/' | wc -l   -> 127
+  GUARD2  grep -rnE 'const val +Go[A-Z]' ... | wc -l                                        -> 27   (unchanged; T3 scope intact)
+  GUARD3  grep -rnE '\bGO_[A-Z_]+' ... | wc -l                                              -> 144  (unchanged; T3 scope intact)
+  distinct GO_* names                                                                       -> 53
+
+Breakdown of the 127 GUARD1 lines (positions classified by a string/comment-aware scanner):
+  code identifiers (references to the 27 const val Go*)  = 112
+  string-literal TEXT (frozen diagnostic messages)       = 4   (NsdDiscoveryAdapterTest "GoResolveFirst did not return…",
+                                                                HubServerAdapterTest "GoBoundPort must report the assigned port after GoStart(0)",
+                                                                HubServerAdapterTest "GoStop() returned in …")
+  comment references to the 27 const val Go*             = 13
+  NON-CONST code identifiers remaining                   = 0    <-- the actual acceptance condition
+  Remaining distinct tokens: 31 = 27 const val Go*  +  4 string-literal-text tokens
+    (GoResolveFirst, GoBoundPort, GoStart, GoStop — all inside test assertion MESSAGE strings, not identifiers;
+     changing them would violate "MUST NOT change any string literal value".)
+
+Raw-minus-T3 arithmetic:
+  127 lines − 112 code-ref lines − 13 comment-ref lines − 4 string-literal-text lines = -2
+  (the 4 string-text + some lines carry multiple tokens; the precise figure is: 0 non-const code identifiers remain)
+  i.e. every remaining code IDENTIFIER is one of the 27 T3-owned `const val Go*`.
+
+## 3. String-value preservation proof
+Raw diff method (task's exact command):
+  git diff -U0 | grep -E '^\+' | grep -oE '"[^"]*"' | sort > /tmp/new_strings.txt
+  git diff -U0 | grep -E '^-' | grep -oE '"[^"]*"' | sort > /tmp/old_strings.txt
+  diff /tmp/old_strings.txt /tmp/new_strings.txt
+Raw result: NON-empty (230 lines) — as expected, because string INTERPOLATIONS such as "$GoPort"
+become "$port". The interpolation EXPRESSION is symbol text, not a literal value.
+
+Normalized proof (literal text only; ${expr}/$ident collapsed to a placeholder):
+  python3 /tmp/norm_strings.py   (extracts each string literal with interpolations normalised)
+  normalized old=784  new=784
+  diff /tmp/old_norm.txt /tmp/new_norm.txt  -> EMPTY
+CONCLUSION: all 784 string literal values are byte-identical; only interpolation VARIABLES were renamed.
+No string literal value changed anywhere. (4 frozen diagnostic strings above are part of this identical set.)
+
+## 4. Invariant gate (after change)
+Command (exact, mandatory preamble):
+  JAVA_HOME=/home/chaos/.jdk/jdk-21.0.12.1+1 ANDROID_HOME=/home/chaos/Android/Sdk \
+    ./gradlew :domain:test :service:test :adapter:testDebugUnitTest :app:testDebugUnitTest \
+    --rerun-tasks --console=plain
+Result: BUILD SUCCESSFUL  (79 actionable tasks: 79 executed)
+Per-module XML parse:
+  domain  tests=45  failures=0 errors=0 skipped=0
+  service tests=63  failures=0 errors=0 skipped=0
+  adapter tests=96  failures=0 errors=0 skipped=0
+  app     tests=96  failures=0 errors=0 skipped=0
+  TOTAL   tests=300 failures=0 errors=0
+<testcase> element count: domain 45 / service 63 / adapter 96 / app 96 = 300.
+Baseline exactly preserved.
+
+## 5. assembleDebug gate
+Command:
+  JAVA_HOME=/home/chaos/.jdk/jdk-21.0.12.1+1 ANDROID_HOME=/home/chaos/Android/Sdk \
+    ./gradlew :app:assembleDebug --console=plain
+Result: BUILD SUCCESSFUL
+
+## 6. const val Go* intact proof
+grep -rnE 'const val +Go[A-Z]' domain/src service/src adapter/src testkit/src app/src --include='*.kt'
+27 declarations (unchanged from baseline), names:
+  GoAudioSampleRateHz, GoDefaultIterations, GoDefaultPeerId, GoDefaultPollIntervalMs,
+  GoDefaultRegion, GoDefaultServiceType, GoMaxPinAttempts, GoMinIterations,
+  GoMulticastLockTag, GoReasonNameMissing, GoReasonNoWindow, GoReasonPinConsumed,
+  GoReasonPinExpired, GoReasonPinInvalid, GoReasonPinLocked, GoReasonPinMissing,
+  GoRouteDashboard, GoRouteDevices, GoRoutePairing, GoRouteSettings, GoRouteStream,
+  GoSaltBytes, GoSourceGateway, GoSourceMdns, GoTiramisuExtensionAbsent,
+  GoTokenBits, GoWindowTtlMs
+NOTE: task brief listed 25; measurement shows 27 — GoSaltBytes and GoTokenBits are also
+`const val Go*` in service/.../security/TokenCodec.kt and were correctly left untouched.
+
+## 7. Rename summary
+  distinct non-const identifiers renamed : 664  (695 original distinct − 31 remaining)
+  occurrence renames applied              : 6667 (by the renamer) + 6 double-Go call sites
+  source files changed                    : 112  (domain 23, service 20, adapter 26, testkit 3, app 40)
+  file renames                            : 0    (T1 scope)
+  package declarations changed            : 0
+  build files / dependencies changed      : 0
+  enum entry names changed                : 0
+  @Suppress rule-name arguments changed   : 0  (only trailing-comment identifiers renamed)
+  Lumo files touched                       : 0
+  generated/build sources touched          : 0
+
+## 8. Rename-induced collision fixes (compiler-caught, minimal)
+1. DiscoveryStateMachine.reject(): default param `state: DiscoveryState = state` self-shadowed the
+   member -> `= this.state`.
+2. AppConfigTest.MemoryConfig.setHotspotMode(): `mode = mode` -> `this.mode = mode`.
+3. FakeBatteryExemption.setExempt(): `exempt = exempt` -> `this.exempt = exempt`.
+4. FakeSocket.attach(): `listener = listener` -> `this.listener = listener`.
+5. NsdDiscoveryAdapterTest: 6 × `serviceName/serviceType = serviceName/serviceType`
+   -> explicit `this@NsdDiscoveryAdapterTest.` qualifier.
+6. Double-`Go` token `GoGoBinary` (function `GoGoBinary()` -> `goBinary()`); its 6 call sites were
+   initially over-renamed to `GoBinary`, corrected with a scoped sed back to `goBinary`.
+
+## 9. Commit
+Single commit: refactor(naming): drop go prefix and use lowercamelcase members
