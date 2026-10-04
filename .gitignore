@@ -9,3 +9,10 @@ captures/
 bin/
 .vscode/
 out/
+
+# Agent runtime state (OpenCode work plans, evidence, boulder state) is
+# local-only and must never be committed.
+.omo/
+
+# Stray Python linter cache (no Python is tracked in this repo).
+.ruff_cache/
