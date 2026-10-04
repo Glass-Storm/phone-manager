@@ -32,36 +32,42 @@ repo root because the root `go.work` and the Go module are root-relative.
 `:build-logic` is a Gradle composite build providing the `phonemanager.*`
 convention plugins, not a published module.
 
-## The mandatory Gradle preamble
+## The Gradle preamble (JDK 21 + Android SDK)
 
-Every Gradle invocation in this repository needs an explicit JDK and Android SDK.
-The shell used by build agents is non-interactive: it has no `ANDROID_HOME` and
-it points `JAVA_HOME` at Java 25, on which Gradle 8.13 cannot run. So set both
-inline:
+Gradle 8.13 cannot run on Java 25, and the shell used by build agents is
+non-interactive: it has no `ANDROID_HOME` and it may put Java 25 on `PATH`. Two
+mechanisms cover this, and the inline preamble below remains the canonical form
+used by every acceptance command in this file:
 
 ```bash
 JAVA_HOME=/home/chaos/.jdk/jdk-21.0.12.1+1 ANDROID_HOME=/home/chaos/Android/Sdk ./gradlew <task>
 ```
 
-Why both:
+- **JDK 21 is now pinned IN THE REPO**, not only in the command line.
+  [`gradle/gradle-daemon-jvm.properties`](gradle/gradle-daemon-jvm.properties)
+  declares the Gradle 8.8+ daemon-JVM criteria `toolchainVersion=21`, so a bare
+  `./gradlew <task>` selects a JDK 21 daemon wherever Gradle can discover one —
+  CI's Temurin 21, or this host's JDK 21 (made discoverable through the
+  machine-local, gitignored `~/.gradle/gradle.properties`:
+  `org.gradle.java.installations.paths=/home/chaos/.jdk/jdk-21.0.12.1+1`).
+  When no JDK 21 can be found, the build fails with a clear toolchain message
+  instead of the opaque `What went wrong: 25.0.4.1`. Only the `JAVA_HOME=`
+  prefix is therefore optional now; a bare `./gradlew :contract:test` works on
+  this host.
+- **`ANDROID_HOME`** (or `local.properties`) must still point at the SDK.
+  Without it, AGP cannot find `compileSdk 36` / `build-tools 36.0.0` and
+  configuration fails. If you prefer to keep the SDK path out of the command
+  line, create `local.properties` at the repo root:
 
-- **`JAVA_HOME`** must point at a JDK 21. Gradle 8.13 refuses to start on Java 25,
-  and the toolchain here is Temurin 21.0.12.1+1.
-- **`ANDROID_HOME`** must point at the SDK. Without it, AGP cannot find
-  `compileSdk 36` / `build-tools 36.0.0` and configuration fails.
+    ```properties
+    sdk.dir=/home/chaos/Android/Sdk
+    ```
+
+    `local.properties` is gitignored and must never be committed.
 
 This path is machine-specific on purpose. CI uses its own SDK and JDK; the
 workflow in `.github/workflows/ci.yml` sets its own environment and must not
-copy this string. If you prefer to keep the SDK path out of the command line,
-create `local.properties` at the repo root with:
-
-```properties
-sdk.dir=/home/chaos/Android/Sdk
-```
-
-Either mechanism works. `local.properties` is gitignored and must never be
-committed; the inline `ANDROID_HOME` is the form the acceptance commands below
-use.
+copy this string.
 
 ## Commands
 
@@ -110,6 +116,19 @@ harness in `:transport:grpc` and the Robolectric-hosted app hub in `:app`, both
 driving the Go mockpeer as a child process. It depends on the same test tasks, so
 it cannot diverge from them. On a warm build `e2e` reports `UP-TO-DATE`; add
 `--rerun-tasks` to force it to actually execute.
+
+The Go toolchain is a **hard** prerequisite: the real-socket suites fail (they do
+not skip) when `go` is absent. A second, **opt-in** Python suite
+(`EcosysPiE2eTest`, task 14) drives the sibling Pi repo's `ecosys_pi` CLI through
+`uv`; it is excluded from `e2e` and `test`, and runs only under
+`:app:ecosysPiE2e` (which is also attached to `check`), skipping loudly when its
+prerequisites are missing. Its two machine-specific defaults are overridable by
+environment variable:
+
+- `PI_ECOSYS_REPO` — the sibling Pi repo root (default:
+  `/home/chaos/workplace/fyp/necklace-data-processing-raspberrypi-side-`). It
+  must contain `src/ecosys_pi/cli.py`.
+- `UV_BIN` — the `uv` executable (default: `/home/chaos/.local/bin/uv`).
 
 ### Lint
 
@@ -197,13 +216,17 @@ degraded mode or a failure to investigate.
 ## On-device smoke checklist (NON-BLOCKING)
 
 **This checklist is NOT an acceptance gate.** KVM is accessible to this user
-(group `kvm`), but the emulator package and an AVD are not installed by default,
-and the host root filesystem (~93 % full, ~7 GB free) cannot allocate the
-emulator's userdata partition (~7.3 GB needed); no device automation is present
-either. Consequently on-device behaviour must be verified by hand on real
-hardware. The automated suite does NOT cover any of the items below; a green
-test run says nothing about them. Do not present a passed suite as evidence that
-on-device behaviour works.
+(group `kvm`), and the emulator tooling is installed: emulator 37.1.11, the
+`phonemanager29` AVD (`system-images;android-29;google_apis;x86_64`), and
+`libpulse0` (so it boots headless — add `-no-audio` if audio is not needed).
+What is still missing is _automation_: there is no `src/androidTest` source set,
+no Gradle Managed Devices configuration, and no `connectedAndroidTest` wiring, so
+nothing below is exercised by an automated task. This is a deliberate v1 choice:
+the host no longer blocks it, the design simply keeps on-device behaviour manual.
+Consequently on-device behaviour must be verified by hand on real hardware. The
+automated suite does NOT cover any of the items below; a green test run says
+nothing about them. Do not present a passed suite as evidence that on-device
+behaviour works.
 
 - [ ] The app requests the runtime permissions it needs and the request flow is
       sane on a real device.
