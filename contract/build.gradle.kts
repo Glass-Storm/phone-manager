@@ -95,7 +95,10 @@ protobuf {
 // ---------------------------------------------------------------------------
 
 group = "com.glassstorm.phonemanager"
-version = "1.0.0"
+// 1.1.0 — the additive gesture/diarization frames (image/gesture/tts_audio/
+// enroll_*/stream_open, fields 5-10). A new MINOR because the change is
+// additive-only: an existing 1.0.x peer keeps working against it unchanged.
+version = "1.1.0"
 
 // Packages the `src/main/proto` tree into a JAR whose entries keep the original
 // relative path (`ecosys/v1/ecosys.proto`), so a consumer can hand the extracted
@@ -110,13 +113,13 @@ val protoSourceJar by tasks.registering(Jar::class) {
 publishing {
     publications {
         create<MavenPublication>("maven") {
-            // Coordinates: com.glassstorm.phonemanager:contract:1.0.0
+            // Coordinates: com.glassstorm.phonemanager:contract:1.1.0
             // `artifactId` follows the Gradle project name (`:contract` -> `contract`,
             // `:adapter:jvm` -> `adapter-jvm`); pinned explicitly so a future rename
             // of the directory cannot silently rename the published artifact.
             groupId = "com.glassstorm.phonemanager"
             artifactId = "contract"
-            version = "1.0.0"
+            version = "1.1.0"
 
             // The compiled bindings. `from(components["java"])` also emits the
             // correct runtime dependency set in the POM (the `api(...)` deps), so a
