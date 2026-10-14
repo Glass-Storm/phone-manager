@@ -8,15 +8,66 @@ pluginManagement {
     includeBuild("build-logic")
 }
 
+// The ai-android engine checkout consumed as a pinned composite build (see below).
+// Declared before `dependencyResolutionManagement` because its vendored sherpa-onnx
+// AAR must be resolvable from this build's shared repositories too (see the flatDir).
+val aiAndroidDir = file("../../ai-android")
+
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
         google()
         mavenCentral()
+        // ai-android's `:asr` / `:diarize` / `:tts` resolve their vendored sherpa-onnx
+        // AAR from a flatDir repository declared in AI-ANDROID's settings. A composite
+        // build does not carry that repository over to the CONSUMING build's dependency
+        // resolution, so `:adapter:ai`'s runtime classpath cannot find it unless it is
+        // re-declared here. Only the empty-group `sherpa-onnx-*` module resolves here; a
+        // missing directory is harmless (and the checkout check below fails loudly first).
+        flatDir { dirs(aiAndroidDir.resolve("libs")) }
     }
 }
 
 rootProject.name = "phone-manager"
+
+// ---------------------------------------------------------------------------
+// ai-android: the on-device inference engine (gesture / ASR / diarization / TTS).
+//
+// It ships NO stable tag, so there is no released artifact to depend on. It is
+// consumed as a PINNED COMPOSITE BUILD: the local checkout is substituted for the
+// `hk.edu.hkmu:*` coordinates, and the exact commit is enforced below so a build
+// can never silently compile against a drifting engine.
+//
+// The ai-android engine uses FULL protobuf-java (MediaPipe) while the hub's
+// `:contract` uses protobuf-lite. To keep that clash OFF the hub's default
+// classpath, the adapter lives in the isolated `:adapter:ai` module, which the
+// `:app` graph does NOT depend on by default (the JVM fakes are the default
+// bindings). See `:adapter:ai`'s build file for the resolution.
+// ---------------------------------------------------------------------------
+val pinnedAiAndroidCommit = "c0644eada44c242604e07546ff93aef80d9563f8"
+check(aiAndroidDir.isDirectory) {
+    "ai-android composite build not found at ${aiAndroidDir.absolutePath}. " +
+        "Clone the engine there (see README 'Provisioning the ai-android engine')."
+}
+val aiAndroidHead =
+    providers.exec {
+        commandLine("git", "-C", aiAndroidDir.absolutePath, "rev-parse", "HEAD")
+    }.standardOutput.asText.get().trim()
+check(aiAndroidHead == pinnedAiAndroidCommit) {
+    "ai-android is pinned to $pinnedAiAndroidCommit but the checkout at " +
+        "${aiAndroidDir.absolutePath} is at $aiAndroidHead. " +
+        "Check out the pinned commit (git -C ${aiAndroidDir.absolutePath} checkout $pinnedAiAndroidCommit) " +
+        "or bump `pinnedAiAndroidCommit` in settings.gradle.kts deliberately."
+}
+includeBuild(aiAndroidDir) {
+    dependencySubstitution {
+        substitute(module("hk.edu.hkmu:core")).using(project(":core"))
+        substitute(module("hk.edu.hkmu:sign")).using(project(":sign"))
+        substitute(module("hk.edu.hkmu:asr")).using(project(":asr"))
+        substitute(module("hk.edu.hkmu:diarize")).using(project(":diarize"))
+        substitute(module("hk.edu.hkmu:tts")).using(project(":tts"))
+    }
+}
 
 include(":app")
 // The adapters are split by ANDROID DEPENDENCE. `:adapter:jvm` is a plain Kotlin
@@ -28,6 +79,20 @@ include(":app")
 // possible without a backward edge.
 include(":adapter:jvm")
 include(":adapter:android")
+// The ai-android INTEGRATION module: the on-device implementations of the gesture /
+// speech+diarization / TTS ports backed by the pinned `hk.edu.hkmu:*` composite build
+// above. It is a SEPARATE, ISOLATED module on purpose:
+//
+//  * ai-android (MediaPipe) uses FULL protobuf-java, while the hub's `:contract` and
+//    `:transport:grpc` use protobuf-lite. Putting the engine on `:app`'s classpath would
+//    put both on one runtime classpath and the duplicate `com.google.protobuf.*` classes
+//    would fail dexing. Keeping the adapter in its own module, off the `:app` graph,
+//    means the hub keeps building and the JVM fakes stay the default bindings.
+//  * ai-android's gesture/diarization native is arm64-v8a ONLY, so a JVM/unit build can
+//    never load it. `:app` therefore binds the `:adapter:jvm` fakes; adopting this module
+//    on a device is a deliberate graph change (see README "Provisioning the ai-android
+//    engine").
+include(":adapter:ai")
 // The hand-written domain DTOs (pure Kotlin data types, zero dependencies): the
 // shared language spoken across every layer, extracted so consumers depend on
 // the data alone rather than the whole `:core:domain` port module.

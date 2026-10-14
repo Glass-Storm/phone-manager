@@ -48,6 +48,8 @@ object ModuleBoundaries {
                 setOf(ArchitectureScope.ADAPTER_JVM, ArchitectureScope.APP),
             "$ADAPTER_PACKAGE.android" to
                 setOf(ArchitectureScope.ADAPTER_ANDROID, ArchitectureScope.APP),
+            "$ADAPTER_PACKAGE.ai" to
+                setOf(ArchitectureScope.ADAPTER_AI, ArchitectureScope.APP),
         )
 
     private val NON_APP_MODULE_ROOTS = setOf("core", "adapter", "transport", "contract", "testing")

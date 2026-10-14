@@ -30,6 +30,7 @@ object ArchitectureScope {
     const val TRANSPORT_GRPC = "transport/grpc"
     const val ADAPTER_JVM = "adapter/jvm"
     const val ADAPTER_ANDROID = "adapter/android"
+    const val ADAPTER_AI = "adapter/ai"
     const val TESTING_TESTKIT = "testing/testkit"
     const val TESTING_ARCHITECTURE = "testing/architecture"
 
@@ -50,6 +51,7 @@ object ArchitectureScope {
             TRANSPORT_GRPC,
             ADAPTER_JVM,
             ADAPTER_ANDROID,
+            ADAPTER_AI,
             TESTING_TESTKIT,
             TESTING_ARCHITECTURE,
         ).map(::sources)

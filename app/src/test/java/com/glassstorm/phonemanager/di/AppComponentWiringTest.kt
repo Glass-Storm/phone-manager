@@ -4,6 +4,10 @@ import android.app.Application
 import androidx.test.core.app.ApplicationProvider
 import com.glassstorm.phonemanager.adapter.android.config.RuntimeConfigStore
 import com.glassstorm.phonemanager.adapter.android.repository.sqlite.SqliteDeviceRepository
+import com.glassstorm.phonemanager.adapter.jvm.ai.FakeEnrollmentStore
+import com.glassstorm.phonemanager.adapter.jvm.ai.FakeGesturePort
+import com.glassstorm.phonemanager.adapter.jvm.ai.FakeSpeechPort
+import com.glassstorm.phonemanager.adapter.jvm.ai.FakeTtsPort
 import com.glassstorm.phonemanager.core.domain.adapter.config.AppConfig
 import com.glassstorm.phonemanager.core.domain.adapter.repository.DeviceRepository
 import com.glassstorm.phonemanager.core.model.HotspotMode
@@ -62,5 +66,19 @@ class AppComponentWiringTest {
         assertThat(config.sttEngine()).isEqualTo(SttEngine.SPEECHMATICS)
         assertThat(config.region()).isEqualTo("eu")
         assertThat(config.hotspotMode()).isEqualTo(HotspotMode.AUTO)
+    }
+
+    @Test
+    fun `the ai ports are bound to the deterministic jvm fakes by default`() {
+        // Given the production component with a real Android Application
+        val component = component()
+
+        // When each ai port is resolved by type
+        // Then the DEFAULT graph binds the JVM fakes, so unit builds never touch
+        // ai-android's arm64-only native (see AiModule).
+        assertThat(component.gesturePort()).isInstanceOf(FakeGesturePort::class.java)
+        assertThat(component.speechPort()).isInstanceOf(FakeSpeechPort::class.java)
+        assertThat(component.ttsPort()).isInstanceOf(FakeTtsPort::class.java)
+        assertThat(component.enrollmentStore()).isInstanceOf(FakeEnrollmentStore::class.java)
     }
 }

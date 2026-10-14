@@ -25,12 +25,74 @@ repo ships the hub plus the contract they generate their clients from.
 | `:contract`        | pure Kotlin/JVM     | The FROZEN `ecosys.v1` wire contract: the `.proto` source of truth and its protobuf/gRPC-lite codegen. The ONE artifact the out-of-scope peers consume.                                                                 |
 | `:adapter:jvm`     | pure Kotlin/JVM     | Android-free port implementations: the STT engines and the discarding frame sink.                                                                                                                                       |
 | `:adapter:android` | Android library     | Platform-backed adapters: SQLite, LocalOnlyHotspot, NSD discovery, and the runtime config store. The battery-exemption helper lives in `:app` (it is app-owned platform glue).                                          |
+| `:adapter:ai`      | Android library     | The ai-android INTEGRATION module: device implementations of the gesture / speech+diarization / TTS / enrollment ports, backed by the pinned `hk.edu.hkmu:*` composite build. ISOLATED from `:app` (see below).         |
 | `:testing:testkit` | pure Kotlin/JVM     | Test support: the bounded child-process runner, the deterministic media generators, and the in-memory repository double, shared by the `:transport:grpc` and `:app` test suites. Its only dependency is `:core:domain`. |
 
 `tools/mockpeer` (the Go reference peer) is NOT a Gradle module; it stays at the
 repo root because the root `go.work` and the Go module are root-relative.
 `:build-logic` is a Gradle composite build providing the `phonemanager.*`
 convention plugins, not a published module.
+
+## Provisioning the ai-android engine (on-device inference)
+
+The hub's on-device gesture, speech+diarization, TTS and voiceprint-enrollment
+adapters live in `:adapter:ai` and are implemented against
+[`ai-android`](https://github.com/Glass-Storm/ai-android) (`group hk.edu.hkmu`,
+version `0.0.1-alpha.1`). ai-android ships no stable release, so it is consumed as
+a **pinned composite build**, never a released artifact.
+
+### The pinned composite build
+
+`settings.gradle.kts` resolves `../../ai-android` (override by cloning there),
+asserts its `HEAD` equals `pinnedAiAndroidCommit`, and substitutes the
+`hk.edu.hkmu:core|sign|asr|diarize|tts` coordinates for that checkout's projects.
+A missing checkout or a drifted commit fails configuration with a named message,
+so a build can never silently compile against a different engine.
+
+### Why `:adapter:ai` is isolated
+
+ai-android's MediaPipe path uses **full protobuf-java**, while `:contract` and
+`:transport:grpc` use **protobuf-lite**. Putting both on `:app`'s runtime
+classpath would ship duplicate `com.google.protobuf.*` classes and break dexing.
+`:adapter:ai` is therefore a **separate module that `:app` does not depend on**:
+the hub keeps building with the deterministic `:adapter:jvm` fakes bound by
+default, and the engine is compiled and packaged only for the arm64 on-device
+build. ai-android's gesture/diarization native is `arm64-v8a` only, so a JVM test
+could never load it anyway.
+
+Build the engine adapter on its own:
+
+```bash
+JAVA_HOME=/home/chaos/.jdk/jdk-21.0.12.1+1 ANDROID_HOME=/home/chaos/Android/Sdk ./gradlew :adapter:ai:assembleDebug
+```
+
+Adopting it on a device is a deliberate graph change: add the `:adapter:ai` edge
+to `:app`, bind its constructors in place of the `:adapter:jvm` fakes, and resolve
+the protobuf conflict there (exclude `protobuf-javalite` and supply full
+`protobuf-java`, which also bundles `GeneratedMessageLite`).
+
+### Model provisioning
+
+The device adapter needs three model files, fetched and SHA-256-verified by
+`scripts/fetch-ai-models.sh [DEST_DIR]` (`DEST_DIR` defaults to
+`./build/ai-models`):
+
+| File                                                                | License    | Source                           |
+| ------------------------------------------------------------------- | ---------- | -------------------------------- |
+| `gesture/gesture_recognizer.task`                                   | Apache-2.0 | MediaPipe Tasks (Google)         |
+| `diarization/sherpa-onnx-pyannote-segmentation-3-0/model.int8.onnx` | MIT        | pyannote/segmentation-3.0        |
+| `diarization/3dspeaker_speech_campplus_sv_zh-cn_16k-common.onnx`    | Apache-2.0 | 3D-Speaker CAM++ (zh-cn, 16 kHz) |
+
+Copy the tree into an app-private directory on an arm64 device, for example:
+
+```bash
+adb push build/ai-models /data/local/tmp/ai-models
+adb shell run-as com.glassstorm.phonemanager cp -r /data/local/tmp/ai-models files/ai-models
+```
+
+Large ASR/TTS voices are separate downloads and are not needed for the T4
+adapter; only the gesture bundle and the two diarization graphs are provisioned
+here.
 
 ## The Gradle preamble (JDK 21 + Android SDK)
 
