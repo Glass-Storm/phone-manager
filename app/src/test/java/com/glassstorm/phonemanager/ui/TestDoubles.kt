@@ -18,7 +18,6 @@ import com.glassstorm.phonemanager.core.model.RelayOutput
 import com.glassstorm.phonemanager.core.model.RelayResult
 import com.glassstorm.phonemanager.core.model.RelaySession
 import com.glassstorm.phonemanager.core.model.RelayStats
-import com.glassstorm.phonemanager.core.model.SttEngine
 import com.glassstorm.phonemanager.hub.HubStarter
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -283,59 +282,23 @@ class FakeDeviceRepository(
 }
 
 /**
- * [AppConfig] fake implementing the DOMAIN port only.
- *
- * [storedKey] is what a real store would hold; the screen must never render it in
- * cleartext by default, so the value is a recognizable sentinel the test can search
- * for in the semantics tree.
+ * [AppConfig] fake implementing the DOMAIN port only: the hotspot mode. The hub runs
+ * a single on-device speech engine, so the port carries no engine/credential state.
+ * [failReads] drives the "config unavailable" path.
  */
 class FakeAppConfig(
-    storedKey: String = "",
-    engine: SttEngine = SttEngine.MOCK,
-    regionValue: String = AppConfig.DEFAULT_REGION,
     mode: HotspotMode = HotspotMode.MANUAL,
     private val failReads: Boolean = false,
 ) : AppConfig {
-    private var keyValue: String = storedKey
-    private var engineValue: SttEngine = engine
-    private var regionValue: String = regionValue
     private var modeValue: HotspotMode = mode
-
-    var setSttAdapterCalls: Int = 0
-        private set
-
-    var setRegionCalls: Int = 0
-        private set
 
     var setHotspotModeCalls: Int = 0
         private set
 
-    override fun sttEngine(): SttEngine {
+    override fun hotspotMode(): HotspotMode {
         if (failReads) throw IllegalStateException("config store unavailable")
-        return engineValue
+        return modeValue
     }
-
-    override fun setSttEngine(kind: SttEngine) {
-        setSttAdapterCalls += 1
-        engineValue = kind
-    }
-
-    override fun apiKey(): String = keyValue
-
-    override fun setApiKey(apiKey: String?) {
-        keyValue = apiKey?.trim().orEmpty()
-    }
-
-    override fun region(): String = regionValue
-
-    override fun setRegion(region: String?) {
-        setRegionCalls += 1
-        region?.trim()?.lowercase()?.takeIf { it.isNotEmpty() }?.let {
-            if (it in setOf("global", "eu", "us", "au")) regionValue = it
-        }
-    }
-
-    override fun hotspotMode(): HotspotMode = modeValue
 
     override fun setHotspotMode(mode: HotspotMode) {
         setHotspotModeCalls += 1

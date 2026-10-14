@@ -11,7 +11,6 @@ import com.glassstorm.phonemanager.adapter.jvm.ai.FakeTtsPort
 import com.glassstorm.phonemanager.core.domain.adapter.config.AppConfig
 import com.glassstorm.phonemanager.core.domain.adapter.repository.DeviceRepository
 import com.glassstorm.phonemanager.core.model.HotspotMode
-import com.glassstorm.phonemanager.core.model.SttEngine
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -51,20 +50,16 @@ class AppComponentWiringTest {
     }
 
     @Test
-    fun `the app config port round-trips an engine choice through the adapter store`() {
+    fun `the app config port round-trips a hotspot mode through the adapter store`() {
         // Given the production component
         val component = component()
 
-        // When the config port is resolved and a non-default engine is stored
+        // When the config port is resolved and the hotspot mode is stored
         val config: AppConfig = component.appConfig()
-        config.setSttEngine(SttEngine.SPEECHMATICS)
-        config.setRegion("eu")
         config.setHotspotMode(HotspotMode.AUTO)
 
-        // Then it is the adapter-backed store and the values read back through the port
+        // Then it is the adapter-backed store and the value reads back through the port
         assertThat(config).isInstanceOf(RuntimeConfigStore::class.java)
-        assertThat(config.sttEngine()).isEqualTo(SttEngine.SPEECHMATICS)
-        assertThat(config.region()).isEqualTo("eu")
         assertThat(config.hotspotMode()).isEqualTo(HotspotMode.AUTO)
     }
 

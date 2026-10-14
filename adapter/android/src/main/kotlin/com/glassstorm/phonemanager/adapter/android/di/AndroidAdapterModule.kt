@@ -25,7 +25,7 @@ import javax.inject.Singleton
  *
  * All bindings are `@Singleton` to match the registry's one-instance-per-port
  * semantics: one SQLite handle, one hotspot reservation owner, one NSD advertiser,
- * and one config store the settings screen and the STT factory both read.
+ * and one config store the settings screen reads.
  *
  * ## Deliberately absent
  *
@@ -42,7 +42,7 @@ object AndroidAdapterModule {
         @ApplicationContext context: Context,
     ): DeviceRepository = SqliteDeviceRepository(context)
 
-    /** App-private runtime configuration (STT engine, API key, region, hotspot mode). */
+    /** App-private runtime configuration (the hotspot mode). */
     @Provides
     @Singleton
     fun provideAppConfig(

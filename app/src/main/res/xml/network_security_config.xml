@@ -17,7 +17,7 @@
   "secure")
   ==========================================================================
   * The permissive `base-config` exists to satisfy Android's HTTP-client stacks
-    (the Speechmatics OkHttp/WebSocket path and any future HTTP client).
+    (any HTTP/WS client the hub may carry).
   * The netty gRPC listener uses RAW SOCKETS. Raw sockets are NOT subject to this
     policy at all — neither `cleartextTrafficPermitted` nor
     `NetworkSecurityPolicy.isCleartextTrafficPermitted()` is consulted for them.
@@ -34,7 +34,7 @@
      the gRPC transport to TLS; keep the hub listener on `TLS`-terminated sockets.
   2. Change `base-config cleartextTrafficPermitted` to `false` and scope any
      remaining cleartext to explicit `domain-config` entries.
-  3. Re-test the Speechmatics client against `https://`/`wss://` only.
+  3. Re-test any HTTP client against `https://`/`wss://` only.
 
   Adding TLS is explicitly out of scope for T12 (the plan forbids it); this
   comment is the upgrade path, not a promise that it exists today.

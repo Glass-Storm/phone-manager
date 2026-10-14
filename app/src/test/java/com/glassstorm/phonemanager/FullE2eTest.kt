@@ -31,8 +31,8 @@ import java.util.Collections
  *
  * This is the suite that proves the ANDROID WIRING, not just the protocol: the
  * graph comes from the real [PhoneManagerApplication] component (SQLite repository,
- * the deterministic `MockSttAdapter`, the ai fakes), and only two collaborators are
- * chosen for the test:
+ * the deterministic ai fakes: speech, gesture, TTS and enrollment), and only two
+ * collaborators are chosen for the test:
  *
  *  * [HubServer] — built with the loopback [HubServerAdapter]. The app's own bind
  *    is `0.0.0.0` (all interfaces), which is FORBIDDEN in tests; the explicit

@@ -141,9 +141,10 @@ class GrpcMappingTest {
 
     @Test
     fun `the StreamResult variant carries the pts and speaker the transcript variant omits`() {
-        // This pins the SHAPE of the two result-carrying variants so the transcript
-        // choice above cannot silently migrate. `StreamResult` is the richer v1
-        // variant; the hub maps `RelayResult` to the bare `transcript` one instead.
+        // Pins the SHAPE of StreamResult, the variant the hub ACTUALLY emits for a
+        // recognized utterance: it carries the text, the speaker label and the pts.
+        // The bare `transcript` string (field 3) stays in the oneof as a frozen,
+        // UNEMITTED field kept for wire compatibility only.
         val result =
             StreamResult
                 .newBuilder()

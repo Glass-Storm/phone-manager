@@ -7,19 +7,12 @@ package com.glassstorm.phonemanager.ui
  * [configAvailable] is `false` when no `AppConfig` was registered, which drives
  * the "not available" line instead of a crash.
  *
- * [apiKeyDraft] mirrors the reference client: the stored key is loaded into an
- * editable field so it can be replaced, but the field is rendered through a password
- * transformation while [apiKeyVisible] is `false`. Revealing it takes an explicit
- * action, so the cleartext key is never on screen by default.
+ * Speech-to-text is not configurable, so this state carries no engine, region or
+ * credential field: the hub runs a single on-device engine with no cloud path.
  */
 data class SettingsUiState(
     val configAvailable: Boolean = false,
-    val sttEngine: String = "",
-    val region: String = "",
     val hotspotMode: String = "",
-    val apiKeyConfigured: Boolean = false,
-    val apiKeyDraft: String = "",
-    val apiKeyVisible: Boolean = false,
     val batteryExempt: Boolean = false,
     val batteryAvailable: Boolean = false,
     val protocol: String = "",

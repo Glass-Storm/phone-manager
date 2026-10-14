@@ -1,20 +1,15 @@
 package com.glassstorm.phonemanager.ui
 
-import androidx.compose.ui.semantics.SemanticsProperties
-import androidx.compose.ui.semantics.getOrNull
-import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.ComposeContentTestRule
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
-import androidx.compose.ui.test.performTextInput
 import com.glassstorm.phonemanager.battery.BatteryExemption
 import com.glassstorm.phonemanager.core.domain.adapter.config.AppConfig
 import com.glassstorm.phonemanager.core.domain.adapter.transport.HubServer
 import com.glassstorm.phonemanager.core.model.HotspotMode
-import com.glassstorm.phonemanager.core.model.SttEngine
 import com.google.common.truth.Truth.assertThat
 import org.junit.Rule
 import org.junit.Test
@@ -28,10 +23,9 @@ import org.robolectric.RobolectricTestRunner
  * only to the domain `AppConfig` / `HubServer` / `BatteryExemption` ports, so these
  * tests drive fakes and never name an `:adapter` class.
  *
- * The masking case is the security headline: a stored API key must NOT appear in
- * cleartext in the semantics tree by default. It is asserted with a MATCHER (not a
- * text lookup) so the check bites whether the field is masked or not — a masked
- * field reports `[Password]` and dots, while an unmasked one reports the raw key.
+ * There is no speech-engine selector and no API-key field any more: the hub runs a
+ * single on-device engine with no cloud path, so the screen exposes only the hotspot
+ * mode, the Doze exemption and the endpoint.
  */
 @RunWith(RobolectricTestRunner::class)
 class SettingsScreenTest {
@@ -47,44 +41,10 @@ class SettingsScreenTest {
     }
 
     @Test
-    fun `the configured engine and region render as the current selection`() {
-        val config =
-            FakeAppConfig(
-                engine = SttEngine.SPEECHMATICS,
-                regionValue = "eu",
-            )
+    fun `the hotspot card renders the current mode`() {
+        composeRule.setSettingsContent(config = FakeAppConfig(mode = HotspotMode.MANUAL))
 
-        composeRule.setSettingsContent(config = config)
-
-        composeRule.assertText("Speech engine")
-        composeRule.assertText("Current engine: Speechmatics")
-        composeRule.assertText("Current region: eu")
-    }
-
-    @Test
-    fun `selecting the cloud engine persists it through the port`() {
-        val config = FakeAppConfig(engine = SttEngine.MOCK)
-
-        composeRule.setSettingsContent(config = config)
-        composeRule.assertText("Current engine: Mock (offline)")
-
-        composeRule.click("Use Speechmatics")
-
-        assertThat(config.sttEngine()).isEqualTo(SttEngine.SPEECHMATICS)
-        composeRule.assertText("Current engine: Speechmatics")
-    }
-
-    @Test
-    fun `selecting a region persists it through the port`() {
-        val config = FakeAppConfig(regionValue = "us")
-
-        composeRule.setSettingsContent(config = config)
-        composeRule.assertText("Current region: us")
-
-        composeRule.click("Region au")
-
-        assertThat(config.region()).isEqualTo("au")
-        composeRule.assertText("Current region: au")
+        composeRule.assertText("Hotspot mode: Manual")
     }
 
     @Test
@@ -98,72 +58,6 @@ class SettingsScreenTest {
 
         assertThat(config.hotspotMode()).isEqualTo(HotspotMode.AUTO)
         composeRule.assertText("Hotspot mode: Auto")
-    }
-
-    @Test
-    fun `a stored api key is never rendered in cleartext by default`() {
-        // Given a store holding a recognizable key
-        val config = FakeAppConfig(storedKey = "sk-SECRET-SENTINEL-1234")
-
-        composeRule.setSettingsContent(config = config)
-
-        // When the whole semantics tree is searched for the raw key
-        // Then it is absent, and a masked password field is present instead
-        assertThat(composeRule.maskedPasswordFieldCount()).isAtLeast(1)
-        assertThat(composeRule.cleartextKeyNodeCount("sk-SECRET-SENTINEL-1234")).isEqualTo(0)
-        composeRule.assertText("API key configured: yes")
-    }
-
-    @Test
-    fun `a fresh install with no key renders the not-configured state and stays masked`() {
-        val config = FakeAppConfig(storedKey = "")
-
-        composeRule.setSettingsContent(config = config)
-
-        composeRule.assertText("API key configured: no")
-        // The input is still a masked password field even when empty, so the shape
-        // never changes between configured and unconfigured states.
-        assertThat(composeRule.maskedPasswordFieldCount()).isAtLeast(1)
-        assertThat(composeRule.cleartextKeyNodeCount("sk-SECRET-SENTINEL-1234")).isEqualTo(0)
-    }
-
-    @Test
-    fun `an empty api key submission never crashes and keeps the unconfigured state`() {
-        val config = FakeAppConfig(storedKey = "")
-
-        composeRule.setSettingsContent(config = config)
-        composeRule.click("Set API key")
-
-        assertThat(config.apiKey()).isEmpty()
-        composeRule.assertText("API key configured: no")
-    }
-
-    @Test
-    fun `a newly typed api key is persisted and reported as configured`() {
-        val config = FakeAppConfig(storedKey = "")
-
-        composeRule.setSettingsContent(config = config)
-        composeRule.typeIntoField("sk-typed-777")
-        composeRule.click("Set API key")
-
-        assertThat(config.apiKey()).isEqualTo("sk-typed-777")
-        composeRule.assertText("API key configured: yes")
-        // The newly stored key is still not on screen in cleartext.
-        assertThat(composeRule.cleartextKeyNodeCount("sk-typed-777")).isEqualTo(0)
-    }
-
-    @Test
-    fun `revealing the api key takes an explicit action`() {
-        val config = FakeAppConfig(storedKey = "sk-SECRET-SENTINEL-1234")
-
-        composeRule.setSettingsContent(config = config)
-        composeRule.assertText("Show API key")
-
-        composeRule.click("Show API key")
-
-        // Only after the explicit toggle may the cleartext be rendered.
-        assertThat(composeRule.cleartextKeyNodeCount("sk-SECRET-SENTINEL-1234")).isAtLeast(1)
-        composeRule.assertText("Hide API key")
     }
 
     @Test
@@ -224,32 +118,4 @@ class SettingsScreenTest {
         onNodeWithText(text).performScrollTo().performClick()
         waitForIdle()
     }
-
-    private fun ComposeContentTestRule.typeIntoField(text: String) {
-        onNode(
-            SemanticsMatcher("is the api key input") { node ->
-                node.config.getOrNull(SemanticsProperties.Password) != null
-            },
-        ).performScrollTo().performTextInput(text)
-        waitForIdle()
-    }
-
-    /** Nodes that are text INPUTS marked as password fields (the masked shape). */
-    private fun ComposeContentTestRule.maskedPasswordFieldCount(): Int =
-        onAllNodes(
-            SemanticsMatcher("is a password input") { node ->
-                node.config.getOrNull(SemanticsProperties.Password) != null
-            },
-        ).fetchSemanticsNodes().size
-
-    /** Nodes whose rendered text CONTAINS [key]: 0 means the key is not on screen. */
-    private fun ComposeContentTestRule.cleartextKeyNodeCount(key: String): Int =
-        onAllNodes(
-            SemanticsMatcher("renders the api key in cleartext") { node ->
-                val text = node.config.getOrNull(SemanticsProperties.Text)
-                val editable = node.config.getOrNull(SemanticsProperties.EditableText)
-                text?.any { it.text.contains(key) } == true ||
-                    editable?.text?.contains(key) == true
-            },
-        ).fetchSemanticsNodes().size
 }

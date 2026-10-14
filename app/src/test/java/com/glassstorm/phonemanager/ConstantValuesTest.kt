@@ -3,12 +3,6 @@ package com.glassstorm.phonemanager
 import com.glassstorm.phonemanager.adapter.android.config.RuntimeConfigStore
 import com.glassstorm.phonemanager.adapter.android.network.nsd.NsdDiscoveryAdapter
 import com.glassstorm.phonemanager.adapter.android.network.wifi.LocalOnlyHotspotAdapter
-import com.glassstorm.phonemanager.adapter.jvm.speech.mock.MockSttAdapter
-import com.glassstorm.phonemanager.adapter.jvm.speech.speechmatics.ADD_TRANSCRIPT
-import com.glassstorm.phonemanager.adapter.jvm.speech.speechmatics.DEFAULT_LANGUAGE
-import com.glassstorm.phonemanager.adapter.jvm.speech.speechmatics.NORMAL_CLOSURE
-import com.glassstorm.phonemanager.adapter.jvm.speech.speechmatics.SAMPLE_RATE_HZ
-import com.glassstorm.phonemanager.core.domain.adapter.config.AppConfig
 import com.glassstorm.phonemanager.core.domain.service.StreamService
 import com.glassstorm.phonemanager.core.model.PeerAddress
 import com.glassstorm.phonemanager.transport.grpc.HubServerAdapter
@@ -55,17 +49,9 @@ class ConstantValuesTest {
     @Test
     fun `persisted runtime config identifiers are unchanged`() {
         assertThat(RuntimeConfigStore.PREFS_NAME).isEqualTo("runtime_config")
-        assertThat(RuntimeConfigStore.KEY_STT_ADAPTER).isEqualTo("stt_adapter")
-        assertThat(RuntimeConfigStore.KEY_API_KEY).isEqualTo("api_key")
-        assertThat(RuntimeConfigStore.KEY_REGION).isEqualTo("region")
         assertThat(RuntimeConfigStore.KEY_HOTSPOT_MODE).isEqualTo("hotspot_mode")
-        assertThat(RuntimeConfigStore.ADAPTER_MOCK).isEqualTo("mock")
-        assertThat(RuntimeConfigStore.ADAPTER_SPEECHMATICS).isEqualTo("speechmatics")
         assertThat(RuntimeConfigStore.HOTSPOT_MANUAL).isEqualTo("manual")
         assertThat(RuntimeConfigStore.HOTSPOT_AUTO).isEqualTo("auto")
-        assertThat(RuntimeConfigStore.DEFAULT_REGION).isEqualTo("us")
-        assertThat(RuntimeConfigStore.PLACEHOLDER_API_KEY).isEqualTo("YOUR_SPEECHMATICS_API_KEY")
-        assertThat(AppConfig.DEFAULT_REGION).isEqualTo("us")
     }
 
     @Test
@@ -98,19 +84,5 @@ class ConstantValuesTest {
         assertThat(StreamViewModel.DEFAULT_POLL_INTERVAL_MS).isEqualTo(250L)
         assertThat(StreamViewModel.DEFAULT_PEER_ID).isEqualTo("local-peer")
         assertThat(StreamService.AUDIO_SAMPLE_RATE_HZ).isEqualTo(16_000)
-    }
-
-    @Test
-    fun `speechmatics wire constants are unchanged`() {
-        assertThat(SAMPLE_RATE_HZ).isEqualTo(16_000)
-        assertThat(DEFAULT_LANGUAGE).isEqualTo("en")
-        assertThat(ADD_TRANSCRIPT).isEqualTo("AddTranscript")
-        assertThat(NORMAL_CLOSURE).isEqualTo(1000)
-    }
-
-    @Test
-    fun `fnv constants used by the deterministic mock are unchanged`() {
-        assertThat(MockSttAdapter.FNV_OFFSET_BASIS).isEqualTo(-0x340d631b7bdddcdbL)
-        assertThat(MockSttAdapter.FNV_PRIME).isEqualTo(0x100000001b3L)
     }
 }

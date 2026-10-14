@@ -71,12 +71,10 @@ includeBuild(aiAndroidDir) {
 
 include(":app")
 // The adapters are split by ANDROID DEPENDENCE. `:adapter:jvm` is a plain Kotlin
-// library (the STT engines, the discarding frame sink, the in-memory repository)
-// with ZERO Android imports; it never depends on `:adapter:android`. `:adapter:android`
-// holds the platform-backed adapters (SQLite, hotspot, NSD, the config store) and
-// may depend on the domain ports only. `SttFactory` lives in `:adapter:jvm` and
-// selects its engine through the `AppConfig` PORT, which is what makes the split
-// possible without a backward edge.
+// library (the deterministic ai fakes, the discarding frame sink, the in-memory
+// repository) with ZERO Android imports; it never depends on `:adapter:android`.
+// `:adapter:android` holds the platform-backed adapters (SQLite, hotspot, NSD, the
+// config store) and may depend on the domain ports only.
 include(":adapter:jvm")
 include(":adapter:android")
 // The ai-android INTEGRATION module: the on-device implementations of the gesture /
