@@ -2,7 +2,6 @@ package com.glassstorm.phonemanager.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.glassstorm.phonemanager.core.domain.service.PairingService
 import com.glassstorm.phonemanager.core.domain.service.StreamService
 import com.glassstorm.phonemanager.core.model.RelayOutput
 import com.glassstorm.phonemanager.core.model.RelayStats
@@ -17,9 +16,9 @@ import javax.inject.Inject
 /**
  * Stream state holder.
  *
- * The `StreamService` and `PairingService` ports are CONSTRUCTOR dependencies. A
- * FAILING port degrades to the "not available" rendering instead of a crash; a
- * missing port is impossible under compile-time DI.
+ * The `StreamService` port is a CONSTRUCTOR dependency. A FAILING port degrades
+ * to the "not available" rendering instead of a crash; a missing port is
+ * impossible under compile-time DI.
  *
  * ## Per-session counters
  *
@@ -39,14 +38,12 @@ import javax.inject.Inject
 class StreamViewModel
     private constructor(
         private val stream: StreamService,
-        private val pairing: PairingService,
         private val pollIntervalMs: Long,
     ) : ViewModel() {
         @Inject
         constructor(
             stream: StreamService,
-            pairing: PairingService,
-        ) : this(stream, pairing, DEFAULT_POLL_INTERVAL_MS)
+        ) : this(stream, DEFAULT_POLL_INTERVAL_MS)
 
         private val state = MutableStateFlow(StreamUiState())
 
@@ -70,7 +67,7 @@ class StreamViewModel
                 return
             }
             baseline = stats.getOrThrow()
-            val peerId = runCatching { pairing.listPaired().firstOrNull()?.deviceId }.getOrNull() ?: DEFAULT_PEER_ID
+            val peerId = DEFAULT_PEER_ID
             val session = runCatching { stream.openSession(peerId) }
             if (session.isFailure) {
                 state.value = state.value.copy(available = false)
@@ -153,7 +150,6 @@ class StreamViewModel
             /** Counter refresh cadence. Short enough to look live, long enough not to spin. */
             const val DEFAULT_POLL_INTERVAL_MS: Long = 250L
 
-            /** Peer used when no paired device exists yet: the session is still real. */
             const val DEFAULT_PEER_ID: String = "local-peer"
 
             /**
@@ -162,9 +158,8 @@ class StreamViewModel
              */
             fun forTesting(
                 stream: StreamService,
-                pairing: PairingService,
                 pollIntervalMs: Long = DEFAULT_POLL_INTERVAL_MS,
-            ): StreamViewModel = StreamViewModel(stream, pairing, pollIntervalMs)
+            ): StreamViewModel = StreamViewModel(stream, pollIntervalMs)
         }
     }
 

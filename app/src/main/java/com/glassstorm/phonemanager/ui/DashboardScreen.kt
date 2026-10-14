@@ -21,8 +21,7 @@ import com.glassstorm.phonemanager.ui.components.Text
 import com.glassstorm.phonemanager.ui.components.card.Card
 
 /**
- * Ecosystem hub status: listener state, hotspot credentials, bound port and how
- * many devices are paired.
+ * Ecosystem hub status: listener state, hotspot credentials and the bound port.
  *
  * [viewModelFactory] is the Dagger-backed factory the shell threads down: the
  * ViewModel and its ports are resolved from the compile-time graph, so a wiring
@@ -72,7 +71,6 @@ private fun hubCard(
 
             Text(text = if (state.running) "Hub: running" else "Hub: stopped")
             Text(text = "Port: ${state.boundPort}")
-            Text(text = "Paired devices: ${state.pairedCount}")
 
             state.startError?.let { Text(text = it) }
 

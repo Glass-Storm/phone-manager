@@ -1,17 +1,11 @@
 package com.glassstorm.phonemanager.transport.grpc
 
-import com.glassstorm.phonemanager.core.domain.security.TokenVerifier
-import com.glassstorm.phonemanager.core.domain.service.PairingService
 import com.glassstorm.phonemanager.core.domain.service.StreamService
-import com.glassstorm.phonemanager.core.model.Device
-import com.glassstorm.phonemanager.core.model.PairOutcome
-import com.glassstorm.phonemanager.core.model.Pairing
 import com.glassstorm.phonemanager.core.model.PeerRole
 import com.glassstorm.phonemanager.core.model.RelayOutput
 import com.glassstorm.phonemanager.core.model.RelayResult
 import com.glassstorm.phonemanager.core.model.RelaySession
 import com.glassstorm.phonemanager.core.model.RelayStats
-import com.glassstorm.phonemanager.transport.grpc.security.AuthInterceptor
 import com.google.common.truth.Truth.assertThat
 import com.google.protobuf.ByteString
 import ecosys.v1.DeviceRole
@@ -19,8 +13,6 @@ import ecosys.v1.EnrollRequest
 import ecosys.v1.EnrollResponse
 import ecosys.v1.GestureResult
 import ecosys.v1.ImageFrame
-import ecosys.v1.PairRequest
-import ecosys.v1.PairingServiceGrpcKt
 import ecosys.v1.StreamFrame
 import ecosys.v1.StreamKind
 import ecosys.v1.StreamOpenRequest
@@ -28,7 +20,6 @@ import ecosys.v1.StreamResult
 import ecosys.v1.StreamServiceGrpcKt
 import ecosys.v1.TtsAudio
 import io.grpc.ManagedChannel
-import io.grpc.Metadata
 import io.grpc.Server
 import io.grpc.inprocess.InProcessChannelBuilder
 import io.grpc.inprocess.InProcessServerBuilder
@@ -44,20 +35,18 @@ import java.util.concurrent.TimeUnit
 /**
  * The FOCUSED DTO <-> proto MAPPING suite for `:transport:grpc`.
  *
- * The relay/auth suites prove behaviour; this one pins the CONVERSION at the
- * boundary, because that is the whole reason the contract is isolated to this
- * module (D3/D4): a proto change does not auto-propagate into the domain's DTOs,
- * so the mapping must be confronted by a test.
+ * The relay suites prove behaviour; this one pins the CONVERSION at the boundary,
+ * because that is the whole reason the contract is isolated to this module (D3/D4):
+ * a proto change does not auto-propagate into the domain's DTOs, so the mapping
+ * must be confronted by a test.
  *
  * Everything runs over an in-process gRPC server so the REAL mapping code runs
  * against the REAL generated `ecosys.v1` types, with only the domain-side
- * collaborators faked (exactly as a composition would supply real ones).
+ * collaborators faked (exactly as a composition would supply real ones). The
+ * stream is UNAUTHENTICATED; pairing/token mapping was removed with the runtime.
  *
  * ## What is pinned
  *
- *  * `PairOutcome.Ok` -> `PairResponse{ok=true, token, device_id}`;
- *  * `PairOutcome.Rejected` -> `PairResponse{ok=false, reject_reason=<exact>}`;
- *  * the `PairRequest` role/name -> the domain `pair()` arguments;
  *  * a `RelayOutput.Speech` -> a `result` [StreamFrame] carrying text + speaker;
  *  * audio (and video) payloads pass through to the relay OPAQUELY, byte for byte;
  *  * each additive payload variant (`image`, `gesture`, `tts_audio`,
@@ -72,26 +61,10 @@ import java.util.concurrent.TimeUnit
 class GrpcMappingTest {
     private lateinit var server: Server
     private lateinit var channel: ManagedChannel
-    private lateinit var pairing: RecordingPairingService
     private lateinit var stream: RecordingStreamService
-
-    private val authKey: Metadata.Key<String> =
-        Metadata.Key.of("authorization", Metadata.ASCII_STRING_MARSHALLER)
-
-    /** The exact device the fake token resolves to. */
-    private val device =
-        Device(
-            deviceId = "d-mapping",
-            deviceName = "glass-mapping",
-            role = "GLASS",
-            tokenHash = "hash-d-mapping",
-            pairedAtMs = 1_000L,
-            lastSeenMs = null,
-        )
 
     @Before
     fun startServer() {
-        pairing = RecordingPairingService()
         stream = RecordingStreamService()
 
         val name = InProcessServerBuilder.generateName()
@@ -99,9 +72,7 @@ class GrpcMappingTest {
             InProcessServerBuilder
                 .forName(name)
                 .directExecutor()
-                .addService(PairingGrpcService(pairing))
                 .addService(StreamGrpcService(stream))
-                .intercept(AuthInterceptor(TokenVerifier { token -> device.takeIf { token == GOOD_TOKEN } }))
                 .build()
                 .start()
         channel = InProcessChannelBuilder.forName(name).directExecutor().build()
@@ -113,69 +84,6 @@ class GrpcMappingTest {
         server.shutdownNow()
         channel.awaitTermination(5, TimeUnit.SECONDS)
         server.awaitTermination(5, TimeUnit.SECONDS)
-    }
-
-    // ------------------------------------------------------------------ Pair
-
-    @Test
-    fun `a successful pair maps to ok true with the token and device id`() {
-        // Given the domain pairing will accept
-        pairing.outcome = PairOutcome.Ok(deviceId = "d-issued", token = "tok-issued")
-
-        // When Pair is called over the wire
-        val response = runBlocking { pairingStub().pair(pairRequest()) }
-
-        // Then the domain value maps field-for-field
-        assertThat(response.ok).isTrue()
-        assertThat(response.token).isEqualTo("tok-issued")
-        assertThat(response.deviceId).isEqualTo("d-issued")
-        // ...and a rejection reason is NOT smuggled onto a success
-        assertThat(response.rejectReason).isEmpty()
-
-        // And the request fields reached the domain port unchanged
-        assertThat(pairing.lastPin).isEqualTo(PIN)
-        assertThat(pairing.lastDeviceName).isEqualTo("glass-1")
-        assertThat(pairing.lastRole).isEqualTo(DeviceRole.DEVICE_ROLE_GLASS.name)
-    }
-
-    @Test
-    fun `a rejection maps to ok false with the exact reject reason and no token`() {
-        // Given the domain pairing will reject with a specific reason
-        pairing.outcome = PairOutcome.Rejected(reason = PairOutcome.REASON_PIN_INVALID)
-
-        // When Pair is called
-        val response = runBlocking { pairingStub().pair(pairRequest()) }
-
-        // Then the reason string crosses the boundary byte-for-byte
-        assertThat(response.ok).isFalse()
-        assertThat(response.rejectReason).isEqualTo(PairOutcome.REASON_PIN_INVALID)
-        assertThat(response.token).isEmpty()
-        assertThat(response.deviceId).isEmpty()
-    }
-
-    @Test
-    fun `every domain reject reason maps to its identical wire string`() {
-        // Given each frozen reason in turn
-        val reasons =
-            listOf(
-                PairOutcome.REASON_NO_WINDOW,
-                PairOutcome.REASON_PIN_INVALID,
-                PairOutcome.REASON_PIN_EXPIRED,
-                PairOutcome.REASON_PIN_CONSUMED,
-                PairOutcome.REASON_PIN_LOCKED,
-                PairOutcome.REASON_PIN_MISSING,
-                PairOutcome.REASON_NAME_MISSING,
-            )
-
-        reasons.forEach { reason ->
-            // When the domain rejects with it
-            pairing.outcome = PairOutcome.Rejected(reason = reason)
-            val response = runBlocking { pairingStub().pair(pairRequest()) }
-
-            // Then the wire carries the SAME string, never a re-mapped one
-            assertThat(response.rejectReason).isEqualTo(reason)
-            assertThat(response.ok).isFalse()
-        }
     }
 
     // ------------------------------------------------------------------ Stream
@@ -435,25 +343,13 @@ class GrpcMappingTest {
 
     // ------------------------------------------------------------------ helpers
 
-    private fun pairingStub(): PairingServiceGrpcKt.PairingServiceCoroutineStub = PairingServiceGrpcKt.PairingServiceCoroutineStub(channel)
-
     private fun streamOnce(frame: StreamFrame): List<StreamFrame> =
         runBlocking {
             StreamServiceGrpcKt
                 .StreamServiceCoroutineStub(channel)
-                .openStream(flowOf(frame), bearer())
+                .openStream(flowOf(frame))
                 .toList()
         }
-
-    private fun bearer(): Metadata = Metadata().apply { put(authKey, "Bearer $GOOD_TOKEN") }
-
-    private fun pairRequest(): PairRequest =
-        PairRequest
-            .newBuilder()
-            .setPin(PIN)
-            .setDeviceName("glass-1")
-            .setRole(DeviceRole.DEVICE_ROLE_GLASS)
-            .build()
 
     private fun audioFrame(bytes: ByteArray): StreamFrame =
         StreamFrame
@@ -466,43 +362,6 @@ class GrpcMappingTest {
             .newBuilder()
             .setVideoH264Nal(ByteString.copyFrom(bytes))
             .build()
-
-    /**
-     * [PairingService] fake that records the arguments the mapping passed and
-     * returns a configurable [outcome]. Only the two methods the RPC surface uses
-     * are exercised; the rest are inert.
-     */
-    private class RecordingPairingService : PairingService {
-        var outcome: PairOutcome = PairOutcome.Rejected(reason = PairOutcome.REASON_NO_WINDOW)
-
-        var lastPin: String? = null
-        var lastDeviceName: String? = null
-        var lastRole: String? = null
-
-        override fun openWindow(ttlMs: Long): Pairing = Pairing(pin = "000000", expiresAtMs = ttlMs)
-
-        override fun stopWindow() = Unit
-
-        override fun pair(
-            pin: String,
-            deviceName: String,
-            role: String,
-        ): PairOutcome {
-            lastPin = pin
-            lastDeviceName = deviceName
-            lastRole = role
-            return outcome
-        }
-
-        override fun touchLastSeen(
-            deviceId: String,
-            seenAtMs: Long,
-        ) = Unit
-
-        override fun revoke(deviceId: String) = Unit
-
-        override fun listPaired(): List<Device> = emptyList()
-    }
 
     /**
      * [StreamService] fake that records the media the mapping handed to the relay
@@ -566,10 +425,5 @@ class GrpcMappingTest {
                 transcripts = 0L,
                 liveSessions = 0,
             )
-    }
-
-    private companion object {
-        const val PIN: String = "428193"
-        const val GOOD_TOKEN: String = "good-token"
     }
 }

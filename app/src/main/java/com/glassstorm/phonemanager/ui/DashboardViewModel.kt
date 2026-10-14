@@ -6,7 +6,6 @@ import com.glassstorm.phonemanager.core.domain.adapter.network.HotspotController
 import com.glassstorm.phonemanager.core.domain.adapter.transport.HubServer
 import com.glassstorm.phonemanager.core.domain.network.HotspotFailure
 import com.glassstorm.phonemanager.core.domain.network.HotspotUnavailableException
-import com.glassstorm.phonemanager.core.domain.service.PairingService
 import com.glassstorm.phonemanager.hub.HubStarter
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -46,7 +45,6 @@ class DashboardViewModel
     private constructor(
         private val hub: HubServer,
         private val hotspot: HotspotController,
-        private val pairing: PairingService,
         private val hubStarter: HubStarter,
         private val pollIntervalMs: Long,
     ) : ViewModel() {
@@ -54,9 +52,8 @@ class DashboardViewModel
         constructor(
             hub: HubServer,
             hotspot: HotspotController,
-            pairing: PairingService,
             hubStarter: HubStarter,
-        ) : this(hub, hotspot, pairing, hubStarter, DEFAULT_POLL_INTERVAL_MS)
+        ) : this(hub, hotspot, hubStarter, DEFAULT_POLL_INTERVAL_MS)
 
         private val state = MutableStateFlow(DashboardUiState())
 
@@ -142,7 +139,6 @@ class DashboardViewModel
         private fun refresh(startError: String? = state.value.startError) {
             val running = runCatching { hub.isRunning() }
             val port = runCatching { hub.boundPort() }
-            val paired = runCatching { pairing.listPaired() }
             val detected = runCatching { hotspot.detectManualTether() }
 
             state.value =
@@ -151,7 +147,6 @@ class DashboardViewModel
                     hotspotAvailable = detected.isSuccess,
                     running = running.getOrDefault(false),
                     boundPort = port.getOrDefault(0),
-                    pairedCount = paired.getOrDefault(emptyList()).size,
                     hotspot = detected.getOrNull(),
                     hotspotError = state.value.hotspotError,
                     startError = startError,
@@ -173,10 +168,9 @@ class DashboardViewModel
             fun forTesting(
                 hub: HubServer,
                 hotspot: HotspotController,
-                pairing: PairingService,
                 hubStarter: HubStarter,
                 pollIntervalMs: Long = DEFAULT_POLL_INTERVAL_MS,
-            ): DashboardViewModel = DashboardViewModel(hub, hotspot, pairing, hubStarter, pollIntervalMs)
+            ): DashboardViewModel = DashboardViewModel(hub, hotspot, hubStarter, pollIntervalMs)
         }
     }
 

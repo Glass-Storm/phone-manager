@@ -9,18 +9,12 @@ import com.glassstorm.phonemanager.adapter.jvm.speech.speechmatics.DEFAULT_LANGU
 import com.glassstorm.phonemanager.adapter.jvm.speech.speechmatics.NORMAL_CLOSURE
 import com.glassstorm.phonemanager.adapter.jvm.speech.speechmatics.SAMPLE_RATE_HZ
 import com.glassstorm.phonemanager.core.domain.adapter.config.AppConfig
-import com.glassstorm.phonemanager.core.domain.service.PairingService
 import com.glassstorm.phonemanager.core.domain.service.StreamService
-import com.glassstorm.phonemanager.core.model.PairOutcome
 import com.glassstorm.phonemanager.core.model.PeerAddress
-import com.glassstorm.phonemanager.core.service.security.TokenCodec
 import com.glassstorm.phonemanager.transport.grpc.HubServerAdapter
-import com.glassstorm.phonemanager.transport.grpc.security.AuthInterceptor
-import com.glassstorm.phonemanager.ui.PairingViewModel
 import com.glassstorm.phonemanager.ui.ROUTES
 import com.glassstorm.phonemanager.ui.ROUTE_DASHBOARD
 import com.glassstorm.phonemanager.ui.ROUTE_DEVICES
-import com.glassstorm.phonemanager.ui.ROUTE_PAIRING
 import com.glassstorm.phonemanager.ui.ROUTE_SETTINGS
 import com.glassstorm.phonemanager.ui.ROUTE_STREAM
 import com.glassstorm.phonemanager.ui.SettingsViewModel
@@ -83,26 +77,14 @@ class ConstantValuesTest {
     }
 
     @Test
-    fun `the five routes and their order are unchanged`() {
+    fun `the four routes and their order are unchanged`() {
         assertThat(ROUTE_DASHBOARD).isEqualTo("dashboard")
-        assertThat(ROUTE_PAIRING).isEqualTo("pairing")
         assertThat(ROUTE_STREAM).isEqualTo("stream")
         assertThat(ROUTE_DEVICES).isEqualTo("devices")
         assertThat(ROUTE_SETTINGS).isEqualTo("settings")
         assertThat(ROUTES)
-            .containsExactly("dashboard", "pairing", "stream", "devices", "settings")
+            .containsExactly("dashboard", "stream", "devices", "settings")
             .inOrder()
-    }
-
-    @Test
-    fun `the seven pairing reject reasons are unchanged`() {
-        assertThat(PairOutcome.REASON_NO_WINDOW).isEqualTo("no-window")
-        assertThat(PairOutcome.REASON_PIN_INVALID).isEqualTo("pin-invalid")
-        assertThat(PairOutcome.REASON_PIN_EXPIRED).isEqualTo("pin-expired")
-        assertThat(PairOutcome.REASON_PIN_CONSUMED).isEqualTo("pin-consumed")
-        assertThat(PairOutcome.REASON_PIN_LOCKED).isEqualTo("pin-locked")
-        assertThat(PairOutcome.REASON_PIN_MISSING).isEqualTo("pin-missing")
-        assertThat(PairOutcome.REASON_NAME_MISSING).isEqualTo("name-missing")
     }
 
     @Test
@@ -112,21 +94,10 @@ class ConstantValuesTest {
     }
 
     @Test
-    fun `the unauthenticated gRPC method allowlist entry is unchanged`() {
-        assertThat(AuthInterceptor.PAIR_METHOD).isEqualTo("ecosys.v1.PairingService/Pair")
-    }
-
-    @Test
     fun `numeric protocol and policy constants are unchanged`() {
-        assertThat(PairingService.MAX_PIN_ATTEMPTS).isEqualTo(5)
-        assertThat(PairingViewModel.WINDOW_TTL_MS).isEqualTo(120_000L)
         assertThat(StreamViewModel.DEFAULT_POLL_INTERVAL_MS).isEqualTo(250L)
         assertThat(StreamViewModel.DEFAULT_PEER_ID).isEqualTo("local-peer")
         assertThat(StreamService.AUDIO_SAMPLE_RATE_HZ).isEqualTo(16_000)
-        assertThat(TokenCodec.DEFAULT_ITERATIONS).isEqualTo(210_000)
-        assertThat(TokenCodec.MIN_ITERATIONS).isEqualTo(100_000)
-        assertThat(TokenCodec.TOKEN_BITS).isEqualTo(256)
-        assertThat(TokenCodec.SALT_BYTES).isEqualTo(16)
     }
 
     @Test

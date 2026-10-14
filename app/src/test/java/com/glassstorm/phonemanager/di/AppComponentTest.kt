@@ -4,13 +4,10 @@ import android.app.Application
 import androidx.test.core.app.ApplicationProvider
 import com.glassstorm.phonemanager.PhoneManagerApplication
 import com.glassstorm.phonemanager.core.domain.adapter.transport.HubServer
-import com.glassstorm.phonemanager.core.domain.security.TokenVerifier
 import com.glassstorm.phonemanager.core.domain.service.DeviceService
-import com.glassstorm.phonemanager.core.domain.service.PairingService
 import com.glassstorm.phonemanager.transport.grpc.HubServerAdapter
 import com.glassstorm.phonemanager.ui.DashboardViewModel
 import com.glassstorm.phonemanager.ui.DevicesViewModel
-import com.glassstorm.phonemanager.ui.PairingViewModel
 import com.glassstorm.phonemanager.ui.SettingsViewModel
 import com.glassstorm.phonemanager.ui.StreamViewModel
 import com.google.common.truth.Truth.assertThat
@@ -20,14 +17,11 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * Proves the Dagger graph compiles and resolves the whole hub, AND that the
- * pairing/token-verifier identity invariant survives the registry -> Dagger move.
+ * Proves the Dagger graph compiles and resolves the whole hub.
  *
- * The two resolutions below are the heart of this suite: the gRPC Pairing service
- * mints tokens through [PairingService] while the `AuthInterceptor` verifies them
- * through [TokenVerifier]. If the graph built two instances they could disagree;
- * `ServiceModule` binds both to one `@Singleton` `PairingServiceImpl`, and this
- * test fails the moment that binding is split.
+ * Pairing/token-verifier binding invariants are gone with the pairing runtime:
+ * the hub no longer serves `Pair`/`Heartbeat`, so there is no authority for the
+ * (removed) interceptor to verify against.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [29])
@@ -44,24 +38,9 @@ class AppComponentTest {
         // When each port is resolved by type
         // Then none throws — a missing binding would fail the BUILD, not this call
         assertThat(component.deviceService()).isNotNull()
-        assertThat(component.pairingService()).isNotNull()
         assertThat(component.streamService()).isNotNull()
         assertThat(component.hubServer()).isNotNull()
         assertThat(component.appConfig()).isNotNull()
-    }
-
-    @Test
-    fun `the pairing service and the token verifier are the same instance`() {
-        // Given the production Dagger component
-        val component = component()
-
-        // When the service surface and the interceptor's verifier are resolved
-        val pairing: PairingService = component.pairingService()
-        val verifier: TokenVerifier = component.tokenVerifier()
-
-        // Then they are identical, so the interceptor can never verify against a
-        // different pairing state than the one Pair mints tokens into.
-        assertThat(verifier).isSameInstanceAs(pairing)
     }
 
     @Test
@@ -105,7 +84,6 @@ class AppComponentTest {
         // throw here, so this is the guard for the multibinding
         assertThat(factory.create(DashboardViewModel::class.java)).isInstanceOf(DashboardViewModel::class.java)
         assertThat(factory.create(DevicesViewModel::class.java)).isInstanceOf(DevicesViewModel::class.java)
-        assertThat(factory.create(PairingViewModel::class.java)).isInstanceOf(PairingViewModel::class.java)
         assertThat(factory.create(SettingsViewModel::class.java)).isInstanceOf(SettingsViewModel::class.java)
         assertThat(factory.create(StreamViewModel::class.java)).isInstanceOf(StreamViewModel::class.java)
     }

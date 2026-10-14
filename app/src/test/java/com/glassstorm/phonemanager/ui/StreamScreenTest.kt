@@ -8,7 +8,6 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.lifecycle.ViewModelStore
-import com.glassstorm.phonemanager.core.domain.service.PairingService
 import com.glassstorm.phonemanager.core.domain.service.StreamService
 import com.google.common.truth.Truth.assertThat
 import org.junit.Rule
@@ -155,7 +154,7 @@ class StreamScreenTest {
     @Test
     fun `stopping without starting is a no-op and never crashes`() {
         val peer = FakeStreamService()
-        val viewModel = StreamViewModel(peer, FakePairingService())
+        val viewModel = StreamViewModel(peer)
 
         // The Stop control is disabled while idle, so the idempotent path is driven
         // at the ViewModel level: a stop with no session must not close anything.
@@ -193,7 +192,7 @@ class StreamScreenTest {
     fun `clearing the ViewModel mid-refresh leaves no live coroutine behind`() {
         val peer = FakeStreamService()
         val store = ViewModelStore()
-        val viewModel = StreamViewModel(peer, FakePairingService())
+        val viewModel = StreamViewModel(peer)
         store.put("stream", viewModel)
 
         viewModel.onStart()
@@ -215,11 +214,8 @@ class StreamScreenTest {
         assertThat(viewModel.uiState.value).isEqualTo(frozen)
     }
 
-    private fun ComposeContentTestRule.setStreamContent(
-        stream: StreamService,
-        pairing: PairingService = FakePairingService(),
-    ) {
-        val viewModel = StreamViewModel(stream, pairing)
+    private fun ComposeContentTestRule.setStreamContent(stream: StreamService) {
+        val viewModel = StreamViewModel(stream)
         setContent {
             AppTheme {
                 StreamScreen(viewModelFactory = viewModelFactory(viewModel))

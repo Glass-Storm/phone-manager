@@ -21,7 +21,6 @@ import com.glassstorm.phonemanager.ui.components.Surface
 import com.glassstorm.phonemanager.ui.components.Text
 
 const val ROUTE_DASHBOARD = "dashboard"
-const val ROUTE_PAIRING = "pairing"
 const val ROUTE_STREAM = "stream"
 const val ROUTE_DEVICES = "devices"
 const val ROUTE_SETTINGS = "settings"
@@ -29,14 +28,13 @@ const val ROUTE_SETTINGS = "settings"
 val ROUTES: List<String> =
     listOf(
         ROUTE_DASHBOARD,
-        ROUTE_PAIRING,
         ROUTE_STREAM,
         ROUTE_DEVICES,
         ROUTE_SETTINGS,
     )
 
 /**
- * The app shell: one [NavHost] over the five routes the hub exposes.
+ * The app shell: one [NavHost] over the four routes the hub exposes.
  *
  * [viewModelFactory] is the Dagger-backed [ViewModelProvider.Factory] the
  * composition root owns, handed down so each screen can resolve its ViewModel and
@@ -69,7 +67,6 @@ fun AppShell(
             modifier = Modifier.fillMaxSize(),
         ) {
             composable(ROUTE_DASHBOARD) { DashboardScreen(viewModelFactory, Modifier.padding(insets)) }
-            composable(ROUTE_PAIRING) { PairingScreen(viewModelFactory, Modifier.padding(insets)) }
             composable(ROUTE_STREAM) { StreamScreen(viewModelFactory, Modifier.padding(insets)) }
             composable(ROUTE_DEVICES) { DevicesScreen(viewModelFactory, Modifier.padding(insets)) }
             composable(ROUTE_SETTINGS) { SettingsScreen(viewModelFactory, Modifier.padding(insets)) }
@@ -122,7 +119,6 @@ private fun NavigationBar(
 private fun routeLabel(route: String): String =
     when (route) {
         ROUTE_DASHBOARD -> "DASHBOARD"
-        ROUTE_PAIRING -> "PAIRING"
         ROUTE_STREAM -> "STREAM"
         ROUTE_DEVICES -> "DEVICES"
         ROUTE_SETTINGS -> "SETTINGS"

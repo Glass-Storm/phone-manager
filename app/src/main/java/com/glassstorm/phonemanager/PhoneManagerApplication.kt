@@ -9,8 +9,8 @@ import com.glassstorm.phonemanager.di.DaggerAppComponent
  *
  * Building the component here — once per process, before any Activity or Service
  * runs — is what makes the dependency graph process-wide: the foreground service
- * and the UI resolve the SAME `PairingServiceImpl`, `StreamServiceImpl` and
- * `HubServer` through it, so they can never observe different hub state.
+ * and the UI resolve the SAME `StreamServiceImpl` and `HubServer` through it, so
+ * they can never observe different hub state.
  *
  * [HubForegroundService] resolves its collaborators and [MainActivity] resolves
  * the ViewModel factory from this field; nothing builds a second graph.

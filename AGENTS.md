@@ -7,12 +7,14 @@ The always-loaded contract for this repository. The skills under
 
 `phone-manager` is the phone-side hub of the `ecosys.v1` device ecosystem: an
 Android phone that is both the access point AND the server. It runs a local-only
-hotspot, advertises `_ecosys._tcp` over DNS-SD, pairs peers with a single-use
-6-digit PIN, authenticates every later call with a bearer token, relays audio and
-video between peers and a pluggable STT engine, and returns transcripts on the same
-stream. The ecosystem has exactly three peers: the phone hub (THIS repo, in scope);
-the smart-glasses app and the Ubuntu/Raspberry-Pi daemon, both OUT OF SCOPE here.
-Those two consume this repo's frozen `:contract` artifact instead of forking it.
+hotspot, advertises `_ecosys._tcp` over DNS-SD, and serves an UNAUTHENTICATED
+bidirectional stream: peers bind their identity with a `stream_open` frame (no
+PIN, no bearer token), the hub relays audio, video and JPEG stills between peers
+and an on-device STT / gesture / TTS engine, and returns transcripts and gesture
+results on the same stream. The ecosystem has exactly three peers: the phone hub
+(THIS repo, in scope); the smart-glasses app and the Ubuntu/Raspberry-Pi daemon,
+both OUT OF SCOPE here. Those two consume this repo's frozen `:contract` artifact
+instead of forking it.
 
 ## 2. Golden rules (NON-NEGOTIABLE)
 
@@ -27,6 +29,10 @@ Those two consume this repo's frozen `:contract` artifact instead of forking it.
 - The `ecosys.v1` contract is FROZEN: never renumber or reuse a field number or an
   enum value, never change a field's type or name. Additive changes only, and new
   fields must be optional.
+- No PIN pairing and no bearer-token auth in the hub runtime. `OpenStream` is
+  UNAUTHENTICATED and identity is bound by the `stream_open` frame.
+  `PairingService`/`Pair`/`Heartbeat` stay in the `.proto` as a frozen, unserved
+  stub: never delete or alter them, but never re-wire them into the runtime either.
 - All docs, comments, and agent instructions are 100% English.
 - Never hand-edit the vendored Lumo UI kit (`ui/foundation/**`, `ui/components/**`,
   `Theme.kt`, `Color.kt`, `Typography.kt`). Regenerate it through the plugin.
@@ -41,7 +47,7 @@ because agents may be in an environment restricted to one. Marker: (v) came from
 
 | Project                                    | Purpose                                    | Local path                                                             | Branch                | HTTPS URL                                                                           | SSH URL                                                                         |
 | ------------------------------------------ | ------------------------------------------ | ---------------------------------------------------------------------- | --------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| Daemon / Raspberry Pi (`ecosys_pi`)        | Python peer, pairs with this hub over gRPC | `/home/chaos/workplace/fyp/necklace-data-processing-raspberrypi-side-` | `feat/ecosys-client`  | `https://github.com/Glass-Storm/necklace-data-processing-raspberrypi-side-.git` (v) | `git@github.com:Glass-Storm/necklace-data-processing-raspberrypi-side-.git` (d) |
+| Daemon / Raspberry Pi (`ecosys_pi`)        | Python peer, streams to this hub over gRPC | `/home/chaos/workplace/fyp/necklace-data-processing-raspberrypi-side-` | `feat/ecosys-client`  | `https://github.com/Glass-Storm/necklace-data-processing-raspberrypi-side-.git` (v) | `git@github.com:Glass-Storm/necklace-data-processing-raspberrypi-side-.git` (d) |
 | Glasses app (`SpeakerDiarazation-Gesture`) | Android subtitle and gesture demo          | `/home/chaos/workplace/fyp/SpeakerDiarazation-Gesture`                 | `main`                | `https://github.com/Glass-Storm/SpeakerDiarazation-Gesture.git` (d)                 | `git@github.com:Glass-Storm/SpeakerDiarazation-Gesture.git` (v)                 |
 | This hub (`phone-manager`)                 | The `ecosys.v1` hub                        | `/home/chaos/workplace/fyp/phone-manager`                              | `feat/pi-ecosys-peer` | `https://github.com/Glass-Storm/phone-manager.git` (d)                              | `git@github.com:Glass-Storm/phone-manager.git` (v)                              |
 

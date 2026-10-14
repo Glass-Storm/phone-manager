@@ -9,13 +9,10 @@ import com.glassstorm.phonemanager.core.domain.adapter.repository.DeviceReposito
 import com.glassstorm.phonemanager.core.domain.adapter.transport.HubServer
 import com.glassstorm.phonemanager.core.domain.network.HotspotFailure
 import com.glassstorm.phonemanager.core.domain.network.HotspotUnavailableException
-import com.glassstorm.phonemanager.core.domain.service.PairingService
 import com.glassstorm.phonemanager.core.domain.service.StreamService
 import com.glassstorm.phonemanager.core.model.Device
 import com.glassstorm.phonemanager.core.model.HotspotInfo
 import com.glassstorm.phonemanager.core.model.HotspotMode
-import com.glassstorm.phonemanager.core.model.PairOutcome
-import com.glassstorm.phonemanager.core.model.Pairing
 import com.glassstorm.phonemanager.core.model.PeerRole
 import com.glassstorm.phonemanager.core.model.RelayOutput
 import com.glassstorm.phonemanager.core.model.RelayResult
@@ -103,81 +100,6 @@ class FakeHotspotController(
     override fun detectManualTether(): HotspotInfo? {
         if (failOnDetect) throw IllegalStateException("hotspot unavailable")
         return if (active) info else null
-    }
-}
-
-/**
- * [PairingService] fake with the same one-window-at-a-time semantics as the real
- * service: [openWindow] REPLACES the previous window and returns the next PIN in
- * [pinSequence], so a UI that rendered a stale PIN would fail the two-open test.
- */
-class FakePairingService(
-    private val pinSequence: List<String> = listOf("428193", "999999"),
-    private val clock: () -> Long = { 1_000_000L },
-    seed: List<Device> = emptyList(),
-    private val failOnList: Boolean = false,
-) : PairingService {
-    private val rows: MutableMap<String, Device> = linkedMapOf()
-
-    private var window: Pairing? = null
-
-    var openCalls: Int = 0
-        private set
-
-    init {
-        seed.forEach { rows[it.deviceId] = it }
-    }
-
-    fun seedDevice(
-        deviceId: String,
-        deviceName: String,
-        role: String = "GLASS",
-    ) {
-        rows[deviceId] =
-            Device(
-                deviceId = deviceId,
-                deviceName = deviceName,
-                role = role,
-                tokenHash = "hash-$deviceId",
-                pairedAtMs = clock(),
-                lastSeenMs = null,
-            )
-    }
-
-    override fun openWindow(ttlMs: Long): Pairing {
-        val index = openCalls.coerceAtMost(pinSequence.lastIndex)
-        openCalls += 1
-        val fresh =
-            Pairing(
-                pin = pinSequence[index],
-                expiresAtMs = clock() + ttlMs,
-            )
-        window = fresh
-        return fresh
-    }
-
-    override fun stopWindow() {
-        window = null
-    }
-
-    override fun pair(
-        pin: String,
-        deviceName: String,
-        role: String,
-    ): PairOutcome = PairOutcome.Rejected(reason = PairOutcome.REASON_PIN_INVALID)
-
-    override fun touchLastSeen(
-        deviceId: String,
-        seenAtMs: Long,
-    ) = Unit
-
-    override fun revoke(deviceId: String) {
-        rows.remove(deviceId)
-    }
-
-    override fun listPaired(): List<Device> {
-        if (failOnList) throw IllegalStateException("pairing store unavailable")
-        return rows.values.toList()
     }
 }
 

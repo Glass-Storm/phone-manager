@@ -67,16 +67,17 @@ Sent to `PairingService/Pair`. Only ever sent on `Pair`.
 
 ### `StreamOpenRequest`
 
-| Field       | Number | Type         | Semantics                          |
-| ----------- | ------ | ------------ | ---------------------------------- |
-| `device_id` | 1      | `string`     | The peer's device id.              |
-| `kind`      | 2      | `StreamKind` | Which media the stream will carry. |
+| Field       | Number | Type         | Semantics                           |
+| ----------- | ------ | ------------ | ----------------------------------- |
+| `device_id` | 1      | `string`     | The peer's device id.               |
+| `kind`      | 2      | `StreamKind` | Which media the stream will carry.  |
+| `role`      | 3      | `DeviceRole` | The peer's role (glass vs. daemon). |
 
-This message is part of the frozen contract. It is NOT used by
-`StreamService/OpenStream` today: the session binds to the device the bearer
-token proved, and the media kind is inferred from which payload variant each
-frame carries. The header comment in the proto says the same thing: the message
-is frozen, and peers may exchange it over their own side channel.
+With bearer-token auth removed, this message IS used by
+`StreamService/OpenStream`: a peer sends it as the first frame (`stream_open`,
+field 10) to bind its session to a device id and role, which is how the hub routes
+frames. The media kind is still inferred from which payload variant each frame
+carries.
 
 ### `StreamResult`
 
@@ -136,11 +137,19 @@ silently claims a role or a media kind.
 
 ---
 
-## 4. Pairing flow
+## 4. Pairing flow (REMOVED FROM THE RUNTIME)
+
+> **Removed in v3.** Pairing, PIN and bearer-token authentication were removed
+> from the hub runtime. `PairingService/Pair` and `PairingService/Heartbeat` are
+> still declared in the `.proto` (frozen; unused/reserved), but the hub no longer
+> serves them, mints tokens, or verifies credentials. `OpenStream` is opened
+> UNAUTHENTICATED; the peer binds its identity with the `stream_open` frame
+> (section 6). The messages and reasons below remain frozen for wire compatibility
+> with peers generated from older revisions.
 
 1. **The hub opens a pairing window.** At most ONE window exists at a time. It
    carries a 6-digit PIN drawn from `SecureRandom`, and a TTL. The app's default
-   TTL is **120 seconds** (`PairingViewModel.WINDOW_TTL_MS = 120_000L`).
+   TTL is **120 seconds**.
 2. **The peer calls `Pair` with that PIN**, its device name, and its role.
 3. **The hub validates the PIN** in constant time, then:
     - burns the PIN first (single-use: a successful `Pair` consumes it, and a
@@ -149,6 +158,8 @@ silently claims a role or a media kind.
       `token` + `device_id` in `PairResponse`.
 4. **The peer keeps the token** and sends it on every subsequent call as gRPC
    metadata `authorization: Bearer <token>`.
+
+None of steps 1–4 is reachable in the current hub runtime.
 
 Wrong PINs are counted. After **5 failed attempts**
 (`PairingService.MAX_PIN_ATTEMPTS = 5`) the current PIN is locked; only a fresh
@@ -180,10 +191,15 @@ path.
 
 ---
 
-## 5. The auth-rejection contract
+## 5. The auth-rejection contract (REMOVED FROM THE RUNTIME)
 
-**Exactly ONE method is reachable without a bearer token:
-`ecosys.v1.PairingService/Pair`.** This is enforced by a server interceptor that
+> **Removed in v3.** There is no bearer-token gate on the hub any more: every RPC
+> it serves is unauthenticated. There is no `AuthInterceptor`, no
+> `UNAUTHENTICATED` rejection, and no revocation. The section below describes the
+> retired v1 behaviour and is kept only as history.
+
+In v1 exactly ONE method was reachable without a bearer token:
+`ecosys.v1.PairingService/Pair`. This is enforced by a server interceptor that
 matches the full method name `package.Service/Method`, so it cannot be bypassed
 by casing or by a method-name collision across services.
 
@@ -225,10 +241,9 @@ SAME stream.
 - **Video is raw H.264 NAL units, OPAQUE.** The hub never decodes, re-encodes,
   transcodes, or renders video. It relays the bytes. Anything that needs video
   to be displayed does so on the peer.
-- **Transcripts come back as `transcript` frames** (and the structured
-  `StreamResult` on `result`). In v1 the hub emits the plain text; it does not
-  emit a `StreamResult` carrying a speaker label, because diarization is out of
-  scope.
+- **Transcripts come back as `result` frames** carrying `StreamResult{text,
+speaker_label, pts_ms}`. The `speaker_label` is the resolved speaker name, and
+  is empty when the speaker is not enrolled. The bare `transcript` variant (field 3) is frozen but no longer emitted by the hub.
 
 ### Backpressure policy
 
@@ -308,40 +323,52 @@ promise of confidentiality.
 
 ### `PairingService`
 
-Pairing and liveness.
+Pairing and liveness. **Not served by the current hub runtime**: the methods are
+retained in the `.proto` for wire compatibility but the hub exposes neither.
 
-| RPC         | Request            | Response            | Auth                                                                         |
-| ----------- | ------------------ | ------------------- | ---------------------------------------------------------------------------- |
-| `Pair`      | `PairRequest`      | `PairResponse`      | **NONE** (the sole unauthenticated method, and only while a window is open). |
-| `Heartbeat` | `HeartbeatRequest` | `HeartbeatResponse` | Bearer token required.                                                       |
+| RPC         | Request            | Response            | Auth                               |
+| ----------- | ------------------ | ------------------- | ---------------------------------- |
+| `Pair`      | `PairRequest`      | `PairResponse`      | not served (retired with pairing). |
+| `Heartbeat` | `HeartbeatRequest` | `HeartbeatResponse` | not served (retired with pairing). |
 
 ### `StreamService`
 
 Bidirectional media and results relay.
 
-| RPC          | Request              | Response             | Auth                   |
-| ------------ | -------------------- | -------------------- | ---------------------- |
-| `OpenStream` | `stream StreamFrame` | `stream StreamFrame` | Bearer token required. |
+| RPC          | Request              | Response             | Auth      |
+| ------------ | -------------------- | -------------------- | --------- |
+| `OpenStream` | `stream StreamFrame` | `stream StreamFrame` | **NONE**. |
 
 Full method names on the wire: `ecosys.v1.PairingService/Pair`,
 `ecosys.v1.PairingService/Heartbeat`, `ecosys.v1.StreamService/OpenStream`.
 
 ---
 
-## 10. What is explicitly NOT in v1
+## 10. What is explicitly NOT in v1 (revised for v3)
 
 Do not build against these; they do not exist.
 
-- **No diarization and no speaker enrollment.** `StreamResult.speaker_label` is
-  always empty.
+- **No PIN pairing, no bearer tokens, no revocation.** Pairing/auth were removed
+  from the hub runtime (sections 4–5). `PairingService` stays in the `.proto` only
+  as a frozen, unserved stub.
 - **No Wi-Fi Direct and no BLE transports.** The hub is the AP; discovery is
   mDNS plus the direct-IP fallback.
 - **No media storage or recording.** The hub relays media and does not persist
   it. There is no session history.
-- **No on-device ASR model.** Transcription is a pluggable engine: offline mock
-  by default, cloud Speechmatics optionally.
+- **No sentence-level sign-language translation.** Gesture recognition yields
+  isolated canned labels only.
 - **No TLS / SPAKE2+ / Noise** (documented upgrade path only, section 8).
-- **No video decode or render** anywhere on the hub.
+
+The following v1 "never" promises are SUPERSEDED by v3 and no longer hold:
+
+- **Diarization and speaker enrollment now exist.** `StreamResult.speaker_label`
+  carries the resolved speaker name (empty when the speaker is unregistered), and
+  enrollment rides the stream as `enroll_request`/`enroll_response` frames.
+- **Transcription runs on-device.** The default engine is a deterministic offline
+  mock; the on-device `ai-android` adapter is the production path.
+- **JPEG stills ARE decoded on the hub.** The hub decodes each `image` frame
+  solely to run isolated gesture recognition. It still never decodes, re-encodes,
+  transcodes, or renders the H.264 video stream.
 
 ---
 
@@ -359,6 +386,16 @@ Field numbers and enum values are permanent. If you retire something, mark it
 reserved; do not hand its number to something else. A peer generated from an
 older revision of this file must keep working against a hub generated from a
 newer one, and vice versa.
+
+### Retiring without removing
+
+`PairingService` (and the `PairRequest`/`PairResponse`/`HeartbeatRequest`/
+`HeartbeatResponse` messages) is the worked example: pairing was dropped from the
+hub RUNTIME, but the service is kept byte-identical in the `.proto` as an
+unserved, reserved stub so an older peer still links. `StreamService/OpenStream`
+remains and is now UNAUTHENTICATED; a peer binds its identity with the
+`stream_open` frame instead of a token. Fields 1–4 of `StreamFrame` and every enum
+value are untouched — the change is purely additive.
 
 ### Consuming this contract as an artifact
 

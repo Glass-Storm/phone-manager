@@ -2,18 +2,14 @@ package com.glassstorm.phonemanager.transport.grpc
 
 import com.glassstorm.phonemanager.core.domain.service.StreamService
 import com.glassstorm.phonemanager.core.model.RelayOutput
-import com.glassstorm.phonemanager.core.service.PairingServiceImpl
 import com.glassstorm.phonemanager.core.service.StreamServiceImpl
-import com.glassstorm.phonemanager.transport.grpc.security.AuthInterceptor
 import com.google.common.truth.Truth.assertThat
 import com.google.protobuf.ByteString
 import ecosys.v1.DeviceRole
-import ecosys.v1.PairRequest
-import ecosys.v1.PairingServiceGrpcKt
 import ecosys.v1.StreamFrame
+import ecosys.v1.StreamOpenRequest
 import ecosys.v1.StreamServiceGrpcKt
 import io.grpc.ManagedChannel
-import io.grpc.Metadata
 import io.grpc.Server
 import io.grpc.inprocess.InProcessChannelBuilder
 import io.grpc.inprocess.InProcessServerBuilder
@@ -50,9 +46,6 @@ import java.util.concurrent.TimeUnit
 class StreamRelayTest {
     @get:Rule
     val deadline: Timeout = Timeout.seconds(60)
-
-    private val authKey: Metadata.Key<String> =
-        Metadata.Key.of("authorization", Metadata.ASCII_STRING_MARSHALLER)
 
     // -------------------------------------------------------- queue policy cases
 
@@ -223,10 +216,8 @@ class StreamRelayTest {
     fun `mid stream disconnect closes the session and leaves no live work`() {
         // Given a real in-process gRPC surface whose relay runs on an inspectable scope
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-        val repo = FakeDeviceRepository()
         val speech = FakeSpeechPort("relay utterance")
         val sink = FakeFrameSink()
-        val pairing = PairingServiceImpl.withClock(repo, clock = { System.currentTimeMillis() })
         val stream =
             StreamServiceImpl.forTesting(
                 speechPort = speech,
@@ -242,21 +233,18 @@ class StreamRelayTest {
             InProcessServerBuilder
                 .forName(name)
                 .directExecutor()
-                .addService(PairingGrpcService(pairing))
                 .addService(StreamGrpcService(stream))
-                .intercept(AuthInterceptor(pairing))
                 .build()
                 .start()
         val channel: ManagedChannel = InProcessChannelBuilder.forName(name).directExecutor().build()
 
         try {
-            val token = runBlocking { pair(channel, pairing) }
-
-            // When the peer ends the stream early (two frames, then completion)
+            // When the peer bootstraps, ends the stream early (two frames, then
+            // completion), carrying NO token
             runBlocking {
                 StreamServiceGrpcKt
                     .StreamServiceCoroutineStub(channel)
-                    .openStream(flowOf(audioFrame(1), audioFrame(2)), bearer(token))
+                    .openStream(flowOf(streamOpenFrame(), audioFrame(1), audioFrame(2)))
                     .toList()
             }
 
@@ -316,22 +304,14 @@ class StreamRelayTest {
             .setAudioPcm1616K(ByteString.copyFrom(pcm(index)))
             .build()
 
-    private fun bearer(token: String): Metadata = Metadata().apply { put(authKey, "Bearer $token") }
-
-    private suspend fun pair(
-        channel: ManagedChannel,
-        pairing: PairingServiceImpl,
-    ): String {
-        val window = pairing.openWindow(ttlMs = 60_000)
-        val request =
-            PairRequest
-                .newBuilder()
-                .setPin(window.pin)
-                .setDeviceName("relay-peer")
-                .setRole(DeviceRole.DEVICE_ROLE_GLASS)
-                .build()
-        val paired = PairingServiceGrpcKt.PairingServiceCoroutineStub(channel).pair(request)
-        check(paired.ok) { "test setup failed to pair: ${paired.rejectReason}" }
-        return paired.token
-    }
+    private fun streamOpenFrame(): StreamFrame =
+        StreamFrame
+            .newBuilder()
+            .setStreamOpen(
+                StreamOpenRequest
+                    .newBuilder()
+                    .setDeviceId("relay-peer")
+                    .setRole(DeviceRole.DEVICE_ROLE_GLASS)
+                    .build(),
+            ).build()
 }

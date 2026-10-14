@@ -16,9 +16,7 @@ import com.glassstorm.phonemanager.core.domain.adapter.repository.DeviceReposito
 import com.glassstorm.phonemanager.core.domain.adapter.speech.SpeechPort
 import com.glassstorm.phonemanager.core.domain.adapter.speech.TtsPort
 import com.glassstorm.phonemanager.core.domain.adapter.transport.HubServer
-import com.glassstorm.phonemanager.core.domain.security.TokenVerifier
 import com.glassstorm.phonemanager.core.domain.service.DeviceService
-import com.glassstorm.phonemanager.core.domain.service.PairingService
 import com.glassstorm.phonemanager.core.domain.service.StreamService
 import com.glassstorm.phonemanager.core.service.ServiceModule
 import com.glassstorm.phonemanager.transport.grpc.TransportModule
@@ -70,15 +68,6 @@ interface AppComponent {
      * so each consumer gets its port by type.
      */
     fun deviceService(): DeviceService
-
-    fun pairingService(): PairingService
-
-    /**
-     * The interceptor's token authority. Resolving it alongside [pairingService]
-     * MUST return the SAME object: [ServiceModule] binds both to one `@Singleton`
-     * `PairingServiceImpl`, so the `Pair` path and the auth path can never disagree.
-     */
-    fun tokenVerifier(): TokenVerifier
 
     fun streamService(): StreamService
 

@@ -14,7 +14,6 @@ data class DashboardUiState(
     val hotspotAvailable: Boolean = false,
     val running: Boolean = false,
     val boundPort: Int = 0,
-    val pairedCount: Int = 0,
     val hotspot: HotspotInfo? = null,
     val hotspotError: String? = null,
     val startError: String? = null,

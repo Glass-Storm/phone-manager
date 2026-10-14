@@ -9,7 +9,6 @@ import androidx.lifecycle.ViewModelStore
 import com.glassstorm.phonemanager.core.domain.adapter.network.HotspotController
 import com.glassstorm.phonemanager.core.domain.adapter.transport.HubServer
 import com.glassstorm.phonemanager.core.domain.network.HotspotFailure
-import com.glassstorm.phonemanager.core.domain.service.PairingService
 import com.glassstorm.phonemanager.hub.HubStarter
 import com.google.common.truth.Truth.assertThat
 import org.junit.Rule
@@ -45,17 +44,10 @@ class DashboardScreenTest {
     }
 
     @Test
-    fun `starting the hub shows the bound port and the paired device count`() {
-        val pairing =
-            FakePairingService().also {
-                it.seedDevice(deviceId = "d-1", deviceName = "Glass One")
-                it.seedDevice(deviceId = "d-2", deviceName = "Ubuntu Daemon", role = "DAEMON")
-            }
-
+    fun `starting the hub shows the bound port`() {
         composeRule.setDashboardContent(
             hub = FakeHubServer(boundPortValue = 40404),
             hotspot = FakeHotspotController(failOnDetect = true),
-            pairing = pairing,
         )
         composeRule.onNodeWithText("Hub: stopped").assertIsDisplayed()
 
@@ -64,7 +56,6 @@ class DashboardScreenTest {
 
         composeRule.onNodeWithText("Hub: running").assertIsDisplayed()
         composeRule.onNodeWithText("Port: 40404").assertIsDisplayed()
-        composeRule.onNodeWithText("Paired devices: 2").assertIsDisplayed()
         // The failing hotspot port degrades, it does not crash the shell.
         composeRule.onNodeWithText("Hotspot not available").assertIsDisplayed()
     }
@@ -136,7 +127,7 @@ class DashboardScreenTest {
     fun `clearing the dashboard mid-poll leaves no live coroutine behind`() {
         val hub = FakeHubServer()
         val store = ViewModelStore()
-        val viewModel = DashboardViewModel(hub, FakeHotspotController(), FakePairingService(), FakeHubStarter())
+        val viewModel = DashboardViewModel(hub, FakeHotspotController(), FakeHubStarter())
         store.put("dashboard", viewModel)
         assertThat(viewModel.uiState.value.running).isFalse()
 
@@ -178,10 +169,9 @@ class DashboardScreenTest {
     private fun androidx.compose.ui.test.junit4.ComposeContentTestRule.setDashboardContent(
         hub: HubServer = FakeHubServer(),
         hotspot: HotspotController = FakeHotspotController(),
-        pairing: PairingService = FakePairingService(),
         hubStarter: HubStarter = FakeHubStarter { hub.start(0) },
     ) {
-        val viewModel = DashboardViewModel(hub, hotspot, pairing, hubStarter)
+        val viewModel = DashboardViewModel(hub, hotspot, hubStarter)
         setContent {
             AppTheme {
                 DashboardScreen(viewModelFactory = viewModelFactory(viewModel))

@@ -4,7 +4,6 @@ import com.glassstorm.phonemanager.core.domain.service.StreamService
 import com.glassstorm.phonemanager.core.model.PeerRole
 import com.glassstorm.phonemanager.core.model.RelayOutput
 import com.glassstorm.phonemanager.core.model.RelaySession
-import com.glassstorm.phonemanager.transport.grpc.security.AuthInterceptor
 import com.google.protobuf.ByteString
 import ecosys.v1.DeviceRole
 import ecosys.v1.EnrollResponse
@@ -13,8 +12,6 @@ import ecosys.v1.StreamFrame
 import ecosys.v1.StreamResult
 import ecosys.v1.StreamServiceGrpcKt
 import ecosys.v1.TtsAudio
-import io.grpc.Status
-import io.grpc.StatusException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
@@ -29,17 +26,17 @@ import kotlinx.coroutines.withContext
  * transcription, video to the opaque sink, image to gesture recognition, and an
  * enrollment request to the hub-owned directory. The relay's own outputs
  * ([RelayOutput]) are mapped back onto result frames on the SAME or the
- * counterpart peer's stream. Token enforcement (until it is retired) already
- * happened in [AuthInterceptor].
+ * counterpart peer's stream. The stream is UNAUTHENTICATED by design: pairing,
+ * PIN and bearer tokens were removed from the hub runtime.
  *
  * ## Session identity
  *
- * With bearer-token auth still present, the session falls back to the
- * token-proved device id. The hub ALSO honours the explicit `stream_open`
- * bootstrap frame (field 10): a peer that declares `{device_id, role}` binds its
- * session to that role, which is what lets the registry route necklace images to
- * the glasses. The FIRST frame of the stream determines identity; a peer that
- * sends neither a token nor `stream_open` is refused exactly as before.
+ * Identity comes from the explicit `stream_open` bootstrap frame (field 10): the
+ * FIRST frame may declare `{device_id, role}`, which binds the session to that
+ * role so the registry can route necklace images to the glasses. A peer that
+ * sends media before any `stream_open` still gets a session (opened under
+ * [UNKNOWN_DEVICE_ID]) and only its role binding is skipped. No frame is ever
+ * refused for lack of a credential.
  *
  * [StreamService] is a CONSTRUCTOR dependency supplied by `TransportModule` at
  * the composition root.
@@ -56,16 +53,13 @@ class StreamGrpcService(
 ) : StreamServiceGrpcKt.StreamServiceCoroutineImplBase() {
     override fun openStream(requests: Flow<StreamFrame>): Flow<StreamFrame> =
         channelFlow {
-            // Never trust a frame field for identity while a token is present: prefer
-            // the token-proved device id, and let `stream_open` bind the role.
-            val authenticatedDeviceId = AuthInterceptor.deviceIdKey.get()
             var session: RelaySession? = null
             try {
                 coroutineScope {
                     try {
                         requests.collect { frame ->
                             val active =
-                                session ?: bindSession(frame, authenticatedDeviceId).also { opened ->
+                                session ?: bindSession(frame).also { opened ->
                                     session = opened
                                     // Relayed outputs are forwarded as they are produced.
                                     launch {
@@ -89,23 +83,26 @@ class StreamGrpcService(
             }
         }
 
-    /** Resolve the session identity from the bootstrap frame or the token. */
-    private fun bindSession(
-        frame: StreamFrame,
-        authenticatedDeviceId: String?,
-    ): RelaySession =
+    /**
+     * Resolve the session identity from the bootstrap frame (no credential).
+     *
+     * A `stream_open` declares `{device_id, role}`; an empty device id falls back
+     * to [UNKNOWN_DEVICE_ID]. Any other first frame still opens a session under
+     * [UNKNOWN_DEVICE_ID], so the stream is never rejected for identity reasons.
+     */
+    private fun bindSession(frame: StreamFrame): RelaySession {
+        val deviceId =
+            if (frame.payloadCase == StreamFrame.PayloadCase.STREAM_OPEN) {
+                frame.streamOpen.deviceId.ifEmpty { UNKNOWN_DEVICE_ID }
+            } else {
+                UNKNOWN_DEVICE_ID
+            }
+        val session = stream.openSession(deviceId)
         if (frame.payloadCase == StreamFrame.PayloadCase.STREAM_OPEN) {
-            val request = frame.streamOpen
-            val deviceId = request.deviceId.ifEmpty { authenticatedDeviceId ?: UNKNOWN_DEVICE_ID }
-            val session = stream.openSession(deviceId)
-            stream.bindRole(session.sessionId, request.role.toPeerRole())
-            session
-        } else {
-            val deviceId =
-                authenticatedDeviceId
-                    ?: throw StatusException(Status.UNAUTHENTICATED.withDescription("missing bearer token"))
-            stream.openSession(deviceId)
+            stream.bindRole(session.sessionId, frame.streamOpen.role.toPeerRole())
         }
+        return session
+    }
 
     private suspend fun dispatch(
         sessionId: String,
