@@ -80,8 +80,23 @@ class StreamGrpcService(
             StreamFrame.PayloadCase.VIDEO_H264_NAL ->
                 stream.pushVideo(sessionId, frame.videoH264Nal.toByteArray())
 
-            // Transcript/result frames are hub->peer output; a peer echoing them
-            // changes nothing, so they are accepted and ignored.
+            // TODO(T8): the real relay routing lands here. An inbound `image` is
+            // decoded and recognised by the gesture port, and an inbound
+            // `enroll_request` is folded into the enrollment store; both produce
+            // output on OTHER sessions resolved from the `stream_open` binding.
+            // Until T8 exists, these frames are received without throwing so a
+            // new frame type never aborts an in-flight session.
+            StreamFrame.PayloadCase.IMAGE,
+            StreamFrame.PayloadCase.ENROLL_REQUEST,
+            StreamFrame.PayloadCase.STREAM_OPEN,
+            -> Unit
+
+            // Hub->peer output and diagnostics. A peer echoing one of these back
+            // changes nothing, exactly like `transcript`/`result`, so they are
+            // accepted and ignored. TODO(T8) is what actually emits them.
+            StreamFrame.PayloadCase.GESTURE,
+            StreamFrame.PayloadCase.TTS_AUDIO,
+            StreamFrame.PayloadCase.ENROLL_RESPONSE,
             StreamFrame.PayloadCase.TRANSCRIPT,
             StreamFrame.PayloadCase.RESULT,
             StreamFrame.PayloadCase.PAYLOAD_NOT_SET,
