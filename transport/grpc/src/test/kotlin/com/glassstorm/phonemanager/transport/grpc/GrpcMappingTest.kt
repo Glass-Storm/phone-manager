@@ -6,6 +6,8 @@ import com.glassstorm.phonemanager.core.domain.service.StreamService
 import com.glassstorm.phonemanager.core.model.Device
 import com.glassstorm.phonemanager.core.model.PairOutcome
 import com.glassstorm.phonemanager.core.model.Pairing
+import com.glassstorm.phonemanager.core.model.PeerRole
+import com.glassstorm.phonemanager.core.model.RelayOutput
 import com.glassstorm.phonemanager.core.model.RelayResult
 import com.glassstorm.phonemanager.core.model.RelaySession
 import com.glassstorm.phonemanager.core.model.RelayStats
@@ -56,16 +58,16 @@ import java.util.concurrent.TimeUnit
  *  * `PairOutcome.Ok` -> `PairResponse{ok=true, token, device_id}`;
  *  * `PairOutcome.Rejected` -> `PairResponse{ok=false, reject_reason=<exact>}`;
  *  * the `PairRequest` role/name -> the domain `pair()` arguments;
- *  * a `RelayResult` -> a `transcript` [StreamFrame] carrying the same text;
+ *  * a `RelayOutput.Speech` -> a `result` [StreamFrame] carrying text + speaker;
  *  * audio (and video) payloads pass through to the relay OPAQUELY, byte for byte;
  *  * each additive payload variant (`image`, `gesture`, `tts_audio`,
  *    `enroll_request`, `enroll_response`, `stream_open`) round-trips, and fields
  *    1-4 keep their wire numbers so the frozen contract stays additive.
  *
- * Deliberately NOT pinned as present: `RelayResult.ptsMs` / `speakerLabel` are
- * NOT carried on the v1 transcript frame (the proto's `transcript` variant is a
- * bare string). That is the frozen behaviour, so the test asserts the `result`
- * variant is NOT selected — making any future, un-negotiated change fail here.
+ * Deliberately pinned: the bare `transcript` variant (field 3) is the frozen v1
+ * shape and is NOT what the hub emits now. Speaker-tagged subtitles travel on the
+ * richer `result` variant, so this test asserts `transcript` is NOT selected —
+ * making any future, un-negotiated regression fail here.
  */
 class GrpcMappingTest {
     private lateinit var server: Server
@@ -179,24 +181,26 @@ class GrpcMappingTest {
     // ------------------------------------------------------------------ Stream
 
     @Test
-    fun `a relay result maps to a transcript frame carrying the same text`() {
+    fun `a relay speech result maps to a stream result carrying the text and speaker`() {
         // Given a paired peer and a domain utterance to relay
         val audio = audioFrame(ByteArray(8) { 3 })
-        stream.result = RelayResult(text = "mapped utterance", speakerLabel = "Speaker 1", ptsMs = 4_242L)
+        stream.result =
+            RelayOutput.Speech(RelayResult(text = "mapped utterance", speakerLabel = "Speaker 1", ptsMs = 4_242L))
 
         // When one audio frame is streamed
         val responses = streamOnce(audio)
 
-        // Then the domain result became a transcript frame with the SAME text
+        // Then the domain result became a `result` frame with the SAME text + speaker
         assertThat(responses).hasSize(1)
         val frame = responses.single()
-        assertThat(frame.payloadCase).isEqualTo(StreamFrame.PayloadCase.TRANSCRIPT)
-        assertThat(frame.transcript).isEqualTo("mapped utterance")
+        assertThat(frame.payloadCase).isEqualTo(StreamFrame.PayloadCase.RESULT)
+        assertThat(frame.result.text).isEqualTo("mapped utterance")
+        assertThat(frame.result.speakerLabel).isEqualTo("Speaker 1")
+        assertThat(frame.result.ptsMs).isEqualTo(4_242L)
 
-        // And the v1 transcript variant does NOT carry pts_ms / speaker_label:
-        // those stay on the `result` variant, which this mapping deliberately
-        // does not select. Pinned so an accidental change fails loudly.
-        assertThat(frame.hasResult()).isFalse()
+        // And the frozen bare `transcript` variant is NOT selected: subtitles now
+        // carry a speaker label, so the richer `result` variant is the one used.
+        assertThat(frame.hasTranscript()).isFalse()
     }
 
     @Test
@@ -399,9 +403,25 @@ class GrpcMappingTest {
 
         val frames =
             listOf(
-                5 to StreamFrame.newBuilder().setImage(ImageFrame.newBuilder().setJpeg(ByteString.copyFrom(byteArrayOf(1))).build()).build(),
+                5 to
+                    StreamFrame
+                        .newBuilder()
+                        .setImage(
+                            ImageFrame
+                                .newBuilder()
+                                .setJpeg(ByteString.copyFrom(byteArrayOf(1)))
+                                .build(),
+                        ).build(),
                 6 to StreamFrame.newBuilder().setGesture(GestureResult.newBuilder().setText("x").build()).build(),
-                7 to StreamFrame.newBuilder().setTtsAudio(TtsAudio.newBuilder().setPcm1616K(ByteString.copyFrom(byteArrayOf(1))).build()).build(),
+                7 to
+                    StreamFrame
+                        .newBuilder()
+                        .setTtsAudio(
+                            TtsAudio
+                                .newBuilder()
+                                .setPcm1616K(ByteString.copyFrom(byteArrayOf(1)))
+                                .build(),
+                        ).build(),
                 8 to StreamFrame.newBuilder().setEnrollRequest(EnrollRequest.newBuilder().setName("x").build()).build(),
                 9 to StreamFrame.newBuilder().setEnrollResponse(EnrollResponse.newBuilder().setOk(true).build()).build(),
                 10 to StreamFrame.newBuilder().setStreamOpen(StreamOpenRequest.newBuilder().setDeviceId("x").build()).build(),
@@ -491,13 +511,19 @@ class GrpcMappingTest {
      * boundary conversion.
      */
     private class RecordingStreamService : StreamService {
-        var result: RelayResult = RelayResult(text = "unset", speakerLabel = "", ptsMs = 0L)
+        var result: RelayOutput =
+            RelayOutput.Speech(RelayResult(text = "unset", speakerLabel = "", ptsMs = 0L))
 
         val audio: MutableList<ByteArray> = mutableListOf()
         val video: MutableList<ByteArray> = mutableListOf()
         val sampleRates: MutableList<Int> = mutableListOf()
 
         override fun openSession(deviceId: String): RelaySession = RelaySession(sessionId = "s-mapping", deviceId = deviceId)
+
+        override fun bindRole(
+            sessionId: String,
+            role: PeerRole,
+        ) = Unit
 
         override suspend fun pushAudio(
             sessionId: String,
@@ -515,7 +541,20 @@ class GrpcMappingTest {
             video += h264Nal
         }
 
-        override fun results(sessionId: String): Flow<RelayResult> = flowOf(result)
+        override suspend fun pushImage(
+            sessionId: String,
+            jpeg: ByteArray,
+            ptsMs: Long,
+        ) = Unit
+
+        override suspend fun pushEnroll(
+            sessionId: String,
+            name: String,
+            pcm16: ByteArray,
+            ptsMs: Long,
+        ) = Unit
+
+        override fun results(sessionId: String): Flow<RelayOutput> = flowOf(result)
 
         override suspend fun closeSession(sessionId: String) = Unit
 

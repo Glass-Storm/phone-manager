@@ -2,6 +2,12 @@ package com.glassstorm.phonemanager.core.service
 
 import kotlinx.coroutines.channels.Channel
 
+/** One queued JPEG still plus the capture timestamp its gesture output inherits. */
+internal data class QueuedImage(
+    val jpeg: ByteArray,
+    val ptsMs: Long,
+)
+
 /**
  * Per-session media queue for one relay session.
  *
@@ -16,18 +22,29 @@ import kotlinx.coroutines.channels.Channel
  *    is NEVER dropped.
  *  * [video] — drop-oldest. [admitVideo] evicts the oldest queued frame when
  *    the buffer is full, so the live edge keeps flowing.
+ *  * [image] — SUSPEND. [admitImage] parks until the buffer has room, so a still
+ *    is never dropped without a counter (a mirrored 10 fps source is naturally
+ *    rate-limited by recognition latency).
  */
 internal class RelayQueue(
     audioCapacity: Int,
     videoCapacity: Int,
+    imageCapacity: Int,
 ) {
     val audio: Channel<ByteArray> = Channel(capacity = audioCapacity)
 
     val video: Channel<ByteArray> = Channel(capacity = videoCapacity)
 
+    val image: Channel<QueuedImage> = Channel(capacity = imageCapacity)
+
     /** Park until [pcm] fits. Audio is the irreplaceable half: it is never dropped. */
     suspend fun admitAudio(pcm: ByteArray) {
         audio.send(pcm)
+    }
+
+    /** Park until [image] fits. A still is never dropped silently. */
+    suspend fun admitImage(image: QueuedImage) {
+        this.image.send(image)
     }
 
     /**
@@ -51,9 +68,10 @@ internal class RelayQueue(
         return true
     }
 
-    /** Close both sides so a pump's `for (x in channel)` finishes after draining. */
+    /** Close every side so a pump's `for (x in channel)` finishes after draining. */
     fun close() {
         audio.close()
         video.close()
+        image.close()
     }
 }

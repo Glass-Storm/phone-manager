@@ -1,7 +1,6 @@
 package com.glassstorm.phonemanager.transport.grpc
 
 import com.glassstorm.phonemanager.core.service.PairingServiceImpl
-import com.glassstorm.phonemanager.core.service.StreamServiceImpl
 import com.glassstorm.phonemanager.testing.testkit.ProcessRun
 import com.glassstorm.phonemanager.testing.testkit.REAP_SECONDS
 import com.glassstorm.phonemanager.testing.testkit.goBinary
@@ -29,7 +28,7 @@ import java.util.concurrent.TimeUnit
  * on Android is unofficial and only the netty-shaded NIO plaintext path is
  * expected to work. Nothing here is mocked — no in-process transport, no fake
  * channel, no faked stdout. The only fakes are the T5 domain-port doubles
- * ([FakeDeviceRepository], [FakeSttPort], [FakeFrameSink]), exactly as an
+ * ([FakeDeviceRepository], [FakeSpeechPort], [FakeFrameSink]), exactly as an
  * Android composition would supply real adapters.
  *
  * ## Hygiene (the adversarial classes)
@@ -47,7 +46,7 @@ class HubServerE2ETest {
     private lateinit var hub: GrpcHubServer
     private lateinit var pairing: PairingServiceImpl
     private lateinit var repo: FakeDeviceRepository
-    private lateinit var stt: FakeSttPort
+    private lateinit var speech: FakeSpeechPort
     private lateinit var sink: FakeFrameSink
     private var port: Int = 0
 
@@ -66,10 +65,10 @@ class HubServerE2ETest {
 
         // Given a hand-wired graph over domain-port fakes only (no :adapter edge)
         repo = FakeDeviceRepository()
-        stt = FakeSttPort("mockpeer recognized utterance")
+        speech = FakeSpeechPort("mockpeer recognized utterance")
         sink = FakeFrameSink()
         pairing = PairingServiceImpl.withClock(repo, clock = { System.currentTimeMillis() })
-        val stream = StreamServiceImpl(stt, sink)
+        val stream = relayStream(speech = speech, sink = sink)
 
         // The transport under test: netty-shaded NIO, IPv4 explicit, ephemeral port.
         hub =
@@ -136,8 +135,8 @@ class HubServerE2ETest {
             .that(count(run.stdout, "transcripts"))
             .isAtLeast(1)
 
-        // And the audio really reached the STT port on the hub side
-        assertThat(stt.audioFrameCount).isAtLeast(10)
+        // And the audio really reached the speech port on the hub side
+        assertThat(speech.audioFrameCount).isAtLeast(10)
     }
 
     @Test

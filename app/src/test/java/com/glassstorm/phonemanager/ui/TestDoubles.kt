@@ -16,6 +16,8 @@ import com.glassstorm.phonemanager.core.model.HotspotInfo
 import com.glassstorm.phonemanager.core.model.HotspotMode
 import com.glassstorm.phonemanager.core.model.PairOutcome
 import com.glassstorm.phonemanager.core.model.Pairing
+import com.glassstorm.phonemanager.core.model.PeerRole
+import com.glassstorm.phonemanager.core.model.RelayOutput
 import com.glassstorm.phonemanager.core.model.RelayResult
 import com.glassstorm.phonemanager.core.model.RelaySession
 import com.glassstorm.phonemanager.core.model.RelayStats
@@ -197,7 +199,7 @@ class FakeStreamService(
     private val sessionIds: List<String> = listOf("s-1", "s-2", "s-3"),
     private val failStats: Boolean = false,
 ) : StreamService {
-    private val resultsFlow = MutableSharedFlow<RelayResult>(replay = 1)
+    private val resultsFlow = MutableSharedFlow<RelayOutput>(replay = 1)
 
     private var statsValue =
         RelayStats(
@@ -236,13 +238,13 @@ class FakeStreamService(
             )
     }
 
-    /** Publish a recognized utterance, as the STT engine would mid-stream. */
+    /** Publish a recognized utterance, as the speech engine would mid-stream. */
     fun emitTranscript(
         text: String,
         speakerLabel: String = "Speaker 1",
     ) {
         resultsFlow.tryEmit(
-            RelayResult(text = text, speakerLabel = speakerLabel, ptsMs = 0L),
+            RelayOutput.Speech(RelayResult(text = text, speakerLabel = speakerLabel, ptsMs = 0L)),
         )
     }
 
@@ -252,6 +254,11 @@ class FakeStreamService(
         liveSessions += 1
         return RelaySession(sessionId = sessionIds[index], deviceId = deviceId)
     }
+
+    override fun bindRole(
+        sessionId: String,
+        role: PeerRole,
+    ) = Unit
 
     override suspend fun pushAudio(
         sessionId: String,
@@ -264,7 +271,20 @@ class FakeStreamService(
         h264Nal: ByteArray,
     ) = Unit
 
-    override fun results(sessionId: String): Flow<RelayResult> = if (liveSessions > 0) resultsFlow else emptyFlow()
+    override suspend fun pushImage(
+        sessionId: String,
+        jpeg: ByteArray,
+        ptsMs: Long,
+    ) = Unit
+
+    override suspend fun pushEnroll(
+        sessionId: String,
+        name: String,
+        pcm16: ByteArray,
+        ptsMs: Long,
+    ) = Unit
+
+    override fun results(sessionId: String): Flow<RelayOutput> = if (liveSessions > 0) resultsFlow else emptyFlow()
 
     override suspend fun closeSession(sessionId: String) {
         closed.add(sessionId)

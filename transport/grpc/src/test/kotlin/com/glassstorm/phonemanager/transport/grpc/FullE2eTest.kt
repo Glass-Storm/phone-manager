@@ -2,7 +2,6 @@ package com.glassstorm.phonemanager.transport.grpc
 
 import com.glassstorm.phonemanager.core.domain.adapter.transport.HubServer
 import com.glassstorm.phonemanager.core.service.PairingServiceImpl
-import com.glassstorm.phonemanager.core.service.StreamServiceImpl
 import com.glassstorm.phonemanager.testing.testkit.MockPeerDriver
 import com.glassstorm.phonemanager.testing.testkit.MockPeerTranscript
 import com.glassstorm.phonemanager.testing.testkit.goBinary
@@ -55,7 +54,7 @@ class FullE2eTest {
     private lateinit var hub: HubServer
     private lateinit var pairing: PairingServiceImpl
     private lateinit var repo: FakeDeviceRepository
-    private lateinit var stt: FakeSttPort
+    private lateinit var speech: FakeSpeechPort
     private lateinit var sink: FakeFrameSink
     private var driver: MockPeerDriver? = null
     private var port: Int = 0
@@ -68,10 +67,10 @@ class FullE2eTest {
             .isTrue()
 
         repo = FakeDeviceRepository()
-        stt = FakeSttPort("full e2e utterance")
+        speech = FakeSpeechPort("full e2e utterance")
         sink = FakeFrameSink()
         pairing = PairingServiceImpl.withClock(repo, clock = { System.currentTimeMillis() })
-        val stream = StreamServiceImpl(stt, sink)
+        val stream = relayStream(speech = speech, sink = sink)
 
         // The PRODUCTION adapter with an explicit loopback bind, exactly as the
         // `:app` harness composes it. The wildcard production bind is never used
@@ -141,8 +140,8 @@ class FullE2eTest {
         }
         assertThat(bytesMatch).isTrue()
 
-        // And the audio really reached STT and produced transcripts on the wire
-        assertThat(stt.audioFrameCount).isAtLeast(10)
+        // And the audio really reached speech and produced results on the wire
+        assertThat(speech.audioFrameCount).isAtLeast(10)
         assertThat(run.stdout).contains("transcripts=")
 
         // When the paired device is revoked and the SAME token is replayed

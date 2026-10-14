@@ -1,9 +1,16 @@
 package com.glassstorm.phonemanager.transport.grpc
 
+import com.glassstorm.phonemanager.core.domain.adapter.enrollment.EnrollmentStore
+import com.glassstorm.phonemanager.core.domain.adapter.gesture.GesturePort
 import com.glassstorm.phonemanager.core.domain.adapter.relay.FrameSink
-import com.glassstorm.phonemanager.core.domain.adapter.speech.SttPort
+import com.glassstorm.phonemanager.core.domain.adapter.speech.SpeechPort
+import com.glassstorm.phonemanager.core.domain.adapter.speech.TtsPort
 import com.glassstorm.phonemanager.core.domain.security.TokenVerifier
 import com.glassstorm.phonemanager.core.domain.service.StreamService
+import com.glassstorm.phonemanager.core.model.EnrollOutcome
+import com.glassstorm.phonemanager.core.model.EnrolledSpeaker
+import com.glassstorm.phonemanager.core.model.GestureOutcome
+import com.glassstorm.phonemanager.core.model.SpeechUtterance
 import com.glassstorm.phonemanager.core.service.PairingServiceImpl
 import com.glassstorm.phonemanager.core.service.StreamServiceImpl
 
@@ -40,7 +47,7 @@ import com.glassstorm.phonemanager.core.service.StreamServiceImpl
  */
 class HubParts(
     val repo: FakeDeviceRepository,
-    val stt: FakeSttPort,
+    val speech: FakeSpeechPort,
     val sink: FakeFrameSink,
     val pairing: PairingServiceImpl,
     val stream: StreamService,
@@ -50,26 +57,53 @@ class HubParts(
 
 fun hubParts(): HubParts {
     val repo = FakeDeviceRepository()
-    val stt = FakeSttPort()
+    val speech = FakeSpeechPort()
     val sink = FakeFrameSink()
     val pairing = PairingServiceImpl.withClock(repo, clock = { System.currentTimeMillis() })
     return HubParts(
         repo = repo,
-        stt = stt,
+        speech = speech,
         sink = sink,
         pairing = pairing,
-        stream = StreamServiceImpl(stt, sink),
+        stream = relayStream(speech = speech, sink = sink),
     )
 }
 
-private class NoopSttPort : SttPort {
+/** Compose a [StreamServiceImpl] over the given leaf ports (defaults: inert fakes). */
+fun relayStream(
+    speech: SpeechPort = FakeSpeechPort(),
+    gesture: GesturePort = FakeGesturePort(),
+    tts: TtsPort = FakeTtsPort(),
+    enrollment: EnrollmentStore = FakeEnrollmentStore(),
+    sink: FrameSink = FakeFrameSink(),
+): StreamService = StreamServiceImpl(speech, gesture, tts, enrollment, sink)
+
+private class NoopSpeechPort : SpeechPort {
     override suspend fun transcribe(
         sessionId: String,
-        audioPcm16: ByteArray,
-        sampleRateHz: Int,
-    ): String? = null
+        pcm16: ByteArray,
+    ): SpeechUtterance? = null
 
     override suspend fun close(sessionId: String) = Unit
+}
+
+private class NoopGesturePort : GesturePort {
+    override suspend fun recognize(jpeg: ByteArray): GestureOutcome? = null
+}
+
+private class NoopTtsPort : TtsPort {
+    override suspend fun synthesize(text: String): ByteArray = ByteArray(0)
+}
+
+private class NoopEnrollmentStore : EnrollmentStore {
+    override suspend fun enroll(
+        name: String,
+        pcm16: ByteArray,
+    ): EnrollOutcome = EnrollOutcome.accepted
+
+    override suspend fun names(): List<String> = emptyList()
+
+    override suspend fun enrollments(): List<EnrolledSpeaker> = emptyList()
 }
 
 private class NoopFrameSink : FrameSink {
@@ -80,4 +114,5 @@ private class NoopFrameSink : FrameSink {
 }
 
 /** A paired service surface with inert media ports; used where media never flows. */
-fun inertStreamService(): StreamService = StreamServiceImpl(NoopSttPort(), NoopFrameSink())
+fun inertStreamService(): StreamService =
+    StreamServiceImpl(NoopSpeechPort(), NoopGesturePort(), NoopTtsPort(), NoopEnrollmentStore(), NoopFrameSink())

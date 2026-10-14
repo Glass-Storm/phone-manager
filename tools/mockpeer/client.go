@@ -210,7 +210,7 @@ func openStream(ctx context.Context, conn *grpc.ClientConn, cfg config, token st
 		if err != nil {
 			return scenarioResult{frames: sent, transcripts: transcripts}, mapStatus(err)
 		}
-		if resp.GetTranscript() != "" {
+		if resp.GetTranscript() != "" || resp.GetResult().GetText() != "" {
 			transcripts++
 		}
 	}

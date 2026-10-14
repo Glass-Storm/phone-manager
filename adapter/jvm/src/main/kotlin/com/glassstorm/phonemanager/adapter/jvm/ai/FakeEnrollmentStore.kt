@@ -46,9 +46,10 @@ class FakeEnrollmentStore : EnrollmentStore {
     /** A deterministic 16-dim embedding whose values are derived from the audio digest. */
     private fun voiceprintFrom(pcm16: ByteArray): Voiceprint {
         val digest = Fnv1a.hash(pcm16)
-        val embedding = FloatArray(FAKE_EMBEDDING_DIM) { index ->
-            ((digest ushr (index % 32)) and 0xFF).toFloat() / 255f
-        }
+        val embedding =
+            FloatArray(FAKE_EMBEDDING_DIM) { index ->
+                ((digest ushr (index % 32)) and 0xFF).toFloat() / 255f
+            }
         return Voiceprint(embedding = embedding, modelId = "fake-fnv1a")
     }
 }

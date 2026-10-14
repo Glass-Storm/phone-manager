@@ -2,7 +2,6 @@ package com.glassstorm.phonemanager.transport.grpc
 
 import com.glassstorm.phonemanager.core.model.PairOutcome
 import com.glassstorm.phonemanager.core.service.PairingServiceImpl
-import com.glassstorm.phonemanager.core.service.StreamServiceImpl
 import com.glassstorm.phonemanager.transport.grpc.security.AuthInterceptor
 import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
@@ -41,7 +40,7 @@ class AuthGrpcTest {
     private lateinit var channel: ManagedChannel
     private lateinit var pairing: PairingServiceImpl
     private lateinit var repo: FakeDeviceRepository
-    private lateinit var stt: FakeSttPort
+    private lateinit var stt: FakeSpeechPort
     private lateinit var sink: FakeFrameSink
     private var nowMs: Long = 1_000_000L
 
@@ -52,10 +51,10 @@ class AuthGrpcTest {
     fun startServer() {
         // Given a hand-wired graph over domain-port fakes only
         repo = FakeDeviceRepository()
-        stt = FakeSttPort("recognized utterance")
+        stt = FakeSpeechPort("recognized utterance")
         sink = FakeFrameSink()
         pairing = PairingServiceImpl.withClock(repo, clock = { nowMs })
-        val stream = StreamServiceImpl(stt, sink)
+        val stream = relayStream(speech = stt, sink = sink)
 
         val name = InProcessServerBuilder.generateName()
         server =
@@ -220,7 +219,7 @@ class AuthGrpcTest {
     }
 
     @Test
-    fun `audio frame round trips through the stt port and returns a transcript frame`() {
+    fun `audio frame round trips through the speech port and returns a stream result`() {
         // Given a paired device and an opaque PCM16 audio frame
         val token = pairOnce()
         val audio =
@@ -240,11 +239,11 @@ class AuthGrpcTest {
                     .toList()
             }
 
-        // Then the STT fake really saw the frame and a transcript came back
+        // Then the speech fake really saw the frame and a result came back
         assertThat(stt.audioFrameCount).isEqualTo(1)
         assertThat(responses).hasSize(1)
-        assertThat(responses.single().payloadCase).isEqualTo(StreamFrame.PayloadCase.TRANSCRIPT)
-        assertThat(responses.single().transcript).isEqualTo("recognized utterance")
+        assertThat(responses.single().payloadCase).isEqualTo(StreamFrame.PayloadCase.RESULT)
+        assertThat(responses.single().result.text).isEqualTo("recognized utterance")
     }
 
     @Test

@@ -2,7 +2,6 @@ package com.glassstorm.phonemanager
 
 import android.app.Application
 import androidx.test.core.app.ApplicationProvider
-import com.glassstorm.phonemanager.adapter.jvm.speech.SttFactory
 import com.glassstorm.phonemanager.core.domain.adapter.relay.FrameSink
 import com.glassstorm.phonemanager.core.domain.adapter.transport.HubServer
 import com.glassstorm.phonemanager.core.domain.service.PairingService
@@ -95,8 +94,14 @@ class FullE2eTest {
 
         // When the loopback listener and the recording sink are composed over it
         sink = RecordingFrameSink()
-        val stt = SttFactory(component.appConfig()).createSttPort()
-        val stream = StreamServiceImpl(stt, sink)
+        val stream =
+            StreamServiceImpl(
+                speechPort = component.speechPort(),
+                gesturePort = component.gesturePort(),
+                ttsPort = component.ttsPort(),
+                enrollmentStore = component.enrollmentStore(),
+                frameSink = sink,
+            )
         hub =
             HubServerAdapter(
                 pairingService = PairingGrpcService(pairing),

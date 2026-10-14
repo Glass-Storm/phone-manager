@@ -1,19 +1,20 @@
 package com.glassstorm.phonemanager.core.service
 
-import com.glassstorm.phonemanager.core.model.RelayResult
+import com.glassstorm.phonemanager.core.model.PeerRole
+import com.glassstorm.phonemanager.core.model.RelayOutput
 import com.glassstorm.phonemanager.core.model.RelaySession
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import org.junit.Test
 
-/** Direct proof for [RelaySessionRegistry]: register/find/remove/size. */
+/** Direct proof for [RelaySessionRegistry]: register/find/remove/size and the role index. */
 class RelaySessionRegistryTest {
     private fun state(deviceId: String): SessionState =
         SessionState(
             relay = RelaySession(sessionId = "s-$deviceId", deviceId = deviceId),
-            queue = RelayQueue(audioCapacity = 1, videoCapacity = 1),
-            results = Channel<RelayResult>(Channel.UNLIMITED),
+            queue = RelayQueue(audioCapacity = 1, videoCapacity = 1, imageCapacity = 1),
+            results = Channel<RelayOutput>(Channel.UNLIMITED),
             pump = Job(),
         )
 
@@ -79,5 +80,50 @@ class RelaySessionRegistryTest {
         // And shrinks again after a removal
         registry.remove("s-a")
         assertThat(registry.size()).isEqualTo(1)
+    }
+
+    @Test
+    fun `a bound role resolves to its session and an unbound role to null`() {
+        // Given a registered session
+        val registry = RelaySessionRegistry()
+        registry.register("s-necklace", state("necklace"))
+
+        // Then an unbound role resolves to nothing
+        assertThat(registry.sessionFor(PeerRole.GLASS)).isNull()
+
+        // When the session binds the daemon role
+        registry.bindRole("s-necklace", PeerRole.DAEMON)
+
+        // Then the role index resolves it, and the other role stays unbound
+        assertThat(registry.sessionFor(PeerRole.DAEMON)).isEqualTo("s-necklace")
+        assertThat(registry.sessionFor(PeerRole.GLASS)).isNull()
+    }
+
+    @Test
+    fun `an unspecified role is never bound`() {
+        // Given a registry
+        val registry = RelaySessionRegistry()
+        registry.register("s-a", state("a"))
+
+        // When an unspecified role is bound
+        registry.bindRole("s-a", PeerRole.UNSPECIFIED)
+
+        // Then nothing resolves for it
+        assertThat(registry.sessionFor(PeerRole.UNSPECIFIED)).isNull()
+    }
+
+    @Test
+    fun `removing a session drops its role binding`() {
+        // Given a session bound to a role
+        val registry = RelaySessionRegistry()
+        registry.register("s-glasses", state("glasses"))
+        registry.bindRole("s-glasses", PeerRole.GLASS)
+        assertThat(registry.sessionFor(PeerRole.GLASS)).isEqualTo("s-glasses")
+
+        // When it is removed
+        registry.remove("s-glasses")
+
+        // Then the role index no longer resolves a dead session
+        assertThat(registry.sessionFor(PeerRole.GLASS)).isNull()
     }
 }

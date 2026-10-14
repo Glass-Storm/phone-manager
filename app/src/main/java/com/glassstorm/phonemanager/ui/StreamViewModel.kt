@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.glassstorm.phonemanager.core.domain.service.PairingService
 import com.glassstorm.phonemanager.core.domain.service.StreamService
+import com.glassstorm.phonemanager.core.model.RelayOutput
 import com.glassstorm.phonemanager.core.model.RelayStats
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -113,12 +114,14 @@ class StreamViewModel
 
         private suspend fun collectResults(sessionId: String) {
             runCatching {
-                stream.results(sessionId).collect { result ->
-                    state.value =
-                        state.value.copy(
-                            latestTranscript = result.text,
-                            latestSpeakerLabel = result.speakerLabel,
-                        )
+                stream.results(sessionId).collect { output ->
+                    if (output is RelayOutput.Speech) {
+                        state.value =
+                            state.value.copy(
+                                latestTranscript = output.result.text,
+                                latestSpeakerLabel = output.result.speakerLabel,
+                            )
+                    }
                 }
             }
         }
