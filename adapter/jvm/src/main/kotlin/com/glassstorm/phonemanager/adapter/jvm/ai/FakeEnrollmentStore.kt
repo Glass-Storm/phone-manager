@@ -32,9 +32,10 @@ class FakeEnrollmentStore : EnrollmentStore {
         if (pcm16.size < AudioFormat.ENROLLMENT_MIN_BYTES) {
             return EnrollOutcome.rejected(EnrollOutcome.REASON_AUDIO_TOO_SHORT)
         }
+        val replacement = EnrolledSpeaker(name, voiceprintFrom(pcm16))
         synchronized(lock) {
-            speakers.removeAll { it.name == name }
-            speakers.add(EnrolledSpeaker(name, voiceprintFrom(pcm16)))
+            val existing = speakers.indexOfFirst { it.name == name }
+            if (existing >= 0) speakers[existing] = replacement else speakers.add(replacement)
         }
         return EnrollOutcome.accepted
     }
