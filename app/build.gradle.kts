@@ -91,6 +91,11 @@ dependencies {
     // Shared E2E kit (mockpeer runner + deterministic media generators), used by
     // FullE2eTest to drive the real Go peer against the Robolectric-hosted hub.
     testImplementation(project(":testing:testkit"))
+    // The in-process `ecosys.v1` peer fixture for the cross-repo Python E2E
+    // (T23). It has to come from `:transport:grpc`'s testFixtures because
+    // `ecosys.v1.*` may only be named by `:transport:grpc`/`:contract`; `:app`
+    // consumes only the fixture's plain `PeerEvent` types (Konsist law b).
+    testImplementation(testFixtures(project(":transport:grpc")))
     testImplementation(libs.compose.ui.test.junit4)
     // `org.json` is already on the `:app` test classpath via `:adapter:jvm`, but
     // the T14 harness reads the Pi token cache with it directly, so depend on it

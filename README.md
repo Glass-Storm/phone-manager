@@ -180,12 +180,34 @@ it cannot diverge from them. On a warm build `e2e` reports `UP-TO-DATE`; add
 `--rerun-tasks` to force it to actually execute.
 
 The Go toolchain is a **hard** prerequisite: the real-socket suites fail (they do
-not skip) when `go` is absent. A second, **opt-in** Python suite
-(`EcosysPiE2eTest`, task 14) drives the sibling Pi repo's `ecosys_pi` CLI through
-`uv`; it is excluded from `e2e` and `test`, and runs only under
-`:app:ecosysPiE2e` (which is also attached to `check`), skipping loudly when its
-prerequisites are missing. Its two machine-specific defaults are overridable by
-environment variable:
+not skip) when `go` is absent.
+
+### Cross-repo E2E (the real Pi CLI)
+
+A second, **opt-in** Python suite (`EcosysPiE2eTest`, T23) is the cross-repo E2E.
+It drives the REAL sibling Pi repo's `ecosys_pi` CLI (the necklace) against the
+Robolectric-hosted hub — whose `AiModule` binds the deterministic `:adapter:jvm`
+fakes — over a loopback socket with NO token, while an in-process `ecosys.v1` peer
+(the `:transport:grpc` test-fixture `HubPeerClient`) plays the glasses. It asserts
+BOTH new loops:
+
+- **gesture** — the necklace's JPEG `image` frames become a `gesture` frame on the
+  glasses session AND a hub-synthesized `tts_audio` frame back on the necklace;
+- **subtitle** — the glasses' `audio_pcm16_16k` frames become a `StreamResult` on
+  the SAME session, with the EMPTY `speaker_label` for an unregistered speaker.
+
+No device, camera, `nmcli`, model, or hotspot is involved: the Pi is pointed at
+`127.0.0.1` with its synthetic JPEG source and a shimmed `aplay` that captures the
+audio the necklace is told to play. It is excluded from `e2e` and `test`, and runs
+only under `:app:ecosysPiE2e` (which is also attached to `check`), skipping
+LOUDLY (a named `Assume` reason) only when the Pi repo, `uv`, or CPython 3.11+ is
+absent; any other failure is a test failure.
+
+```bash
+JAVA_HOME=/home/chaos/.jdk/jdk-21.0.12.1+1 ANDROID_HOME=/home/chaos/Android/Sdk ./gradlew :app:ecosysPiE2e --rerun-tasks
+```
+
+Its two machine-specific defaults are overridable by environment variable:
 
 - `PI_ECOSYS_REPO` — the sibling Pi repo root (default:
   `/home/chaos/workplace/fyp/necklace-data-processing-raspberrypi-side-`). It

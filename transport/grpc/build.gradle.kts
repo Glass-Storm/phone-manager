@@ -1,6 +1,12 @@
 plugins {
     alias(libs.plugins.phonemanager.kotlin.library)
     alias(libs.plugins.phonemanager.ktlint)
+    // `java-test-fixtures` publishes an `HubPeerClient` test fixture (a real
+    // in-process `ecosys.v1` peer) that the `:app` cross-repo E2E drives. It has
+    // to live here, not in `:app`, because `ecosys.v1.*` may only be named by
+    // `:transport:grpc` and `:contract` (Konsist law b) — so `:app` consumes the
+    // fixture through `testFixtures(...)` without ever importing the wire types.
+    id("java-test-fixtures")
     // Dagger annotation processing for TransportModule + the `@Inject` members.
     alias(libs.plugins.phonemanager.ksp)
 }
@@ -53,4 +59,22 @@ dependencies {
     // dependency, so the real-socket E2E suites resolve it on the test classpath.
     testImplementation(libs.grpc.inprocess)
     testImplementation(libs.grpc.testing)
+}
+
+// The `HubPeerClient` test fixture: a real `ecosys.v1` peer that opens the
+// unauthenticated stream, declares its `{device_id, role}` via `stream_open`,
+// sends media and exposes the hub's replies as typed [PeerEvent]s (no wire
+// types leak to the consumer). `:app`'s cross-repo E2E consumes it via
+// `testImplementation(testFixtures(project(":transport:grpc")))`, which is the
+// only way `:app` can open an in-process glasses/daemon stream without itself
+// importing `ecosys.v1.*` (forbidden by Konsist law b).
+dependencies {
+    testFixturesApi(project(":contract"))
+    testFixturesApi(project(":core:model"))
+    testFixturesImplementation(libs.grpc.stub)
+    testFixturesImplementation(libs.grpc.kotlin.stub)
+    testFixturesImplementation(libs.grpc.netty.shaded)
+    testFixturesImplementation(libs.grpc.protobuf.lite)
+    testFixturesImplementation(libs.protobuf.javalite)
+    testFixturesImplementation(libs.kotlinx.coroutines.core)
 }
