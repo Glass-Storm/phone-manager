@@ -16,11 +16,11 @@ The phone is the hub. It is the access point AND the server. The two other peers
 dial in to it, they never accept connections from it and they never talk to each
 other.
 
-| Peer              | Role value                     | Who it is                                                                  |
-| ----------------- | ------------------------------ | -------------------------------------------------------------------------- |
-| Phone hub         | (none, it authenticates peers) | This repo. Hotspot + discovery + pairing/auth + A/V relay + pluggable STT. |
-| Smart glasses app | `DEVICE_ROLE_GLASS`            | Out of scope here. Streams audio and video, receives transcripts.          |
-| Ubuntu daemon     | `DEVICE_ROLE_DAEMON`           | Out of scope here. Long-lived paired peer.                                 |
+| Peer              | Role value               | Who it is                                                                                                                   |
+| ----------------- | ------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| Phone hub         | (none; it is the server) | This repo. Hotspot + gateway discovery + an unauthenticated stream + A/V/image relay + on-device speech/gesture/TTS.        |
+| Smart glasses app | `DEVICE_ROLE_GLASS`      | Out of scope here. Streams mic audio, shows speaker-tagged subtitles and gestures, plays synthesized audio, enrolls voices. |
+| Necklace / daemon | `DEVICE_ROLE_DAEMON`     | Out of scope here. Sends camera JPEG stills and plays the hub-synthesized audio.                                            |
 
 The proto package is `ecosys.v1`. The `.proto` file is the SINGLE shared
 contract: both out-of-scope peers generate their client stubs from this same
@@ -81,30 +81,100 @@ carries.
 
 ### `StreamResult`
 
-| Field           | Number | Type     | Semantics                                                                      |
-| --------------- | ------ | -------- | ------------------------------------------------------------------------------ |
-| `text`          | 1      | `string` | The recognized utterance.                                                      |
-| `speaker_label` | 2      | `string` | Speaker label. Always empty in v1; diarization is NOT implemented (section 8). |
-| `pts_ms`        | 3      | `int64`  | Presentation timestamp in milliseconds.                                        |
+| Field           | Number | Type     | Semantics                                                                  |
+| --------------- | ------ | -------- | -------------------------------------------------------------------------- |
+| `text`          | 1      | `string` | The recognized utterance.                                                  |
+| `speaker_label` | 2      | `string` | Resolved speaker name. EMPTY when the speaker is not enrolled (section 8). |
+| `pts_ms`        | 3      | `int64`  | Presentation timestamp in milliseconds.                                    |
+
+### `ImageFrame`
+
+A single JPEG still captured by the necklace camera (320×240 at 10 fps). This is
+the ONE media payload the hub decodes — into a bitmap, solely to run isolated
+gesture recognition on the still. It never re-encodes or stores the bytes, and
+the payload stays opaque to every other layer.
+
+| Field    | Number | Type    | Semantics                               |
+| -------- | ------ | ------- | --------------------------------------- |
+| `jpeg`   | 1      | `bytes` | Raw JPEG bytes of the still.            |
+| `pts_ms` | 2      | `int64` | Presentation timestamp in milliseconds. |
+| `width`  | 3      | `int32` | Still width in pixels (320).            |
+| `height` | 4      | `int32` | Still height in pixels (240).           |
+
+### `GestureResult`
+
+One recognized isolated gesture, emitted by the hub toward the glasses.
+`label` is the raw recognizer class; `text` is the spoken meaning. There is no
+sentence-level sign-language translation — isolated canned labels only.
+
+| Field        | Number | Type     | Semantics                                     |
+| ------------ | ------ | -------- | --------------------------------------------- |
+| `text`       | 1      | `string` | The spoken meaning of the recognized gesture. |
+| `label`      | 2      | `string` | The raw recognizer class label.               |
+| `confidence` | 3      | `float`  | Recognizer confidence in `[0, 1]`.            |
+| `pts_ms`     | 4      | `int64`  | Presentation timestamp in milliseconds.       |
+
+### `TtsAudio`
+
+Hub-synthesized speech as raw little-endian PCM16 mono **@ 16 kHz**, played by
+the necklace or the glasses. The hub never sends another sample rate; the peers
+only play the bytes, they never synthesize.
+
+| Field       | Number | Type    | Semantics                               |
+| ----------- | ------ | ------- | --------------------------------------- |
+| `pcm16_16k` | 1      | `bytes` | Raw little-endian PCM16 mono @ 16 kHz.  |
+| `pts_ms`    | 2      | `int64` | Presentation timestamp in milliseconds. |
+
+### `EnrollRequest`
+
+A voiceprint-enrollment request from the glasses: a display name plus a raw
+little-endian PCM16 mono @ 16 kHz sample. Enrollment rides the stream as a
+frame, so no new RPC (and no token) is introduced.
+
+| Field             | Number | Type     | Semantics                                                                                                     |
+| ----------------- | ------ | -------- | ------------------------------------------------------------------------------------------------------------- |
+| `name`            | 1      | `string` | Display name. Must match `^[\p{Han}A-Za-z0-9]+$` (no whitespace), length 1–24; the hub rejects anything else. |
+| `audio_pcm16_16k` | 2      | `bytes`  | Raw little-endian PCM16 mono @ 16 kHz. The hub requires at least 8 s of audio.                                |
+| `pts_ms`          | 3      | `int64`  | Presentation timestamp in milliseconds.                                                                       |
+
+### `EnrollResponse`
+
+The hub's reply to an `EnrollRequest`. On rejection `ok` is false and `reason`
+carries a machine-checkable explanation (for example `name-invalid` or
+`audio-too-short`).
+
+| Field    | Number | Type     | Semantics                              |
+| -------- | ------ | -------- | -------------------------------------- |
+| `ok`     | 1      | `bool`   | `true` when the voiceprint was stored. |
+| `reason` | 2      | `string` | Machine-checkable rejection reason.    |
 
 ### `StreamFrame`
 
 One frame on the bidirectional stream. Exactly one payload variant is set at a
-time, because the payload is a `oneof`. Media payloads are OPAQUE to the hub.
+time, because the payload is a `oneof`. Media payloads are OPAQUE to the hub,
+with ONE exception: `image.jpeg` is decoded (never re-encoded or stored) so the
+hub can run gesture recognition on the still.
 
-| oneof case        | Number | Type           | Semantics                                                                                                    |
-| ----------------- | ------ | -------------- | ------------------------------------------------------------------------------------------------------------ |
-| `audio_pcm16_16k` | 1      | `bytes`        | Raw little-endian PCM16 mono at 16 kHz. The hub never decodes it, it forwards it to the STT engine.          |
-| `video_h264_nal`  | 2      | `bytes`        | Raw H.264 NAL units. The hub NEVER decodes or re-encodes them, and it never renders video. Pure passthrough. |
-| `transcript`      | 3      | `string`       | Hub to peer: one recognized utterance as plain text.                                                         |
-| `result`          | 4      | `StreamResult` | Hub to peer: the structured form of a recognized utterance.                                                  |
+| oneof case        | Number | Type                | Direction              | Semantics                                                                                                    |
+| ----------------- | ------ | ------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `audio_pcm16_16k` | 1      | `bytes`             | peer → hub             | Raw little-endian PCM16 mono at 16 kHz. The hub never decodes it; it forwards it to the speech engine.       |
+| `video_h264_nal`  | 2      | `bytes`             | peer → hub             | Raw H.264 NAL units. The hub NEVER decodes or re-encodes them, and it never renders video. Pure passthrough. |
+| `transcript`      | 3      | `string`            | hub → peer             | Frozen legacy form of a recognized utterance as plain text; no longer emitted (use `result`).                |
+| `result`          | 4      | `StreamResult`      | hub → peer             | The structured form of a recognized utterance (text + speaker).                                              |
+| `image`           | 5      | `ImageFrame`        | necklace → hub         | A JPEG still; the hub decodes it for gesture recognition.                                                    |
+| `gesture`         | 6      | `GestureResult`     | hub → glasses          | One recognized isolated gesture.                                                                             |
+| `tts_audio`       | 7      | `TtsAudio`          | hub → necklace/glasses | Hub-synthesized PCM16 @ 16 kHz for the peer to play.                                                         |
+| `enroll_request`  | 8      | `EnrollRequest`     | glasses → hub          | A name + voiceprint sample to enroll.                                                                        |
+| `enroll_response` | 9      | `EnrollResponse`    | hub → glasses          | The enrollment outcome.                                                                                      |
+| `stream_open`     | 10     | `StreamOpenRequest` | peer → hub             | The session-binding bootstrap, sent as the FIRST frame. Binds device id + role (no token; section 4).        |
 
 At the generated-code level the payload case is readable as
 `StreamFrame.getPayloadCase()` with values `AUDIO_PCM16_16K`, `VIDEO_H264_NAL`,
-`TRANSCRIPT`, `RESULT`, `PAYLOAD_NOT_SET` (Kotlin:
-`StreamFrame.PayloadCase.*`). A frame whose payload is unset, or whose payload
-is `transcript`/`result` arriving FROM a peer, is accepted and ignored by the
-hub; those two cases are hub-to-peer output.
+`TRANSCRIPT`, `RESULT`, `IMAGE`, `GESTURE`, `TTS_AUDIO`, `ENROLL_REQUEST`,
+`ENROLL_RESPONSE`, `STREAM_OPEN`, `PAYLOAD_NOT_SET` (Kotlin:
+`StreamFrame.PayloadCase.*`). A frame whose payload is unset, or whose payload is
+a hub-to-peer output case (`transcript`/`result`/`gesture`/`tts_audio`/
+`enroll_response`) arriving FROM a peer, is accepted and IGNORED by the hub.
 
 ---
 
@@ -230,20 +300,35 @@ successful RPC with `PairResponse.ok=false` and a `reject_reason`, never as
 
 ## 6. Stream framing
 
-`StreamService/OpenStream` is a bidirectional stream of `StreamFrame`. The peer
-sends media frames; the hub emits `transcript` / `result` frames back on the
-SAME stream.
+`StreamService/OpenStream` is a bidirectional stream of `StreamFrame`. Every
+session OPENS with a `stream_open` frame carrying `StreamOpenRequest{device_id,
+kind, role}` — with auth removed, this is how the hub binds the session to a
+device and routes frames. The peer then sends media frames; the hub emits
+`result` / `gesture` / `tts_audio` / `enroll_response` frames back on the SAME
+stream.
 
 - **Audio is raw little-endian PCM16, mono, at 16 kHz.** The hub's constant is
   `StreamService.AUDIO_SAMPLE_RATE_HZ = 16_000`. The canonical chunk is 20 ms,
   which is 320 samples, 640 bytes. The hub never decodes the audio; it forwards
-  it to the configured STT engine.
+  it to the on-device speech engine.
 - **Video is raw H.264 NAL units, OPAQUE.** The hub never decodes, re-encodes,
   transcodes, or renders video. It relays the bytes. Anything that needs video
   to be displayed does so on the peer.
+- **Images (`image`) are JPEG stills.** This is the ONE media kind the hub
+  decodes: it turns each still into a bitmap and runs isolated gesture
+  recognition on it. It never stores or re-encodes the bytes. The necklace sends
+  these at 320×240 and 10 fps.
+- **Routing is by session role.** A necklace session's `image` frame becomes a
+  `gesture` frame on the GLASSES session AND a `tts_audio` frame back on the
+  necklace; a glasses session's `audio_pcm16_16k` becomes a `result` frame on the
+  SAME session. Cross-session fan-out is tracked by a registry in `:core:service`.
 - **Transcripts come back as `result` frames** carrying `StreamResult{text,
 speaker_label, pts_ms}`. The `speaker_label` is the resolved speaker name, and
-  is empty when the speaker is not enrolled. The bare `transcript` variant (field 3) is frozen but no longer emitted by the hub.
+  is empty when the speaker is not enrolled. The bare `transcript` variant
+  (field 3) is frozen but no longer emitted by the hub.
+- **Enrollment rides the stream.** A glasses `enroll_request{name, audio}` yields
+  an `enroll_response{ok, reason}` on the same session; there is no enrollment
+  RPC (section 9).
 
 ### Backpressure policy
 
@@ -261,29 +346,30 @@ still tears the session down cleanly.
 
 ### Where transcripts come from
 
-The configured STT engine. The default is a deterministic OFFLINE mock
-(`MockSttAdapter`), which requires no network and produces a transcript that is
-a pure function of the audio bytes (`mock:<byte-length>:<fnv1a64-hex>`). The
-optional Speechmatics adapter sends `pcm_f32le` at 16 kHz to a cloud endpoint
-and requires the phone's OWN cellular uplink; the peers never reach the
-internet, only the phone does. The engine is selectable from the app's Settings
-screen; the mock is the v1 default and the cloud path is not an acceptance gate.
+The hub's on-device speech engine. In the JVM/test graph the default is a
+deterministic OFFLINE mock, which requires no network and produces a transcript
+that is a pure function of the audio bytes (`mock:<byte-length>:<fnv1a64-hex>`);
+on a real arm64 device the `:adapter:ai` adapter runs the `ai-android` ASR +
+diarization engine locally. Either way the hub emits `result` frames carrying
+`StreamResult{text, speaker_label, pts_ms}` — `speaker_label` is the resolved
+enrollment name, empty when the speaker is not enrolled. There is NO cloud STT
+and NO cloud TTS: transcription and speech synthesis both run on the phone, and
+the peers never reach the internet.
 
 ---
 
 ## 7. Discovery contract
 
-The hub advertises a DNS-SD service of type **`_ecosys._tcp`**. A peer may
-resolve it over mDNS and learn the hub's address and port.
+Discovery is **manual-hotspot + gateway**. The hub still advertises a DNS-SD
+service of type **`_ecosys._tcp`**, but the peers no longer depend on mDNS: they
+join the phone's hotspot by hand and then dial the **default gateway**.
 
-There is ALSO a **first-class direct-IP fallback** to the hub's gateway address.
 The phone IS the access point, so the hub is reachable at the AP gateway,
-typically `192.168.43.1` on Android's tether. This fallback is the PRIMARY dev
-path in the manual-tether flow, and it is a NORMAL outcome, not an error. An
-mDNS miss or timeout resolves to the gateway address rather than throwing.
-
-A peer should therefore try mDNS first and fall back to the gateway IP without
-treating the fallback as a failure. The advertised port is the hub's gRPC port.
+typically `192.168.43.1` on Android's tether, on the hub's gRPC port. The Pi
+resolves the gateway with `ip route` / `nmcli`; the glasses read it from
+`ConnectivityManager`. Reaching the hub through the gateway is the NORMAL
+outcome, not an error or a degraded mode; mDNS is a legacy convenience, not the
+discovery path peers rely on.
 
 ---
 
@@ -351,8 +437,9 @@ Do not build against these; they do not exist.
 - **No PIN pairing, no bearer tokens, no revocation.** Pairing/auth were removed
   from the hub runtime (sections 4–5). `PairingService` stays in the `.proto` only
   as a frozen, unserved stub.
-- **No Wi-Fi Direct and no BLE transports.** The hub is the AP; discovery is
-  mDNS plus the direct-IP fallback.
+- **No Wi-Fi Direct and no BLE transports.** Discovery is a manual hotspot join
+  plus the default-gateway address; the hub still advertises `_ecosys._tcp` over
+  DNS-SD, but the peers no longer rely on mDNS (section 7).
 - **No media storage or recording.** The hub relays media and does not persist
   it. There is no session history.
 - **No sentence-level sign-language translation.** Gesture recognition yields
@@ -395,7 +482,10 @@ hub RUNTIME, but the service is kept byte-identical in the `.proto` as an
 unserved, reserved stub so an older peer still links. `StreamService/OpenStream`
 remains and is now UNAUTHENTICATED; a peer binds its identity with the
 `stream_open` frame instead of a token. Fields 1–4 of `StreamFrame` and every enum
-value are untouched — the change is purely additive.
+value are untouched: the v3 gesture/diarization work added `image` (5), `gesture`
+(6), `tts_audio` (7), `enroll_request` (8), `enroll_response` (9) and
+`stream_open` (10), all optional, so an older peer keeps working against a newer
+hub and vice versa.
 
 ### Consuming this contract as an artifact
 

@@ -1,11 +1,12 @@
 # phone-manager
 
 The phone-side hub of the `ecosys.v1` device ecosystem. It turns an Android phone
-into the access point AND the server for two peers: a smart-glasses app and an
-Ubuntu daemon. The hub runs a local-only hotspot, advertises itself over DNS-SD,
-pairs peers with a single-use PIN, authenticates every subsequent call with a
-bearer token, relays audio and video between peers and a pluggable speech-to-text
-engine, and returns transcripts on the same stream.
+into the access point AND the server for two peers: a smart-glasses app and a
+Raspberry Pi / Ubuntu daemon. The hub runs a local-only hotspot and serves an
+**UNAUTHENTICATED** bidirectional stream: peers bind their identity with a
+`stream_open` frame (no PIN, no bearer token), the hub relays audio, video and
+JPEG stills between peers and an on-device speech-to-text / gesture / TTS engine,
+and returns transcripts, gesture text and synthesized audio on the same stream.
 
 The peer wire contract is frozen in [`docs/protocol.md`](docs/protocol.md). The
 source of truth for it is
@@ -20,10 +21,10 @@ repo ships the hub plus the contract they generate their clients from.
 | `:app`             | Android application | Compose UI (Lumo components), the five screens, and the composition root. The only module allowed to see the services AND the adapters.                                                                                 |
 | `:core:model`      | pure Kotlin/JVM     | The hand-written domain DTOs: pure data types with zero dependencies, the shared language spoken across every layer.                                                                                                    |
 | `:core:domain`     | pure Kotlin/JVM     | Ports (interfaces) and the two deterministic state machines. Zero implementation, zero framework annotations, no contract edge.                                                                                         |
-| `:core:service`    | pure Kotlin/JVM     | The use-case implementations (device, pairing, relay). Contract-free and gRPC-free by construction.                                                                                                                     |
-| `:transport:grpc`  | pure Kotlin/JVM     | The gRPC service implementations, the bearer-token interceptor, the netty-backed hub server, and the DTO↔proto mapping. The ONE module allowed to depend on `:contract`.                                                |
+| `:core:service`    | pure Kotlin/JVM     | The use-case implementations (device, relay, cross-session registry). Contract-free and gRPC-free by construction.                                                                                                      |
+| `:transport:grpc`  | pure Kotlin/JVM     | The gRPC service implementations (the UNAUTHENTICATED stream), the netty-backed hub server, and the DTO↔proto mapping. The ONE module allowed to depend on `:contract`.                                                 |
 | `:contract`        | pure Kotlin/JVM     | The FROZEN `ecosys.v1` wire contract: the `.proto` source of truth and its protobuf/gRPC-lite codegen. The ONE artifact the out-of-scope peers consume.                                                                 |
-| `:adapter:jvm`     | pure Kotlin/JVM     | Android-free port implementations: the STT engines and the discarding frame sink.                                                                                                                                       |
+| `:adapter:jvm`     | pure Kotlin/JVM     | Android-free port implementations: the deterministic STT/gesture/speech/TTS/enrollment fakes bound by default, and the discarding frame sink.                                                                           |
 | `:adapter:android` | Android library     | Platform-backed adapters: SQLite, LocalOnlyHotspot, NSD discovery, and the runtime config store. The battery-exemption helper lives in `:app` (it is app-owned platform glue).                                          |
 | `:adapter:ai`      | Android library     | The ai-android INTEGRATION module: device implementations of the gesture / speech+diarization / TTS / enrollment ports, backed by the pinned `hk.edu.hkmu:*` composite build. ISOLATED from `:app` (see below).         |
 | `:testing:testkit` | pure Kotlin/JVM     | Test support: the bounded child-process runner, the deterministic media generators, and the in-memory repository double, shared by the `:transport:grpc` and `:app` test suites. Its only dependency is `:core:domain`. |
@@ -222,11 +223,12 @@ JAVA_HOME=/home/chaos/.jdk/jdk-21.0.12.1+1 ANDROID_HOME=/home/chaos/Android/Sdk 
 
 ## Running the mockpeer
 
-`tools/mockpeer` is the Go reference peer. It pairs, heartbeats, and pushes
+`tools/mockpeer` is the Go reference peer. It opens the stream UNAUTHENTICATED,
+sends a `stream_open` bootstrap frame to bind its device id/role, and pushes
 synthetic media so you can exercise the hub without a device or an emulator.
 
 ```bash
-go run ./tools/mockpeer --addr 127.0.0.1:50051 --pin 123456
+go run ./tools/mockpeer --addr 127.0.0.1:50051
 ```
 
 Build it from the REPOSITORY ROOT. The root has a `go.work` (the root is not a Go
@@ -244,22 +246,17 @@ listed in go.work". From inside `tools/mockpeer`, plain `./...` is fine.
 
 ### Flags
 
-| Flag                       | Default           | Meaning                                                                                                                          |
-| -------------------------- | ----------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `--addr`                   | `127.0.0.1:50051` | Hub `host:port` to dial (plaintext).                                                                                             |
-| `--pin`                    | (empty)           | 6-digit pairing PIN for the open window.                                                                                         |
-| `--token`                  | (empty)           | Bearer token; skips `Pair` when set.                                                                                             |
-| `--token-file`             | (empty)           | Read the bearer token from this file instead of pairing.                                                                         |
-| `--token-out`              | (empty)           | Write the issued token to this file (mode 0600), keeping it OUT of stdout.                                                       |
-| `--no-token`               | `false`           | Skip `Pair` and heartbeat WITHOUT metadata; the hub must reject.                                                                 |
-| `--expect-unauthenticated` | `false`           | Heartbeat with the token and REQUIRE an `UNAUTHENTICATED` refusal (the revoked-token leg). Requires `--token` or `--token-file`. |
-| `--frames`                 | `10`              | Synthetic media frames to send per enabled medium.                                                                               |
-| `--timeout`                | `30`              | Overall deadline in seconds.                                                                                                     |
-| `--mode`                   | `both`            | Media to send: `audio` \| `video` \| `both`.                                                                                     |
-| `--scenario`               | `full`            | `full` \| `pair` \| `stream`.                                                                                                    |
+| Flag         | Default           | Meaning                                            |
+| ------------ | ----------------- | -------------------------------------------------- |
+| `--addr`     | `127.0.0.1:50051` | Hub `host:port` to dial (plaintext).               |
+| `--frames`   | `10`              | Synthetic media frames to send per enabled medium. |
+| `--timeout`  | `30`              | Overall deadline in seconds.                       |
+| `--mode`     | `both`            | Media to send: `audio` \| `video` \| `both`.       |
+| `--scenario` | `full`            | `full` \| `stream`.                                |
 
-`--token`, `--token-file`, and `--no-token` are mutually exclusive.
-`--scenario stream` requires a credential (or `--no-token` to prove rejection).
+There are no credential flags: the stream is unauthenticated, so the peer never
+pairs, heartbeats, or sends an `authorization` header. It binds its identity by
+sending a `stream_open` frame as the stream's first message.
 
 ### stdout contract
 
@@ -267,35 +264,35 @@ Automation keys on stdout, so the lines are frozen:
 
 | Line                                    | Meaning                                                                                | Exit |
 | --------------------------------------- | -------------------------------------------------------------------------------------- | ---- |
+| `stream-open-ok`                        | The `stream_open` bootstrap frame was accepted.                                        | 0    |
 | `session-ok frames=<N> transcripts=<M>` | The scenario completed. `N` counts frames SENT, `M` counts transcript frames RECEIVED. | 0    |
-| `UNAUTHENTICATED`                       | The hub refused an unauthenticated call, as it must.                                   | 2    |
-| `pair-rejected reason=<r>`              | The hub rejected the PIN with reason `<r>`.                                            | 2    |
 | `error: <detail>`                       | Anything else.                                                                         | 1    |
 
-`--scenario full` additionally prints `pair-ok` and `heartbeat-ok` before the
-`session-ok` line, in that order.
+`--scenario full` prints `stream-open-ok` before the `session-ok` line.
 
-One trap: `go run` normalises ANY non-zero child exit to 1, so a rejection that
-exits 2 inside the binary shows up as `go run` exiting 1. Assert `exit != 0`,
-never a specific rejection code, when driving the CLI through `go run`. The token
-itself never reaches stdout; use `--token-out` when you need to reuse it.
+One trap: `go run` normalises ANY non-zero child exit to 1, so assert `exit != 0`,
+never a specific exit code, when driving the CLI through `go run`.
 
 ## The manual-tether dev flow
 
 Manual tethering is the PRIMARY dev path on this project. Two reasons: OEMs block
-programmatic `LocalOnlyHotspot`, and Wi-Fi Direct is unstable on the glasses. So
-during development you enable the phone's system hotspot by hand:
+programmatic `LocalOnlyHotspot`, and Wi-Fi Direct is unstable on the glasses. The
+peers are trusted devices on one local network, so there is no PIN pairing and no
+bearer token: during development you enable the phone's system hotspot by hand and
+the peers dial the gateway directly.
 
 1. Open Android Settings, enable the hotspot, and note the SSID/password.
-2. Join the glasses or the Ubuntu daemon to that hotspot.
-3. The hub advertises `_ecosys._tcp`; peers that can resolve it use mDNS.
-4. Peers that cannot resolve it use the direct gateway IP. The phone is the AP,
-   so the hub is at the gateway, typically `192.168.43.1`. The discovery adapter
-   falls back to the gateway on an mDNS miss, so this path works even when mDNS
-   is filtered.
+2. Join the glasses (and the Pi) to that hotspot by hand. The Pi does this with
+   `nmcli` from its config; the glasses show a manual-connect screen.
+3. The peer finds the hub at the hotspot's **default gateway** — the phone is the
+   AP, so the hub is at the gateway, typically `192.168.43.1` — on the hub's gRPC
+   port. The Pi resolves the gateway with `ip route` / `nmcli`; the glasses read it
+   from `ConnectivityManager`.
+4. The hub still advertises `_ecosys._tcp` over DNS-SD, but the peers no longer
+   depend on mDNS: the gateway is the normative discovery path.
 
-The direct-IP fallback is a normal outcome, not an error. Do not treat it as a
-degraded mode or a failure to investigate.
+Reaching the hub through the gateway is a normal outcome, not an error. Do not
+treat it as a degraded mode or a failure to investigate.
 
 ## On-device smoke checklist (NON-BLOCKING)
 
@@ -318,11 +315,14 @@ behaviour works.
       is used and the dashboard shows the gateway address.
 - [ ] The hub foreground service survives screen-off and backgrounding long
       enough to serve a peer.
-- [ ] mDNS resolution of `_ecosys._tcp` works over the SoftAP (this is exactly
-      the case the gateway fallback exists for).
-- [ ] A real peer pairs with a PIN and holds an authenticated heartbeat.
-- [ ] Audio and video actually arrive from a real peer and transcripts come back.
-- [ ] A revoked token stops working immediately on the device.
+- [ ] mDNS resolution of `_ecosys._tcp` works over the SoftAP, even though the
+      peers now reach the hub through the gateway rather than mDNS.
+- [ ] A peer opens the stream with no token and binds its identity with a
+      `stream_open` frame.
+- [ ] A necklace JPEG still becomes a gesture result on the glasses AND a
+      synthesized-audio (`tts_audio`) frame back on the necklace.
+- [ ] A glasses audio frame becomes a speaker-tagged transcript on the same
+      session, with an empty speaker label for an unregistered speaker.
 
 ## Repo conventions
 
@@ -338,19 +338,19 @@ behaviour works.
   the BUILD, not a runtime lookup. There is no Hilt, Koin, Room, or service
   registry anywhere in this repo.
 - **Naming.** Standard Kotlin convention. Files are PascalCase and match their
-  primary class (`PairingService.kt`, `Context.kt`, `Device.kt`); functions,
+  primary class (`HubBringUp.kt`, `Context.kt`, `Device.kt`); functions,
   members, locals, and parameters are lowerCamelCase (`startHotspot`,
   `boundPort`, `ctx`, `fromContext`); constants are UPPER_SNAKE_CASE
-  (`DEFAULT_HUB_PORT`, `CHANNEL_ID`, `REASON_NO_WINDOW`, `MAX_PIN_ATTEMPTS`);
+  (`DEFAULT_HUB_PORT`, `CHANNEL_ID`, `AUDIO_SAMPLE_RATE_HZ`, `DISCOVERY_NAME`);
   types are PascalCase; package names are all-lowercase reverse-domain.
 
 ## Security posture
 
-- Only the token HASH is persisted; the plaintext bearer token is minted, returned
-  once, and never stored.
-- The Speechmatics API key lives in app-private SharedPreferences
-  (`runtime_config`), and that prefs file is excluded from cloud backup and
-  device transfer, together with `phone_manager.db` (which holds token hashes).
+- There is no bearer token or PIN any more: `OpenStream` is unauthenticated and a
+  peer binds its identity with the `stream_open` frame. `PairingService` stays in
+  the `.proto` as a frozen, unserved stub.
+- Voiceprint enrollment persists name→voiceprint rows in a hub-owned store;
+  `phone_manager.db` is excluded from cloud backup and device transfer.
 - The cleartext network-security config is **DEV-ONLY**. It exists for the
   plaintext LAN posture of v1; it is not a security boundary and it must be
   replaced by the documented TLS upgrade path before any production use. See
