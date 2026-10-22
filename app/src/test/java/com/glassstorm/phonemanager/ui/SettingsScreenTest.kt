@@ -36,15 +36,15 @@ class SettingsScreenTest {
     fun `renders the unavailable state when the config port read fails`() {
         composeRule.setSettingsContent(config = FakeAppConfig(failReads = true))
 
-        composeRule.assertText("Settings")
-        composeRule.assertText("Configuration not available")
+        composeRule.assertText("系統設定")
+        composeRule.assertText("無法使用")
     }
 
     @Test
     fun `the hotspot card renders the current mode`() {
         composeRule.setSettingsContent(config = FakeAppConfig(mode = HotspotMode.MANUAL))
 
-        composeRule.assertText("Hotspot mode: Manual")
+        composeRule.assertText("手動模式")
     }
 
     @Test
@@ -52,12 +52,12 @@ class SettingsScreenTest {
         val config = FakeAppConfig(mode = HotspotMode.MANUAL)
 
         composeRule.setSettingsContent(config = config)
-        composeRule.assertText("Hotspot mode: Manual")
+        composeRule.assertText("手動模式")
 
-        composeRule.click("Hotspot mode Auto")
+        composeRule.click("自動")
 
         assertThat(config.hotspotMode()).isEqualTo(HotspotMode.AUTO)
-        composeRule.assertText("Hotspot mode: Auto")
+        composeRule.assertText("自動模式")
     }
 
     @Test
@@ -66,9 +66,9 @@ class SettingsScreenTest {
         val battery = FakeBatteryExemption(exempt = false)
 
         composeRule.setSettingsContent(config = config, battery = battery)
-        composeRule.assertText("Battery optimization: not exempt")
+        composeRule.assertText("未排除")
 
-        composeRule.click("Request battery exemption")
+        composeRule.click("要求排除電池最佳化")
 
         assertThat(battery.requestCalls).isEqualTo(1)
     }
@@ -77,7 +77,7 @@ class SettingsScreenTest {
     fun `an already exempt app renders the exempt state`() {
         composeRule.setSettingsContent(battery = FakeBatteryExemption(exempt = true))
 
-        composeRule.assertText("Battery optimization: exempt")
+        composeRule.assertText("已排除")
     }
 
     @Test
@@ -86,15 +86,15 @@ class SettingsScreenTest {
             hub = FakeHubServer(boundPortValue = 40404).also { it.start(0) },
         )
 
-        composeRule.assertText("Protocol: ecosys.v1")
-        composeRule.assertText("Hub port: 40404")
+        composeRule.assertText("ecosys.v1")
+        composeRule.assertText("40404")
     }
 
     @Test
     fun `a stopped hub renders a zero port without crashing`() {
         composeRule.setSettingsContent(hub = FakeHubServer(boundPortValue = 40404))
 
-        composeRule.assertText("Hub port: 0")
+        composeRule.assertText("0")
     }
 
     private fun ComposeContentTestRule.setSettingsContent(
@@ -104,7 +104,7 @@ class SettingsScreenTest {
     ) {
         val viewModel = SettingsViewModel(config, hub, battery)
         setContent {
-            AppTheme {
+            HubTheme {
                 SettingsScreen(viewModelFactory = viewModelFactory(viewModel))
             }
         }

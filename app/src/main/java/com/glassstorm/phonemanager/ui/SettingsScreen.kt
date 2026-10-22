@@ -1,12 +1,7 @@
 package com.glassstorm.phonemanager.ui
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -18,7 +13,17 @@ import com.glassstorm.phonemanager.core.model.HotspotMode
 import com.glassstorm.phonemanager.ui.components.Button
 import com.glassstorm.phonemanager.ui.components.ButtonVariant
 import com.glassstorm.phonemanager.ui.components.Text
-import com.glassstorm.phonemanager.ui.components.card.Card
+import com.glassstorm.phonemanager.ui.hub.HubContentColumn
+import com.glassstorm.phonemanager.ui.hub.HubStatus
+import com.glassstorm.phonemanager.ui.hub.InfoRow
+import com.glassstorm.phonemanager.ui.hub.ScreenHeader
+import com.glassstorm.phonemanager.ui.hub.SectionCard
+import com.glassstorm.phonemanager.ui.hub.StatusChip
+
+/** The `AppConfig` label strings the ViewModel publishes for each hotspot mode. */
+private const val MODE_MANUAL = "Manual"
+
+private const val MODE_AUTO = "Auto"
 
 /**
  * Hub configuration: the hotspot mode, the Doze exemption, and the protocol/port
@@ -37,25 +42,23 @@ fun SettingsScreen(
     val viewModel: SettingsViewModel = viewModel(factory = viewModelFactory)
     val state by viewModel.uiState.collectAsState()
 
-    Column(
-        modifier =
-            modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Text(text = "Settings", style = AppTheme.typography.h2)
+    HubContentColumn(modifier = modifier) {
+        ScreenHeader(title = "系統設定", subtitle = "中樞與連線偏好")
 
         if (!state.configAvailable) {
-            Text(text = "Configuration not available")
-            return@Column
+            SectionCard(title = "設定") {
+                StatusChip(status = HubStatus.Error, label = "無法使用")
+                Text(
+                    text = "設定暫時無法讀取。",
+                    style = AppTheme.typography.body2,
+                    color = AppTheme.colors.textSecondary,
+                )
+            }
+            return@HubContentColumn
         }
 
         hotspotCard(state, viewModel)
-
         batteryCard(state, viewModel)
-
         endpointCard(state)
     }
 }
@@ -65,26 +68,20 @@ private fun hotspotCard(
     state: SettingsUiState,
     viewModel: SettingsViewModel,
 ) {
-    Card {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(text = "Hotspot", style = AppTheme.typography.h4)
-            Text(text = "Hotspot mode: ${state.hotspotMode}")
+    SectionCard(title = "熱點") {
+        InfoRow(label = "目前模式", value = localisedMode(state.hotspotMode))
 
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Button(
-                    text = "Hotspot mode Manual",
-                    variant = ButtonVariant.SecondaryOutlined,
-                    onClick = { viewModel.onSelectHotspotMode(HotspotMode.MANUAL) },
-                )
-                Button(
-                    text = "Hotspot mode Auto",
-                    variant = ButtonVariant.SecondaryOutlined,
-                    onClick = { viewModel.onSelectHotspotMode(HotspotMode.AUTO) },
-                )
-            }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Button(
+                text = "手動",
+                variant = if (state.hotspotMode == MODE_MANUAL) ButtonVariant.Primary else ButtonVariant.SecondaryOutlined,
+                onClick = { viewModel.onSelectHotspotMode(HotspotMode.MANUAL) },
+            )
+            Button(
+                text = "自動",
+                variant = if (state.hotspotMode == MODE_AUTO) ButtonVariant.Primary else ButtonVariant.SecondaryOutlined,
+                onClick = { viewModel.onSelectHotspotMode(HotspotMode.AUTO) },
+            )
         }
     }
 }
@@ -94,40 +91,45 @@ private fun batteryCard(
     state: SettingsUiState,
     viewModel: SettingsViewModel,
 ) {
-    Card {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(text = "Battery", style = AppTheme.typography.h4)
-
-            if (!state.batteryAvailable) {
-                Text(text = "Battery exemption not available")
-                return@Column
-            }
-
+    SectionCard(title = "電池") {
+        if (!state.batteryAvailable) {
+            StatusChip(status = HubStatus.Error, label = "無法使用")
             Text(
-                text = "Battery optimization: ${if (state.batteryExempt) "exempt" else "not exempt"}",
+                text = "電池狀態暫時無法取得。",
+                style = AppTheme.typography.body2,
+                color = AppTheme.colors.textSecondary,
             )
-            Button(
-                text = "Request battery exemption",
-                enabled = !state.batteryExempt,
-                onClick = viewModel::onRequestBatteryExemption,
-            )
+            return@SectionCard
         }
+
+        InfoRow(
+            label = "最佳化狀態",
+            value = if (state.batteryExempt) "已排除" else "未排除",
+        )
+        Button(
+            text = "要求排除電池最佳化",
+            enabled = !state.batteryExempt,
+            onClick = viewModel::onRequestBatteryExemption,
+        )
     }
 }
 
 @Composable
 private fun endpointCard(state: SettingsUiState) {
-    Card {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(text = "Endpoint", style = AppTheme.typography.h4)
-            Text(text = "Protocol: ${state.protocol}")
-            Text(text = "Hub port: ${state.hubPort}")
-        }
+    SectionCard(title = "端點") {
+        InfoRow(label = "通訊協定", value = state.protocol)
+        InfoRow(label = "連接埠", value = state.hubPort.toString())
     }
 }
+
+/**
+ * The ViewModel publishes the raw `AppConfig` label; the screen renders the
+ * plain-language value. It deliberately differs from the button labels (手動 /
+ * 自動) so a text query names exactly one node.
+ */
+private fun localisedMode(mode: String): String =
+    when (mode) {
+        MODE_MANUAL -> "手動模式"
+        MODE_AUTO -> "自動模式"
+        else -> mode
+    }

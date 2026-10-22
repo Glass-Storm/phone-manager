@@ -33,15 +33,15 @@ class DevicesScreenTest {
     fun `renders the unavailable state when the repository read fails`() {
         composeRule.setDevicesContent(FakeDeviceRepository(failOnList = true))
 
-        composeRule.assertText("Devices")
-        composeRule.assertText("Device store not available")
+        composeRule.assertText("已連線裝置")
+        composeRule.assertText("無法使用")
     }
 
     @Test
-    fun `an empty store shows the no-devices line`() {
+    fun `an empty store shows the empty state`() {
         composeRule.setDevicesContent(FakeDeviceRepository())
 
-        composeRule.assertText("No paired devices")
+        composeRule.assertText("尚無裝置")
     }
 
     @Test
@@ -55,10 +55,10 @@ class DevicesScreenTest {
         composeRule.setDevicesContent(repo)
 
         composeRule.assertText("Glass One")
-        composeRule.assertText("Role: GLASS")
+        composeRule.assertText("GLASS")
         composeRule.assertText("Ubuntu Daemon")
-        composeRule.assertText("Role: DAEMON")
-        composeRule.assertText("Last seen: 2023-11-14T22:13:20Z")
+        composeRule.assertText("DAEMON")
+        composeRule.assertText("最後連線：2 天前")
     }
 
     @Test
@@ -70,7 +70,7 @@ class DevicesScreenTest {
 
         composeRule.setDevicesContent(repo)
 
-        composeRule.assertText("Last seen: never")
+        composeRule.assertText("最後連線：未曾連線")
     }
 
     @Test
@@ -84,7 +84,7 @@ class DevicesScreenTest {
         composeRule.setDevicesContent(repo)
         composeRule.assertText("Glass One")
 
-        composeRule.click("Revoke Glass One")
+        composeRule.click("移除 Glass One")
 
         composeRule.onNodeWithText("Glass One").assertDoesNotExist()
         composeRule.assertText("Ubuntu Daemon")
@@ -92,13 +92,13 @@ class DevicesScreenTest {
     }
 
     @Test
-    fun `revoking the last device falls back to the empty line`() {
+    fun `revoking the last device falls back to the empty state`() {
         val repo = FakeDeviceRepository().also { it.seedDevice("d-1", "Glass One") }
 
         composeRule.setDevicesContent(repo)
-        composeRule.click("Revoke Glass One")
+        composeRule.click("移除 Glass One")
 
-        composeRule.assertText("No paired devices")
+        composeRule.assertText("尚無裝置")
         composeRule.onNodeWithText("Glass One").assertDoesNotExist()
     }
 
@@ -117,13 +117,24 @@ class DevicesScreenTest {
         assertThat(repo.deletedIds).containsExactly("d-1", "d-1")
     }
 
-    private fun ComposeContentTestRule.setDevicesContent(repo: DeviceRepository) {
+    private fun ComposeContentTestRule.setDevicesContent(
+        repo: DeviceRepository,
+        nowMs: Long = SEEDED_NOW_MS,
+    ) {
         val viewModel = DevicesViewModel(repo)
         setContent {
-            AppTheme {
-                DevicesScreen(viewModelFactory = viewModelFactory(viewModel))
+            HubTheme {
+                DevicesScreen(
+                    viewModelFactory = viewModelFactory(viewModel),
+                    nowMs = { nowMs },
+                )
             }
         }
+    }
+
+    private companion object {
+        /** Two days after the seeded device's [1_700_000_000_000] last-seen instant. */
+        const val SEEDED_NOW_MS = 1_700_172_800_000L
     }
 
     private fun ComposeContentTestRule.assertText(text: String) {

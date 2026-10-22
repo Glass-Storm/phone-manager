@@ -22,25 +22,25 @@ class AppShellTest {
     @Test
     fun `dashboard is the start destination`() {
         composeRule.setShellContent(startRoute = "dashboard")
-        composeRule.onNodeWithText("Dashboard").assertIsDisplayed()
+        composeRule.onNodeWithText("系統總覽").assertIsDisplayed()
     }
 
     @Test
-    fun `stream route renders its placeholder`() {
+    fun `stream route renders its screen`() {
         composeRule.setShellContent(startRoute = "stream")
-        composeRule.onNodeWithText("Stream").assertIsDisplayed()
+        composeRule.onNodeWithText("即時串流").assertIsDisplayed()
     }
 
     @Test
-    fun `devices route renders its placeholder`() {
+    fun `devices route renders its screen`() {
         composeRule.setShellContent(startRoute = "devices")
-        composeRule.onNodeWithText("Devices").assertIsDisplayed()
+        composeRule.onNodeWithText("已連線裝置").assertIsDisplayed()
     }
 
     @Test
-    fun `settings route renders its placeholder`() {
+    fun `settings route renders its screen`() {
         composeRule.setShellContent(startRoute = "settings")
-        composeRule.onNodeWithText("Settings").assertIsDisplayed()
+        composeRule.onNodeWithText("系統設定").assertIsDisplayed()
     }
 
     @Test
@@ -52,12 +52,21 @@ class AppShellTest {
     }
 
     @Test
+    fun `the bottom bar labels every route`() {
+        composeRule.setShellContent(startRoute = "dashboard")
+        composeRule.onNodeWithText("總覽").assertIsDisplayed()
+        composeRule.onNodeWithText("串流").assertIsDisplayed()
+        composeRule.onNodeWithText("裝置").assertIsDisplayed()
+        composeRule.onNodeWithText("設定").assertIsDisplayed()
+    }
+
+    @Test
     fun `repeatedly tapping a tab never stacks duplicate destinations`() {
         lateinit var navController: NavHostController
         composeRule.setShellContent(startRoute = "dashboard") { navController = it }
 
         repeat(3) {
-            composeRule.onNodeWithText("DEVICES").performClick()
+            composeRule.onNodeWithText("裝置").performClick()
             composeRule.waitForIdle()
         }
 
@@ -85,7 +94,7 @@ class AppShellTest {
         setContent {
             val navController = rememberNavController()
             onController?.invoke(navController)
-            AppTheme {
+            HubTheme {
                 AppShell(viewModelFactory = factory, startRoute = startRoute, navController = navController)
             }
         }

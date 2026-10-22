@@ -1,9 +1,11 @@
 package com.glassstorm.phonemanager.ui
 
 import android.os.Looper
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.ComposeContentTestRule
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -42,20 +44,21 @@ class StreamScreenTest {
     fun `renders the unavailable state when the stream port read fails`() {
         composeRule.setStreamContent(FakeStreamService(failStats = true))
 
-        composeRule.assertText("Stream")
-        composeRule.assertText("Stream service not available")
+        composeRule.assertText("即時串流")
+        composeRule.assertText("無法使用")
     }
 
     @Test
     fun `a session starts idle with every counter at zero`() {
         composeRule.setStreamContent(FakeStreamService())
 
-        composeRule.assertText("Session: idle")
-        composeRule.assertText("Audio frames in: 0")
-        composeRule.assertText("Video frames in: 0")
-        composeRule.assertText("Video dropped: 0")
-        composeRule.assertText("Transcripts out: 0")
-        composeRule.assertText("Live sessions: 0")
+        composeRule.assertText("待機")
+        composeRule.assertText("音訊輸入")
+        composeRule.assertText("視訊輸入")
+        composeRule.assertText("視訊捨棄")
+        composeRule.assertText("字幕輸出")
+        // Four counter tiles plus the "目前連線" row all read zero.
+        composeRule.onAllNodesWithText("0").assertCountEquals(5)
     }
 
     @Test
@@ -63,26 +66,26 @@ class StreamScreenTest {
         val peer = FakeStreamService()
 
         composeRule.setStreamContent(peer)
-        composeRule.click("Start session")
+        composeRule.click("開始串流")
 
-        composeRule.assertText("Session: live")
-        composeRule.assertText("Live sessions: 1")
+        composeRule.assertText("已連線")
+        composeRule.assertText("目前連線")
 
         // The peer pushes media AFTER the session opened, so only the refresh loop
         // can surface these numbers.
         peer.reportStats(
             audioFrames = 3L,
             videoFrames = 5L,
-            videoDropped = 1L,
+            videoDropped = 4L,
             transcripts = 2L,
         )
         composeRule.advancePollClock()
 
-        composeRule.assertText("Audio frames in: 3")
-        composeRule.assertText("Video frames in: 5")
-        composeRule.assertText("Video dropped: 1")
-        composeRule.assertText("Transcripts out: 2")
-        composeRule.onNodeWithText("Audio frames in: 0").assertDoesNotExist()
+        composeRule.assertText("3")
+        composeRule.assertText("5")
+        composeRule.assertText("4")
+        composeRule.assertText("2")
+        composeRule.onAllNodesWithText("0").assertCountEquals(0)
     }
 
     @Test
@@ -90,16 +93,16 @@ class StreamScreenTest {
         val peer = FakeStreamService()
 
         composeRule.setStreamContent(peer)
-        composeRule.click("Start session")
+        composeRule.click("開始串流")
 
-        composeRule.assertText("No transcript yet")
+        composeRule.assertText("尚無字幕")
 
         peer.emitTranscript("hello world", speakerLabel = "Speaker 1")
         composeRule.advancePollClock()
 
         composeRule.assertText("hello world")
-        composeRule.assertText("Speaker: Speaker 1")
-        composeRule.onNodeWithText("No transcript yet").assertDoesNotExist()
+        composeRule.assertText("Speaker 1")
+        composeRule.onNodeWithText("尚無字幕").assertDoesNotExist()
     }
 
     @Test
@@ -107,7 +110,7 @@ class StreamScreenTest {
         val peer = FakeStreamService()
 
         composeRule.setStreamContent(peer)
-        composeRule.click("Start session")
+        composeRule.click("開始串流")
 
         peer.emitTranscript("first", speakerLabel = "Speaker 1")
         composeRule.advancePollClock()
@@ -117,7 +120,7 @@ class StreamScreenTest {
         composeRule.advancePollClock()
 
         composeRule.assertText("second")
-        composeRule.assertText("Speaker: Speaker 2")
+        composeRule.assertText("Speaker 2")
         composeRule.onNodeWithText("first").assertDoesNotExist()
     }
 
@@ -126,28 +129,24 @@ class StreamScreenTest {
         val peer = FakeStreamService()
 
         composeRule.setStreamContent(peer)
-        composeRule.click("Start session")
+        composeRule.click("開始串流")
 
         peer.reportStats(
-            audioFrames = 9L,
+            audioFrames = 7L,
             videoFrames = 9L,
             videoDropped = 4L,
             transcripts = 2L,
         )
         peer.emitTranscript("seen while live", speakerLabel = "Speaker 1")
         composeRule.advancePollClock()
-        composeRule.assertText("Audio frames in: 9")
+        composeRule.assertText("7")
         composeRule.assertText("seen while live")
 
-        composeRule.click("Stop session")
+        composeRule.click("停止串流")
 
-        composeRule.assertText("Session: idle")
-        composeRule.assertText("Audio frames in: 0")
-        composeRule.assertText("Video frames in: 0")
-        composeRule.assertText("Video dropped: 0")
-        composeRule.assertText("Transcripts out: 0")
-        composeRule.assertText("Live sessions: 0")
-        composeRule.assertText("No transcript yet")
+        composeRule.assertText("待機")
+        composeRule.assertText("尚無字幕")
+        composeRule.onAllNodesWithText("0").assertCountEquals(5)
         composeRule.onNodeWithText("seen while live").assertDoesNotExist()
     }
 
@@ -170,8 +169,8 @@ class StreamScreenTest {
         val peer = FakeStreamService(sessionIds = listOf("s-1", "s-2"))
 
         composeRule.setStreamContent(peer)
-        composeRule.click("Start session")
-        composeRule.click("Stop session")
+        composeRule.click("開始串流")
+        composeRule.click("停止串流")
 
         peer.reportStats(
             audioFrames = 8L,
@@ -179,12 +178,12 @@ class StreamScreenTest {
             videoDropped = 0L,
             transcripts = 0L,
         )
-        composeRule.click("Start session")
+        composeRule.click("開始串流")
 
-        composeRule.assertText("Session: live")
+        composeRule.assertText("已連線")
         // The second open mints a DIFFERENT session id; the baseline taken at start
         // means the counters show THIS session, not the cumulative relay total.
-        composeRule.assertText("Audio frames in: 0")
+        composeRule.onAllNodesWithText("0").assertCountEquals(4)
         assertThat(peer.openCount()).isEqualTo(2)
     }
 
@@ -217,7 +216,7 @@ class StreamScreenTest {
     private fun ComposeContentTestRule.setStreamContent(stream: StreamService) {
         val viewModel = StreamViewModel(stream)
         setContent {
-            AppTheme {
+            HubTheme {
                 StreamScreen(viewModelFactory = viewModelFactory(viewModel))
             }
         }

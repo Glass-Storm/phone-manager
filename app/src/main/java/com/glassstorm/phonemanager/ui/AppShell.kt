@@ -1,14 +1,39 @@
 package com.glassstorm.phonemanager.ui
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
 import androidx.navigation.NavHostController
@@ -19,6 +44,7 @@ import androidx.navigation.compose.rememberNavController
 import com.glassstorm.phonemanager.ui.components.Scaffold
 import com.glassstorm.phonemanager.ui.components.Surface
 import com.glassstorm.phonemanager.ui.components.Text
+import com.glassstorm.phonemanager.ui.hub.HubMotion
 
 const val ROUTE_DASHBOARD = "dashboard"
 const val ROUTE_STREAM = "stream"
@@ -55,7 +81,7 @@ fun AppShell(
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         bottomBar = {
-            NavigationBar(
+            HubNavigationBar(
                 currentRoute = currentRoute,
                 onNavigate = { route -> navController.navigateToRoute(route, startRoute) },
             )
@@ -75,54 +101,107 @@ fun AppShell(
 }
 
 /**
- * A one-control-per-route bottom bar, so every destination is reachable from
- * any other. The current route is highlighted with the primary surface color.
- *
- * The labels are UPPERCASE on purpose: they are distinct from each screen's own
- * title, so a test or a user never confuses the control with the content.
+ * A one-control-per-route bottom bar, so every destination is reachable from any
+ * other. Each item pairs an icon with its label; the selected route uses `primary`
+ * for both plus a `primary` indicator bar, so selection never relies on colour
+ * alone (the label is always present). The bar is padded for the system navigation
+ * inset so the last row of controls is never under the system chrome.
  */
 @Composable
-private fun NavigationBar(
+private fun HubNavigationBar(
     currentRoute: String,
     onNavigate: (String) -> Unit,
 ) {
-    Surface(color = AppTheme.colors.surface) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-        ) {
+    Surface(
+        modifier = Modifier.windowInsetsPadding(WindowInsets.navigationBars),
+        color = AppTheme.colors.surface,
+    ) {
+        Row(modifier = Modifier.fillMaxWidth()) {
             ROUTES.forEach { route ->
-                val selected = route == currentRoute
-                Surface(
-                    selected = selected,
+                NavigationItem(
+                    route = route,
+                    selected = route == currentRoute,
                     onClick = { onNavigate(route) },
                     modifier = Modifier.weight(1f),
-                    color = if (selected) AppTheme.colors.primary else AppTheme.colors.surface,
-                    contentColor =
-                        if (selected) {
-                            AppTheme.colors.onPrimary
-                        } else {
-                            AppTheme.colors.onSurface
-                        },
-                ) {
-                    Text(
-                        text = routeLabel(route),
-                        modifier = Modifier.padding(vertical = 12.dp, horizontal = 4.dp),
-                        textAlign = TextAlign.Center,
-                    )
-                }
+                )
             }
         }
     }
 }
 
+@Composable
+private fun NavigationItem(
+    route: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val tint by animateColorAsState(
+        targetValue = if (selected) AppTheme.colors.primary else AppTheme.colors.textSecondary,
+        animationSpec = tween(durationMillis = HubMotion.tweenMillis(), easing = FastOutSlowInEasing),
+        label = "navigationItemTint",
+    )
+
+    Surface(
+        selected = selected,
+        onClick = onClick,
+        modifier = modifier.heightIn(min = HubNavigationDefaults.itemMinHeight),
+        color = AppTheme.colors.surface,
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(vertical = HubNavigationDefaults.itemVerticalPadding),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(HubNavigationDefaults.itemGap),
+        ) {
+            Box(
+                modifier =
+                    Modifier
+                        .width(HubNavigationDefaults.indicatorWidth)
+                        .height(HubNavigationDefaults.indicatorHeight)
+                        .clip(RoundedCornerShape(50))
+                        .background(if (selected) AppTheme.colors.primary else AppTheme.colors.transparent),
+            )
+            Image(
+                imageVector = routeIcon(route),
+                contentDescription = null,
+                modifier = Modifier.size(HubNavigationDefaults.iconSize),
+                colorFilter = ColorFilter.tint(tint),
+            )
+            Text(
+                text = routeLabel(route),
+                style = AppTheme.typography.label2,
+                color = tint,
+                textAlign = TextAlign.Center,
+            )
+        }
+    }
+}
+
+private object HubNavigationDefaults {
+    val itemMinHeight: Dp = 56.dp
+    val itemVerticalPadding: Dp = 8.dp
+    val itemGap: Dp = 4.dp
+    val indicatorWidth: Dp = 28.dp
+    val indicatorHeight: Dp = 3.dp
+    val iconSize: Dp = 24.dp
+}
+
 private fun routeLabel(route: String): String =
     when (route) {
-        ROUTE_DASHBOARD -> "DASHBOARD"
-        ROUTE_STREAM -> "STREAM"
-        ROUTE_DEVICES -> "DEVICES"
-        ROUTE_SETTINGS -> "SETTINGS"
+        ROUTE_DASHBOARD -> "總覽"
+        ROUTE_STREAM -> "串流"
+        ROUTE_DEVICES -> "裝置"
+        ROUTE_SETTINGS -> "設定"
         else -> route
+    }
+
+private fun routeIcon(route: String): ImageVector =
+    when (route) {
+        ROUTE_DASHBOARD -> Icons.Default.Home
+        ROUTE_STREAM -> Icons.Default.PlayArrow
+        ROUTE_DEVICES -> Icons.AutoMirrored.Filled.List
+        ROUTE_SETTINGS -> Icons.Default.Settings
+        else -> Icons.Default.Home
     }
 
 /**

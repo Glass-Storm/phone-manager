@@ -83,6 +83,7 @@ dependencies {
     implementation(libs.compose.ui.util)
     implementation(libs.compose.ui.tooling.preview)
     implementation(libs.compose.material.ripple)
+    implementation(libs.compose.material.icons.core)
 
     debugImplementation(libs.compose.ui.tooling)
     debugImplementation(libs.compose.ui.test.manifest)

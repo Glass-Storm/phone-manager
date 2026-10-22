@@ -4,7 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import com.glassstorm.phonemanager.ui.AppShell
-import com.glassstorm.phonemanager.ui.AppTheme
+import com.glassstorm.phonemanager.ui.HubTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -13,7 +13,8 @@ class MainActivity : ComponentActivity() {
         // it exposes is what lets each Compose screen resolve its ports by type.
         val viewModelFactory = (application as PhoneManagerApplication).component.viewModelFactory()
         setContent {
-            AppTheme {
+            // HubTheme wraps the generated kit and re-points its palette (DESIGN.md).
+            HubTheme {
                 AppShell(viewModelFactory = viewModelFactory)
             }
         }
