@@ -82,6 +82,8 @@ class FakeSpeechPort(
     override suspend fun close(sessionId: String) {
         closing += sessionId
     }
+
+    override suspend fun flush(sessionId: String): SpeechUtterance? = null
 }
 
 /** [GesturePort] fake: a fixed outcome for a non-empty still, `null` for an empty one. */

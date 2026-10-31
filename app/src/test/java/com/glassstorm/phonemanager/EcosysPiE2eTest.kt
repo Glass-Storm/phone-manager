@@ -30,7 +30,7 @@ import java.nio.file.Files
  * T23: the CROSS-REPO end-to-end harness.
  *
  * It drives the REAL Python `ecosys_pi` CLI (the necklace) against the REAL hub
- * (Robolectric-hosted, wired from the `:app` graph whose `AiModule` binds the
+ * (Robolectric-hosted, wired from the `:app` graph whose `DeviceAiModule` binds the
  * deterministic `:adapter:jvm` fakes), over a REAL loopback socket with NO token.
  * A second, in-process `ecosys.v1` peer — [HubPeerClient], supplied by
  * `:transport:grpc`'s test fixtures — plays the glasses and, later, the
@@ -94,7 +94,7 @@ class EcosysPiE2eTest {
         val app: Application = ApplicationProvider.getApplicationContext()
         val component = (app as PhoneManagerApplication).component
 
-        // The REAL hub graph, wired from the app component's AiModule fakes. Only
+        // The REAL hub graph, wired from the app component's DeviceAiModule fakes. Only
         // the listener (loopback, never the 0.0.0.0 production bind) and the
         // media sink are chosen for the test, exactly as the sibling FullE2eTest
         // composes them; the engines are the deterministic adapter:jvm fakes.
@@ -198,9 +198,12 @@ class EcosysPiE2eTest {
             .that(speech.speakerLabel)
             .isEmpty()
 
-        // And the earlier gesture frame is still the routing evidence: the hub sent
-        // the gesture to the glasses, never to the necklace (which got the audio).
-        assertThat(glassesClient.drain().filterIsInstance<PeerEvent.TtsAudio>()).isEmpty()
+        // Scenario 3: the glasses PLAY the synthesized audio, so the SAME image also
+        // reaches the glasses session as a `tts_audio` frame (in addition to the
+        // necklace, which played it through the shimmed `aplay`).
+        assertWithMessage("the glasses session never received the hub-synthesized TTS audio")
+            .that(glassesClient.drain().filterIsInstance<PeerEvent.TtsAudio>())
+            .isNotEmpty()
     }
 
     private fun piEnvironment(hubAddress: String): Map<String, String> {

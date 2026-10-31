@@ -1,5 +1,6 @@
 package com.glassstorm.phonemanager.core.domain.service
 
+import com.glassstorm.phonemanager.core.model.LivePeer
 import com.glassstorm.phonemanager.core.model.PeerRole
 import com.glassstorm.phonemanager.core.model.RelayOutput
 import com.glassstorm.phonemanager.core.model.RelaySession
@@ -87,6 +88,22 @@ interface StreamService {
 
     /** Relay outputs for [sessionId]; completes when the session closes. */
     fun results(sessionId: String): Flow<RelayOutput>
+
+    /**
+     * A hot flow of EVERY relay output from EVERY live session (speech results and
+     * gesture results), used by the diagnostics view to observe the hub without
+     * binding to one session. It has NO replay: a collector that attaches after an
+     * output was produced sees nothing until the next output, so a fresh observer
+     * never seeds itself from a previous (possibly dead) session. The flow itself
+     * never completes while the hub is alive.
+     */
+    fun outputs(): Flow<RelayOutput>
+
+    /**
+     * A point-in-time snapshot of the peers attached to live relay sessions, with
+     * the role each one has bound ([PeerRole.UNSPECIFIED] when unbound).
+     */
+    fun livePeers(): List<LivePeer>
 
     /** Idempotent teardown: drains queued frames, closes the speech session exactly once. */
     suspend fun closeSession(sessionId: String)

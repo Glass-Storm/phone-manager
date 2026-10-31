@@ -1,13 +1,17 @@
 package com.glassstorm.phonemanager.adapter.ai
 
+import android.util.Log
 import com.glassstorm.phonemanager.core.domain.adapter.speech.TtsPort
 import com.glassstorm.phonemanager.core.model.AudioFormat
 import hk.edu.hkmu.core.config.TtsConfig
 import hk.edu.hkmu.tts.SherpaTtsEngine
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.withContext
 import java.io.File
+
+private const val TAG = "AiTtsPort"
 
 /**
  * The DEVICE implementation of [TtsPort], backed by ai-android's [SherpaTtsEngine].
@@ -31,16 +35,36 @@ class AiTtsPort(
     override suspend fun synthesize(text: String): ByteArray =
         withContext(Dispatchers.Default) {
             if (text.isEmpty()) return@withContext ByteArray(0)
-            val chunks = engine.synthesize(text).toList()
-            if (chunks.isEmpty()) return@withContext ByteArray(0)
-            val sourceRateHz = chunks.first().sampleRateHz
-            val concatenated = concatenate(chunks.map { it.samples })
-            val resampled = AudioPcm.resample(concatenated, sourceRateHz, AudioFormat.SAMPLE_RATE_HZ)
-            AudioPcm.toPcm16Le(resampled)
+            try {
+                synthesizeGuarded(text)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Throwable) {
+                Log.w(TAG, "synthesis failed for '$text'; emitting no audio", failure)
+                ByteArray(0)
+            }
         }
 
+    private suspend fun synthesizeGuarded(text: String): ByteArray {
+        val chunks = engine.synthesize(text).toList()
+        Log.d(TAG, "synthesize '$text': chunks=${chunks.size} samples=${chunks.sumOf { it.samples.size }}")
+        if (chunks.isEmpty()) return ByteArray(0)
+        val sourceRateHz = chunks.first().sampleRateHz
+        val concatenated = concatenate(chunks.map { it.samples })
+        val resampled = AudioPcm.resample(concatenated, sourceRateHz, AudioFormat.SAMPLE_RATE_HZ)
+        return AudioPcm.toPcm16Le(resampled)
+    }
+
     /** Releases the synthesis sessions. Idempotent. */
-    override fun close() = engine.close()
+    override fun close() {
+        try {
+            engine.close()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Throwable) {
+            Log.w(TAG, "releasing the TTS engine failed", failure)
+        }
+    }
 
     private fun concatenate(parts: List<FloatArray>): FloatArray {
         val total = parts.sumOf { it.size }

@@ -11,9 +11,10 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.lifecycle.ViewModelStore
 import com.glassstorm.phonemanager.core.domain.adapter.network.HotspotController
 import com.glassstorm.phonemanager.core.domain.adapter.transport.HubServer
-import com.glassstorm.phonemanager.core.domain.network.HotspotFailure
+import com.glassstorm.phonemanager.core.model.HotspotInfo
 import com.glassstorm.phonemanager.hub.HubStarter
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.Dispatchers
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -28,9 +29,10 @@ import java.time.Duration
  * shared constant is tautological and passes even when the UI renders the wrong
  * text. One `setContent` per test method — `createComposeRule()` allows no more.
  *
- * Under compile-time DI a port cannot be ABSENT, so the "not available" rendering
- * is driven by a port that FAILS instead. The doubles implement the DOMAIN ports
- * only; `:app`'s test sources never touch a concrete `:adapter` class.
+ * There is no programmatic hotspot and no credential display any more: the
+ * dashboard keeps the hub start/stop controls and reports the detected gateway
+ * only. Under compile-time DI a port cannot be ABSENT, so the "not available"
+ * rendering is driven by a port that FAILS instead.
  */
 @RunWith(RobolectricTestRunner::class)
 class DashboardScreenTest {
@@ -42,8 +44,29 @@ class DashboardScreenTest {
         composeRule.setDashboardContent(FakeHubServer(failOnRead = true), FakeHotspotController(failOnDetect = true))
 
         composeRule.onNodeWithText("系統總覽").assertIsDisplayed()
-        // Both the hub card and the connection card degrade to the same calm status.
+        // Both the hub card and the hotspot card degrade to the same calm status.
         composeRule.onAllNodesWithText("無法使用").assertCountEquals(2)
+    }
+
+    @Test
+    fun `the pre-read state is a quiet checking placeholder, not an error`() {
+        composeRule.setDashboardContent(refreshOnInit = false)
+
+        // A cold start must not flash the red failure state before the first read.
+        composeRule.onAllNodesWithText("檢查中").assertCountEquals(2)
+        composeRule.onNodeWithText("無法使用").assertDoesNotExist()
+    }
+
+    @Test
+    fun `a stopped hub does not display a zero port`() {
+        composeRule.setDashboardContent(
+            hub = FakeHubServer(boundPortValue = 40404),
+            hotspot = FakeHotspotController(failOnDetect = true),
+        )
+
+        composeRule.onNodeWithText("已停止").assertIsDisplayed()
+        composeRule.onNodeWithText("0").assertDoesNotExist()
+        composeRule.onNodeWithText("未啟動").assertIsDisplayed()
     }
 
     @Test
@@ -125,7 +148,7 @@ class DashboardScreenTest {
     fun `clearing the dashboard mid-poll leaves no live coroutine behind`() {
         val hub = FakeHubServer()
         val store = ViewModelStore()
-        val viewModel = DashboardViewModel(hub, FakeHotspotController(), FakeHubStarter())
+        val viewModel = DashboardViewModel.forTesting(hub, FakeHotspotController(), FakeHubStarter(), io = Dispatchers.Unconfined)
         store.put("dashboard", viewModel)
         assertThat(viewModel.uiState.value.running).isFalse()
 
@@ -140,44 +163,65 @@ class DashboardScreenTest {
     }
 
     @Test
-    fun `starting the hotspot reveals the credentials only on an explicit action`() {
-        composeRule.setDashboardContent(hub = FakeHubServer(), hotspot = FakeHotspotController())
+    fun `a detected manual tether shows only its gateway address`() {
+        val manual =
+            HotspotInfo(
+                ssid = "EcoSys-Phone",
+                passphrase = "hunter2-phone",
+                gatewayIp = "192.168.43.1",
+            )
 
-        composeRule.clickButton("啟動熱點")
+        composeRule.setDashboardContent(
+            hub = FakeHubServer(),
+            hotspot = FakeHotspotController(manualTetherInfo = manual),
+        )
 
-        composeRule.onNodeWithText("EcoSys-Phone").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("閘道位址").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("192.168.43.1").performScrollTo().assertIsDisplayed()
-        // The passphrase is masked by default: the raw value is nowhere on screen.
+        composeRule.onNodeWithText("熱點已開啟").performScrollTo().assertIsDisplayed()
+        // The hotspot credentials belong to the system settings, not this screen.
+        composeRule.onNodeWithText("EcoSys-Phone").assertDoesNotExist()
         composeRule.onNodeWithText("hunter2-phone").assertDoesNotExist()
-
-        composeRule.clickButton("顯示密碼")
-
-        composeRule.onNodeWithText("hunter2-phone").performScrollTo().assertIsDisplayed()
+        // An access point is not a connected peer.
+        composeRule.onNodeWithText("已連線").assertDoesNotExist()
     }
 
     @Test
-    fun `a failing hotspot start renders the typed reason instead of crashing`() {
+    fun `an absent hotspot shows actionable copy and never claims a connection`() {
         composeRule.setDashboardContent(
             hub = FakeHubServer(),
-            hotspot = FakeHotspotController(failWith = HotspotFailure.StartFailed(reason = "denied")),
+            hotspot = FakeHotspotController(manualTetherInfo = null),
         )
 
-        composeRule.clickButton("啟動熱點")
-
-        composeRule.onNodeWithText("Hotspot failed: denied").assertIsDisplayed()
+        composeRule.onNodeWithText("熱點未開啟").performScrollTo().assertIsDisplayed()
+        composeRule
+            .onNodeWithText("請到 Android 設定開啟行動熱點，再回到此頁。")
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule.onNodeWithText("已連線").assertDoesNotExist()
+        composeRule.onNodeWithText("未偵測到手機熱點。").assertDoesNotExist()
     }
 
     private fun ComposeContentTestRule.setDashboardContent(
         hub: HubServer = FakeHubServer(),
         hotspot: HotspotController = FakeHotspotController(),
         hubStarter: HubStarter = FakeHubStarter { hub.start(0) },
+        refreshOnInit: Boolean = true,
     ) {
-        val viewModel = DashboardViewModel(hub, hotspot, hubStarter)
+        val viewModel =
+            DashboardViewModel.forTesting(
+                hub,
+                hotspot,
+                hubStarter,
+                io = Dispatchers.Unconfined,
+                refreshOnInit = refreshOnInit,
+            )
         setContent {
             HubTheme {
                 DashboardScreen(viewModelFactory = viewModelFactory(viewModel))
             }
         }
+        waitForIdle()
     }
 
     private fun ComposeContentTestRule.clickButton(text: String) {

@@ -59,11 +59,44 @@ class RelayStatsRecorderTest {
     }
 
     @Test
+    fun `offered stills are counted separately from their evictions`() {
+        // Given a fresh recorder
+        val stats = RelayStatsRecorder()
+
+        // When two stills are offered and the second is evicted
+        stats.onImageOffered(dropped = false)
+        stats.onImageOffered(dropped = true)
+
+        // Then the offered total counts both, while only one was dropped
+        val snapshot = stats.snapshot(liveSessions = 0)
+        assertThat(snapshot.imageFrames).isEqualTo(2L)
+        assertThat(snapshot.imageDropped).isEqualTo(1L)
+    }
+
+    @Test
+    fun `gestures are counted only when recognition produces a result`() {
+        // Given a fresh recorder
+        val stats = RelayStatsRecorder()
+
+        // When two stills are offered but only one is recognized
+        stats.onImageOffered(dropped = false)
+        stats.onImageOffered(dropped = false)
+        stats.onGesture()
+
+        // Then the still and gesture totals answer different questions
+        val snapshot = stats.snapshot(liveSessions = 0)
+        assertThat(snapshot.imageFrames).isEqualTo(2L)
+        assertThat(snapshot.gestures).isEqualTo(1L)
+    }
+
+    @Test
     fun `the snapshot carries the live session count`() {
         // Given a recorder with some counts
         val stats = RelayStatsRecorder()
         stats.onAudioFrame()
         stats.onVideoOffered(dropped = false)
+        stats.onImageOffered(dropped = false)
+        stats.onGesture()
         stats.onTranscript()
 
         // When the snapshot is taken with three live sessions
@@ -73,6 +106,9 @@ class RelayStatsRecorderTest {
         assertThat(snapshot.audioFrames).isEqualTo(1L)
         assertThat(snapshot.videoFrames).isEqualTo(1L)
         assertThat(snapshot.videoDropped).isEqualTo(0L)
+        assertThat(snapshot.imageFrames).isEqualTo(1L)
+        assertThat(snapshot.imageDropped).isEqualTo(0L)
+        assertThat(snapshot.gestures).isEqualTo(1L)
         assertThat(snapshot.transcripts).isEqualTo(1L)
         assertThat(snapshot.liveSessions).isEqualTo(3)
     }

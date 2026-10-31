@@ -1,6 +1,7 @@
 package com.glassstorm.phonemanager.transport.grpc
 
 import com.glassstorm.phonemanager.core.domain.service.StreamService
+import com.glassstorm.phonemanager.core.model.LivePeer
 import com.glassstorm.phonemanager.core.model.PeerRole
 import com.glassstorm.phonemanager.core.model.RelayOutput
 import com.glassstorm.phonemanager.core.model.RelayResult
@@ -415,6 +416,10 @@ class GrpcMappingTest {
         ) = Unit
 
         override fun results(sessionId: String): Flow<RelayOutput> = flowOf(result)
+
+        override fun outputs(): Flow<RelayOutput> = flowOf(result)
+
+        override fun livePeers(): List<LivePeer> = emptyList()
 
         override suspend fun closeSession(sessionId: String) = Unit
 

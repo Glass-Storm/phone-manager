@@ -2,13 +2,12 @@ package com.glassstorm.phonemanager
 
 import com.glassstorm.phonemanager.adapter.android.config.RuntimeConfigStore
 import com.glassstorm.phonemanager.adapter.android.network.nsd.NsdDiscoveryAdapter
-import com.glassstorm.phonemanager.adapter.android.network.wifi.LocalOnlyHotspotAdapter
+import com.glassstorm.phonemanager.adapter.android.network.wifi.ManualTetherHotspotAdapter
 import com.glassstorm.phonemanager.core.domain.service.StreamService
 import com.glassstorm.phonemanager.core.model.PeerAddress
 import com.glassstorm.phonemanager.transport.grpc.HubServerAdapter
 import com.glassstorm.phonemanager.ui.ROUTES
 import com.glassstorm.phonemanager.ui.ROUTE_DASHBOARD
-import com.glassstorm.phonemanager.ui.ROUTE_DEVICES
 import com.glassstorm.phonemanager.ui.ROUTE_SETTINGS
 import com.glassstorm.phonemanager.ui.ROUTE_STREAM
 import com.glassstorm.phonemanager.ui.SettingsViewModel
@@ -43,7 +42,7 @@ class ConstantValuesTest {
         assertThat(HubBringUp.DISCOVERY_NAME).isEqualTo("phone-manager")
         assertThat(NsdDiscoveryAdapter.DEFAULT_SERVICE_TYPE).isEqualTo("_ecosys._tcp")
         assertThat(NsdDiscoveryAdapter.MULTICAST_LOCK_TAG).isEqualTo("phone-manager:mdns")
-        assertThat(LocalOnlyHotspotAdapter.DEFAULT_GATEWAY_IP).isEqualTo("192.168.43.1")
+        assertThat(ManualTetherHotspotAdapter.MANUAL_TETHER_SSID).isEqualTo("manual-tether")
     }
 
     @Test
@@ -63,13 +62,12 @@ class ConstantValuesTest {
     }
 
     @Test
-    fun `the four routes and their order are unchanged`() {
+    fun `the three routes and their order are unchanged`() {
         assertThat(ROUTE_DASHBOARD).isEqualTo("dashboard")
         assertThat(ROUTE_STREAM).isEqualTo("stream")
-        assertThat(ROUTE_DEVICES).isEqualTo("devices")
         assertThat(ROUTE_SETTINGS).isEqualTo("settings")
         assertThat(ROUTES)
-            .containsExactly("dashboard", "stream", "devices", "settings")
+            .containsExactly("dashboard", "stream", "settings")
             .inOrder()
     }
 
@@ -81,8 +79,7 @@ class ConstantValuesTest {
 
     @Test
     fun `numeric protocol and policy constants are unchanged`() {
-        assertThat(StreamViewModel.DEFAULT_POLL_INTERVAL_MS).isEqualTo(250L)
-        assertThat(StreamViewModel.DEFAULT_PEER_ID).isEqualTo("local-peer")
+        assertThat(StreamViewModel.DEFAULT_POLL_INTERVAL_MS).isEqualTo(500L)
         assertThat(StreamService.AUDIO_SAMPLE_RATE_HZ).isEqualTo(16_000)
     }
 }

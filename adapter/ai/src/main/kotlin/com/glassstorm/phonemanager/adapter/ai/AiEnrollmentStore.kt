@@ -12,6 +12,8 @@ import hk.edu.hkmu.diarize.SherpaSpeakerEmbeddingExtractor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
 
@@ -62,6 +64,7 @@ class AiEnrollmentStore internal constructor(
 
     private val speakers = LinkedHashMap<String, EnrolledSpeaker>()
     private val lock = Any()
+    private val embedderMutex = Mutex()
 
     init {
         load()
@@ -75,7 +78,10 @@ class AiEnrollmentStore internal constructor(
         if (pcm16.size < AudioFormat.ENROLLMENT_MIN_BYTES) {
             return EnrollOutcome.rejected(EnrollOutcome.REASON_AUDIO_TOO_SHORT)
         }
-        val embedding = embedder.embeddingFor(pcm16) ?: return EnrollOutcome.rejected(EnrollOutcome.REASON_VOICEPRINT_FAILED)
+        val embedding =
+            embedderMutex.withLock {
+                embedder.embeddingFor(pcm16)
+            } ?: return EnrollOutcome.rejected(EnrollOutcome.REASON_VOICEPRINT_FAILED)
         synchronized(lock) {
             // A plain put on an EXISTING LinkedHashMap key updates the value in place,
             // keeping the original position. Do NOT remove-then-put: that would move a

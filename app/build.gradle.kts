@@ -42,6 +42,15 @@ android {
     }
 }
 
+// ai-android uses FULL protobuf-java (MediaPipe), while `:contract` and
+// `:transport:grpc` generate lite bindings. Full protobuf-java bundles
+// `GeneratedMessageLite`, so it satisfies both call sites; the lite RUNTIME
+// (protobuf-javalite) must be removed from every configuration or the duplicate
+// `com.google.protobuf.*` classes break dexing.
+configurations.configureEach {
+    exclude(group = "com.google.protobuf", module = "protobuf-javalite")
+}
+
 dependencies {
     implementation(libs.core.ktx)
 
@@ -55,6 +64,9 @@ dependencies {
     // config store). The composition root wires both.
     implementation(project(":adapter:jvm"))
     implementation(project(":adapter:android"))
+    // The REAL on-device engines (ai-android). DeviceAiModule selects these when
+    // the models are provisioned and falls back to the `:adapter:jvm` fakes otherwise.
+    implementation(project(":adapter:ai"))
 
     // The GO gRPC transport (T6 spike verdict: netty-shaded, IPv4 explicit, plaintext).
     // Declared here as well because every dependency above is `implementation`, so
@@ -63,7 +75,7 @@ dependencies {
     implementation(libs.grpc.stub)
     implementation(libs.grpc.protobuf.lite)
     implementation(libs.grpc.kotlin.stub)
-    implementation(libs.protobuf.javalite)
+    implementation(libs.protobuf.java)
 
     coreLibraryDesugaring(libs.desugar.jdk.libs)
 
@@ -73,6 +85,7 @@ dependencies {
     implementation(libs.activity.compose)
     implementation(libs.navigation.compose)
     implementation(libs.lifecycle.viewmodel.compose)
+    implementation(libs.lifecycle.runtime.compose)
     implementation(libs.lifecycle.runtime.ktx)
     implementation(libs.kotlinx.coroutines.android)
 

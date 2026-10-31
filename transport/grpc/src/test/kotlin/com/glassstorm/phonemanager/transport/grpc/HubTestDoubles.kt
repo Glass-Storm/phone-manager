@@ -52,6 +52,8 @@ private class NoopSpeechPort : SpeechPort {
     ): SpeechUtterance? = null
 
     override suspend fun close(sessionId: String) = Unit
+
+    override suspend fun flush(sessionId: String): SpeechUtterance? = null
 }
 
 private class NoopGesturePort : GesturePort {

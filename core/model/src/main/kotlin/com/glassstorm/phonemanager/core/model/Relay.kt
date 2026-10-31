@@ -27,6 +27,18 @@ data class RelaySession(
 )
 
 /**
+ * One peer currently attached to a live relay session, as seen by the debug view.
+ *
+ * [role] is the role the peer bound from its `stream_open` frame, or
+ * [PeerRole.UNSPECIFIED] while the session has not declared one yet. Pure data:
+ * the UI can name a connected peer without touching the wire contract.
+ */
+data class LivePeer(
+    val deviceId: String,
+    val role: PeerRole,
+)
+
+/**
  * One recognized utterance produced from an audio frame. Pure data; mirrors the
  * `ecosys.v1.StreamResult` message without depending on the generated types.
  */
@@ -92,8 +104,20 @@ sealed interface RelayOutput {
  *    rare full-queue race a NAL offered immediately after an eviction can be lost
  *    without being counted as an eviction, so they are offered and evicted
  *    counts respectively, never "delivered minus dropped";
+ *  * [imageFrames] — JPEG stills OFFERED to the image queue. Like [videoFrames]
+ *    this is an offered count, so it includes a still that was later evicted;
+ *  * [gestures] — gesture results the image pump actually PRODUCED (a still with
+ *    no recognizable hand produces no gesture);
+ *  * [imageDropped] — stills removed from the image queue by the LATEST-WINS
+ *    drop-oldest policy, so the newest still always fits and `pushImage` never
+ *    parks the peer;
  *  * [transcripts] — recognized utterances emitted;
  *  * [liveSessions] — currently open sessions.
+ *
+ * The image/gesture totals are what the 即時 page shows, because gestures are
+ * driven by JPEG stills rather than by the H.264 video NALs behind
+ * [videoFrames]. [videoFrames] remains the honest offered-NAL count for
+ * diagnostics.
  */
 data class RelayStats(
     val audioFrames: Long,
@@ -101,4 +125,7 @@ data class RelayStats(
     val videoDropped: Long,
     val transcripts: Long,
     val liveSessions: Int,
+    val imageDropped: Long = 0L,
+    val imageFrames: Long = 0L,
+    val gestures: Long = 0L,
 )

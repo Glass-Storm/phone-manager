@@ -1,9 +1,11 @@
 package com.glassstorm.phonemanager.core.service
 
+import com.glassstorm.phonemanager.core.model.LivePeer
 import com.glassstorm.phonemanager.core.model.PeerRole
 import com.glassstorm.phonemanager.core.model.RelayOutput
 import com.glassstorm.phonemanager.core.model.RelaySession
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import org.junit.Test
@@ -15,6 +17,8 @@ class RelaySessionRegistryTest {
             relay = RelaySession(sessionId = "s-$deviceId", deviceId = deviceId),
             queue = RelayQueue(audioCapacity = 1, videoCapacity = 1, imageCapacity = 1),
             results = Channel<RelayOutput>(Channel.UNLIMITED),
+            tts = Channel<String>(capacity = 1),
+            imageDrained = CompletableDeferred(),
             pump = Job(),
         )
 
@@ -113,6 +117,35 @@ class RelaySessionRegistryTest {
     }
 
     @Test
+    fun `live peers resolve their bound role and default to unspecified`() {
+        // Given two sessions, only one of which bound a role
+        val registry = RelaySessionRegistry()
+        registry.register("s-glasses", state("glasses"))
+        registry.register("s-necklace", state("necklace"))
+        registry.bindRole("s-glasses", PeerRole.GLASS)
+
+        // Then the bound session carries its role and the other stays unspecified
+        assertThat(registry.livePeers())
+            .containsExactly(
+                LivePeer(deviceId = "glasses", role = PeerRole.GLASS),
+                LivePeer(deviceId = "necklace", role = PeerRole.UNSPECIFIED),
+            )
+    }
+
+    @Test
+    fun `a removed session disappears from the live peers`() {
+        // Given one registered session
+        val registry = RelaySessionRegistry()
+        registry.register("s-glasses", state("glasses"))
+
+        // When it is removed
+        registry.remove("s-glasses")
+
+        // Then no live peer is reported
+        assertThat(registry.livePeers()).isEmpty()
+    }
+
+    @Test
     fun `removing a session drops its role binding`() {
         // Given a session bound to a role
         val registry = RelaySessionRegistry()
@@ -124,6 +157,41 @@ class RelaySessionRegistryTest {
         registry.remove("s-glasses")
 
         // Then the role index no longer resolves a dead session
+        assertThat(registry.sessionFor(PeerRole.GLASS)).isNull()
+    }
+
+    @Test
+    fun `closing the newer of two glass sessions rebinds the still live one`() {
+        // Given two live GLASS sessions, the second bound last
+        val registry = RelaySessionRegistry()
+        registry.register("s-glasses-1", state("glasses-1"))
+        registry.register("s-glasses-2", state("glasses-2"))
+        registry.bindRole("s-glasses-1", PeerRole.GLASS)
+        registry.bindRole("s-glasses-2", PeerRole.GLASS)
+        assertThat(registry.sessionFor(PeerRole.GLASS)).isEqualTo("s-glasses-2")
+
+        // When the newer session closes
+        registry.remove("s-glasses-2")
+
+        // Then the still-live older session holds the role again, so gestures and
+        // TTS keep routing to it instead of being dropped until it reconnects
+        assertThat(registry.sessionFor(PeerRole.GLASS)).isEqualTo("s-glasses-1")
+        assertThat(registry.livePeers())
+            .containsExactly(LivePeer(deviceId = "glasses-1", role = PeerRole.GLASS))
+    }
+
+    @Test
+    fun `rebinding the same session moves it to the top instead of duplicating`() {
+        // Given a GLASS session that re-sends its stream_open frame
+        val registry = RelaySessionRegistry()
+        registry.register("s-glasses", state("glasses"))
+        registry.bindRole("s-glasses", PeerRole.GLASS)
+        registry.bindRole("s-glasses", PeerRole.GLASS)
+
+        // When it closes
+        registry.remove("s-glasses")
+
+        // Then the single history entry is gone and the role is cleared
         assertThat(registry.sessionFor(PeerRole.GLASS)).isNull()
     }
 }

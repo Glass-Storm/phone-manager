@@ -7,7 +7,6 @@ import com.glassstorm.phonemanager.core.domain.adapter.transport.HubServer
 import com.glassstorm.phonemanager.core.domain.service.DeviceService
 import com.glassstorm.phonemanager.transport.grpc.HubServerAdapter
 import com.glassstorm.phonemanager.ui.DashboardViewModel
-import com.glassstorm.phonemanager.ui.DevicesViewModel
 import com.glassstorm.phonemanager.ui.SettingsViewModel
 import com.glassstorm.phonemanager.ui.StreamViewModel
 import com.google.common.truth.Truth.assertThat
@@ -83,7 +82,6 @@ class AppComponentTest {
         // Then the ViewModelKey map resolved it — a missing @IntoMap binding would
         // throw here, so this is the guard for the multibinding
         assertThat(factory.create(DashboardViewModel::class.java)).isInstanceOf(DashboardViewModel::class.java)
-        assertThat(factory.create(DevicesViewModel::class.java)).isInstanceOf(DevicesViewModel::class.java)
         assertThat(factory.create(SettingsViewModel::class.java)).isInstanceOf(SettingsViewModel::class.java)
         assertThat(factory.create(StreamViewModel::class.java)).isInstanceOf(StreamViewModel::class.java)
     }

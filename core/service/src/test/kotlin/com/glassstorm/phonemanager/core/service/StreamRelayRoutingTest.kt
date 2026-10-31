@@ -9,6 +9,7 @@ import com.glassstorm.phonemanager.core.model.AudioFormat
 import com.glassstorm.phonemanager.core.model.EnrollOutcome
 import com.glassstorm.phonemanager.core.model.EnrolledSpeaker
 import com.glassstorm.phonemanager.core.model.GestureOutcome
+import com.glassstorm.phonemanager.core.model.LivePeer
 import com.glassstorm.phonemanager.core.model.PeerRole
 import com.glassstorm.phonemanager.core.model.RelayOutput
 import com.glassstorm.phonemanager.core.model.SpeechUtterance
@@ -73,6 +74,58 @@ class StreamRelayRoutingTest {
             assertThat(tts.pcm16).isEqualTo(ByteArray(4) { 7 })
             assertThat(tts.ptsMs).isEqualTo(123L)
 
+            // And the GLASSES session received the SAME synthesized audio, so its player is live
+            val glassesTts = glassesOutputs.filterIsInstance<RelayOutput.TtsAudio>().single()
+            assertThat(glassesTts.pcm16).isEqualTo(tts.pcm16)
+            assertThat(glassesTts.ptsMs).isEqualTo(123L)
+
+            // And the image/gesture channel is counted separately from H.264 NALs.
+            val stats = stream.stats()
+            assertThat(stats.imageFrames).isEqualTo(1L)
+            assertThat(stats.gestures).isEqualTo(1L)
+
+            stream.closeSession(necklace.sessionId)
+            stream.closeSession(glasses.sessionId)
+            advanceUntilIdle()
+            necklaceCollector.join()
+            glassesCollector.join()
+            scope.cancel()
+        }
+
+    @Test
+    fun `a failing tts still delivers the gesture and keeps the image pump alive`() =
+        runTest {
+            // Given a synthesizer that fails on every text (the Cantonese voice rejects
+            // a meaning it cannot speak), plus a necklace and a glasses session
+            val wired =
+                wired(
+                    gesture = FixedGesturePort(GestureOutcome(label = "Thumb_Up", text = "好", confidence = 0.9f)),
+                    tts = ThrowingTtsPort(),
+                )
+            val scope = testScope(testScheduler)
+            val stream = wired.newStream(scope)
+            val necklace = stream.openSession("necklace")
+            stream.bindRole(necklace.sessionId, PeerRole.DAEMON)
+            val glasses = stream.openSession("glasses")
+            stream.bindRole(glasses.sessionId, PeerRole.GLASS)
+            val necklaceOutputs = mutableListOf<RelayOutput>()
+            val glassesOutputs = mutableListOf<RelayOutput>()
+            val necklaceCollector = launch { stream.results(necklace.sessionId).collect { necklaceOutputs += it } }
+            val glassesCollector = launch { stream.results(glasses.sessionId).collect { glassesOutputs += it } }
+
+            // When TWO stills are pushed while synthesis throws both times
+            stream.pushImage(necklace.sessionId, jpeg = byteArrayOf(1, 2, 3), ptsMs = 1L)
+            stream.pushImage(necklace.sessionId, jpeg = byteArrayOf(4, 5, 6), ptsMs = 2L)
+            advanceUntilIdle()
+
+            // Then BOTH gestures were delivered: the first failure did not kill the pump
+            val gestures = glassesOutputs.filterIsInstance<RelayOutput.Gesture>()
+            assertThat(gestures.map { it.ptsMs }).containsExactly(1L, 2L).inOrder()
+            assertThat(gestures.map { it.text }).containsExactly("好", "好")
+
+            // And the TTS half was skipped rather than crashing the relay
+            assertThat(necklaceOutputs.filterIsInstance<RelayOutput.TtsAudio>()).isEmpty()
+
             stream.closeSession(necklace.sessionId)
             stream.closeSession(glasses.sessionId)
             advanceUntilIdle()
@@ -101,9 +154,11 @@ class StreamRelayRoutingTest {
             stream.pushImage(necklace.sessionId, jpeg = byteArrayOf(), ptsMs = 1L)
             advanceUntilIdle()
 
-            // Then nothing was emitted anywhere
+            // Then nothing was emitted anywhere, but the offered still was counted
             assertThat(glassesOutputs).isEmpty()
             assertThat(necklaceOutputs).isEmpty()
+            assertThat(stream.stats().imageFrames).isEqualTo(1L)
+            assertThat(stream.stats().gestures).isEqualTo(0L)
 
             stream.closeSession(necklace.sessionId)
             stream.closeSession(glasses.sessionId)
@@ -218,6 +273,200 @@ class StreamRelayRoutingTest {
             scope.cancel()
         }
 
+    @Test
+    fun `live peers report each role and leave an unbound session unspecified`() =
+        runTest {
+            // Given a necklace, a glasses and an unbound session
+            val scope = testScope(testScheduler)
+            val stream = wired().newStream(scope)
+            val necklace = stream.openSession("necklace")
+            stream.bindRole(necklace.sessionId, PeerRole.DAEMON)
+            val glasses = stream.openSession("glasses")
+            stream.bindRole(glasses.sessionId, PeerRole.GLASS)
+            stream.openSession("unbound")
+
+            // Then each live peer carries its bound role, or unspecified
+            assertThat(stream.livePeers())
+                .containsExactly(
+                    LivePeer(deviceId = "glasses", role = PeerRole.GLASS),
+                    LivePeer(deviceId = "necklace", role = PeerRole.DAEMON),
+                    LivePeer(deviceId = "unbound", role = PeerRole.UNSPECIFIED),
+                )
+
+            stream.closeSession(necklace.sessionId)
+            stream.closeSession(glasses.sessionId)
+            advanceUntilIdle()
+            scope.cancel()
+        }
+
+    @Test
+    fun `every speech output is mirrored onto the shared outputs flow`() =
+        runTest {
+            // Given a live session with a collector on the shared outputs flow
+            val wired = wired(speech = FixedSpeechPort(SpeechUtterance(text = "hello", speakerName = "Alice")))
+            val scope = testScope(testScheduler)
+            val stream = wired.newStream(scope)
+            val glasses = stream.openSession("glasses")
+            stream.bindRole(glasses.sessionId, PeerRole.GLASS)
+            val outputs = mutableListOf<RelayOutput>()
+            val collector = launch { stream.outputs().collect { outputs += it } }
+
+            // When a subtitle is produced
+            stream.pushAudio(glasses.sessionId, pcm(8), AudioFormat.SAMPLE_RATE_HZ)
+            advanceUntilIdle()
+
+            // Then the shared flow mirrored the same speech output
+            val speech = outputs.filterIsInstance<RelayOutput.Speech>().single()
+            assertThat(speech.result.text).isEqualTo("hello")
+            assertThat(speech.result.speakerLabel).isEqualTo("Alice")
+
+            collector.cancel()
+            stream.closeSession(glasses.sessionId)
+            advanceUntilIdle()
+            scope.cancel()
+        }
+
+    @Test
+    fun `every gesture output is mirrored onto the shared outputs flow`() =
+        runTest {
+            // Given a necklace session and a collector on the shared outputs flow
+            val wired =
+                wired(
+                    gesture = FixedGesturePort(GestureOutcome(label = "Thumb_Up", text = "Yes", confidence = 0.9f)),
+                    tts = FixedTtsPort(ByteArray(0)),
+                )
+            val scope = testScope(testScheduler)
+            val stream = wired.newStream(scope)
+            val necklace = stream.openSession("necklace")
+            stream.bindRole(necklace.sessionId, PeerRole.DAEMON)
+            val outputs = mutableListOf<RelayOutput>()
+            val collector = launch { stream.outputs().collect { outputs += it } }
+
+            // When the necklace pushes a recognizable still
+            stream.pushImage(necklace.sessionId, jpeg = byteArrayOf(1, 2, 3), ptsMs = 42L)
+            advanceUntilIdle()
+
+            // Then the shared flow mirrored the gesture output
+            val gesture = outputs.filterIsInstance<RelayOutput.Gesture>().single()
+            assertThat(gesture.text).isEqualTo("Yes")
+            assertThat(gesture.ptsMs).isEqualTo(42L)
+
+            collector.cancel()
+            stream.closeSession(necklace.sessionId)
+            advanceUntilIdle()
+            scope.cancel()
+        }
+
+    @Test
+    fun `an utterance buffered at close is flushed as one final transcript`() =
+        runTest {
+            // Given an engine that only yields on flush, like a peer that stopped
+            // without the trailing silence that closes the utterance
+            val speech = BufferedSpeechPort(SpeechUtterance(text = "last words", speakerName = "Alice"))
+            val scope = testScope(testScheduler)
+            val stream = wired(speech = speech).newStream(scope)
+            val glasses = stream.openSession("glasses")
+            stream.bindRole(glasses.sessionId, PeerRole.GLASS)
+            val outputs = mutableListOf<RelayOutput>()
+            val collector = launch { stream.results(glasses.sessionId).collect { outputs += it } }
+
+            // When one audio frame arrives and the session closes before a close-of-utterance
+            stream.pushAudio(glasses.sessionId, pcm(8), AudioFormat.SAMPLE_RATE_HZ)
+            advanceUntilIdle()
+            assertThat(outputs.filterIsInstance<RelayOutput.Speech>()).isEmpty()
+
+            stream.closeSession(glasses.sessionId)
+            advanceUntilIdle()
+
+            // Then the buffered speech was flushed as exactly ONE transcript before close
+            val subtitle = outputs.filterIsInstance<RelayOutput.Speech>().single()
+            assertThat(subtitle.result.text).isEqualTo("last words")
+            assertThat(subtitle.result.speakerLabel).isEqualTo("Alice")
+            assertThat(stream.stats().transcripts).isEqualTo(1L)
+            assertThat(speech.events).containsExactly("transcribe", "flush", "close").inOrder()
+
+            collector.join()
+            scope.cancel()
+        }
+
+    @Test
+    fun `a still queued at close still yields its synthesized speech`() =
+        runTest {
+            // Given a necklace still already accepted but not yet processed at close
+            val tts = CapturingTtsPort(ByteArray(4) { 7 })
+            val wired =
+                wired(
+                    gesture = FixedGesturePort(GestureOutcome(label = "Thumb_Up", text = "Yes", confidence = 0.9f)),
+                    tts = tts,
+                )
+            val scope = testScope(testScheduler)
+            val stream = wired.newStream(scope)
+            val necklace = stream.openSession("necklace")
+            stream.bindRole(necklace.sessionId, PeerRole.DAEMON)
+            val glasses = stream.openSession("glasses")
+            stream.bindRole(glasses.sessionId, PeerRole.GLASS)
+            val glassesOutputs = mutableListOf<RelayOutput>()
+            val collector = launch { stream.results(glasses.sessionId).collect { glassesOutputs += it } }
+
+            // When the still is queued and the sender closes before the pumps run
+            stream.pushImage(necklace.sessionId, jpeg = byteArrayOf(1, 2, 3), ptsMs = 9L)
+            stream.closeSession(necklace.sessionId)
+            advanceUntilIdle()
+
+            // Then the drain recognized the still and synthesized its speech
+            assertThat(glassesOutputs.filterIsInstance<RelayOutput.Gesture>()).hasSize(1)
+            assertThat(glassesOutputs.filterIsInstance<RelayOutput.TtsAudio>()).hasSize(1)
+            assertThat(tts.synthesized).containsExactly("Yes")
+
+            stream.closeSession(glasses.sessionId)
+            advanceUntilIdle()
+            collector.join()
+            scope.cancel()
+        }
+
+    @Test
+    fun `a still queued at the daemon half-close delivers its tts to the glasses and the closing daemon`() =
+        runTest {
+            // Given a necklace still already accepted but not yet processed at close
+            val tts = CapturingTtsPort(ByteArray(4) { 7 })
+            val wired =
+                wired(
+                    gesture = FixedGesturePort(GestureOutcome(label = "Thumb_Up", text = "Yes", confidence = 0.9f)),
+                    tts = tts,
+                )
+            val scope = testScope(testScheduler)
+            val stream = wired.newStream(scope)
+            val necklace = stream.openSession("necklace")
+            stream.bindRole(necklace.sessionId, PeerRole.DAEMON)
+            val glasses = stream.openSession("glasses")
+            stream.bindRole(glasses.sessionId, PeerRole.GLASS)
+            val necklaceOutputs = mutableListOf<RelayOutput>()
+            val glassesOutputs = mutableListOf<RelayOutput>()
+            val necklaceCollector = launch { stream.results(necklace.sessionId).collect { necklaceOutputs += it } }
+            val glassesCollector = launch { stream.results(glasses.sessionId).collect { glassesOutputs += it } }
+            advanceUntilIdle()
+
+            // When the still is queued and the DAEMON half-closes before the pumps run
+            stream.pushImage(necklace.sessionId, jpeg = byteArrayOf(1, 2, 3), ptsMs = 9L)
+            stream.closeSession(necklace.sessionId)
+            advanceUntilIdle()
+
+            // Then the drained still's speech reached BOTH the live glasses session
+            // AND the closing DAEMON session, which is still reading during its drain
+            val glassesTts = glassesOutputs.filterIsInstance<RelayOutput.TtsAudio>().single()
+            val daemonTts = necklaceOutputs.filterIsInstance<RelayOutput.TtsAudio>().single()
+            assertThat(daemonTts.pcm16).isEqualTo(ByteArray(4) { 7 })
+            assertThat(daemonTts.ptsMs).isEqualTo(9L)
+            assertThat(glassesTts.pcm16).isEqualTo(daemonTts.pcm16)
+            assertThat(tts.synthesized).containsExactly("Yes")
+
+            stream.closeSession(glasses.sessionId)
+            advanceUntilIdle()
+            necklaceCollector.join()
+            glassesCollector.join()
+            scope.cancel()
+        }
+
     // ---------------------------------------------------------------------- helpers
 
     private class Wired(
@@ -271,6 +520,32 @@ private class FixedSpeechPort(
     override suspend fun close(sessionId: String) {
         closedSessions += sessionId
     }
+
+    override suspend fun flush(sessionId: String): SpeechUtterance? = null
+}
+
+/** [SpeechPort] fake that keeps its utterance until [flush], like a streaming engine. */
+private class BufferedSpeechPort(
+    private val utterance: SpeechUtterance,
+) : SpeechPort {
+    val events: MutableList<String> = mutableListOf()
+
+    override suspend fun transcribe(
+        sessionId: String,
+        pcm16: ByteArray,
+    ): SpeechUtterance? {
+        events += "transcribe"
+        return null
+    }
+
+    override suspend fun flush(sessionId: String): SpeechUtterance {
+        events += "flush"
+        return utterance
+    }
+
+    override suspend fun close(sessionId: String) {
+        events += "close"
+    }
 }
 
 /** [TtsPort] fake returning fixed PCM bytes. */
@@ -278,6 +553,24 @@ private class FixedTtsPort(
     private val pcm16: ByteArray,
 ) : TtsPort {
     override suspend fun synthesize(text: String): ByteArray = if (text.isEmpty()) ByteArray(0) else pcm16
+}
+
+/** [TtsPort] fake that records every text it synthesized. */
+private class CapturingTtsPort(
+    private val pcm16: ByteArray,
+) : TtsPort {
+    val synthesized: MutableList<String> = mutableListOf()
+
+    override suspend fun synthesize(text: String): ByteArray {
+        if (text.isEmpty()) return ByteArray(0)
+        synthesized += text
+        return pcm16
+    }
+}
+
+/** [TtsPort] fake whose synthesis always fails, like a voice that rejects the language. */
+private class ThrowingTtsPort : TtsPort {
+    override suspend fun synthesize(text: String): ByteArray = throw IllegalStateException("no samples for '$text'")
 }
 
 /** [EnrollmentStore] fake returning a fixed outcome. */

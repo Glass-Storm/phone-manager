@@ -27,6 +27,18 @@ interface SpeechPort {
         pcm16: ByteArray,
     ): SpeechUtterance?
 
+    /**
+     * Drains any audio buffered for [sessionId] into a final utterance and
+     * transcribes it.
+     *
+     * A peer may stop without the trailing silence that closes a streaming
+     * utterance, so the relay calls this after its audio pump has drained and
+     * before [close]. Returns the final [SpeechUtterance], or `null` when the
+     * session has no buffered speech. This does not release the session: [close]
+     * remains the lifecycle terminator.
+     */
+    suspend fun flush(sessionId: String): SpeechUtterance?
+
     /** Release any engine state for [sessionId]. Idempotent. */
     suspend fun close(sessionId: String)
 }

@@ -22,8 +22,9 @@ import org.robolectric.annotation.Config
  *
  * Two facts are asserted independently: the persistent SQLite repository is what
  * the graph binds for [DeviceRepository], and the app-private [RuntimeConfigStore]
- * is the [AppConfig] the Settings screen reads and writes — so `:app/ui` can read
- * and write settings without ever importing `:adapter`.
+ * is the [AppConfig] the graph binds — so a consumer reads and writes config
+ * without ever importing `:adapter`. The Settings screen no longer has a hotspot
+ * mode to configure, but the port stays bound for persisted runtime settings.
  *
  * The registry-era cases that asserted "no Android Context keeps the in-memory
  * fallback" and "the config port is absent without an Android Context" are GONE
@@ -70,7 +71,7 @@ class AppComponentWiringTest {
 
         // When each ai port is resolved by type
         // Then the DEFAULT graph binds the JVM fakes, so unit builds never touch
-        // ai-android's arm64-only native (see AiModule).
+        // ai-android's arm64-only native (see DeviceAiModule).
         assertThat(component.gesturePort()).isInstanceOf(FakeGesturePort::class.java)
         assertThat(component.speechPort()).isInstanceOf(FakeSpeechPort::class.java)
         assertThat(component.ttsPort()).isInstanceOf(FakeTtsPort::class.java)

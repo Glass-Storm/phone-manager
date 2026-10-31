@@ -9,6 +9,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.Dispatchers
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -28,13 +29,7 @@ class AppShellTest {
     @Test
     fun `stream route renders its screen`() {
         composeRule.setShellContent(startRoute = "stream")
-        composeRule.onNodeWithText("即時串流").assertIsDisplayed()
-    }
-
-    @Test
-    fun `devices route renders its screen`() {
-        composeRule.setShellContent(startRoute = "devices")
-        composeRule.onNodeWithText("已連線裝置").assertIsDisplayed()
+        composeRule.onNodeWithText("即時轉送").assertIsDisplayed()
     }
 
     @Test
@@ -44,10 +39,10 @@ class AppShellTest {
     }
 
     @Test
-    fun `shell declares exactly the four required routes`() {
+    fun `shell declares exactly the three required routes`() {
         composeRule.setShellContent(startRoute = "dashboard")
         assertThat(ROUTES)
-            .containsExactly("dashboard", "stream", "devices", "settings")
+            .containsExactly("dashboard", "stream", "settings")
             .inOrder()
     }
 
@@ -55,8 +50,7 @@ class AppShellTest {
     fun `the bottom bar labels every route`() {
         composeRule.setShellContent(startRoute = "dashboard")
         composeRule.onNodeWithText("總覽").assertIsDisplayed()
-        composeRule.onNodeWithText("串流").assertIsDisplayed()
-        composeRule.onNodeWithText("裝置").assertIsDisplayed()
+        composeRule.onNodeWithText("即時").assertIsDisplayed()
         composeRule.onNodeWithText("設定").assertIsDisplayed()
     }
 
@@ -66,12 +60,12 @@ class AppShellTest {
         composeRule.setShellContent(startRoute = "dashboard") { navController = it }
 
         repeat(3) {
-            composeRule.onNodeWithText("裝置").performClick()
+            composeRule.onNodeWithText("即時").performClick()
             composeRule.waitForIdle()
         }
 
         assertThat(navController.currentBackStack.value.mapNotNull { it.destination.route })
-            .containsExactly("dashboard", "devices")
+            .containsExactly("dashboard", "stream")
             .inOrder()
     }
 
@@ -82,14 +76,14 @@ class AppShellTest {
         val dashboardHub = FakeHubServer()
         val factory: ViewModelProvider.Factory =
             viewModelFactory(
-                DashboardViewModel(
+                DashboardViewModel.forTesting(
                     dashboardHub,
                     FakeHotspotController(),
                     FakeHubStarter { dashboardHub.start(0) },
+                    io = Dispatchers.Unconfined,
                 ),
-                DevicesViewModel(FakeDeviceRepository()),
-                SettingsViewModel(FakeAppConfig(), FakeHubServer(), FakeBatteryExemption()),
-                StreamViewModel(FakeStreamService()),
+                SettingsViewModel(FakeHubServer(), FakeBatteryExemption()),
+                StreamViewModel.forTesting(FakeStreamService(), FakeHubServer(initiallyRunning = true)),
             )
         setContent {
             val navController = rememberNavController()

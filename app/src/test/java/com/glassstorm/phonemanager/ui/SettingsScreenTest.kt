@@ -1,15 +1,18 @@
 package com.glassstorm.phonemanager.ui
 
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.ComposeContentTestRule
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.LifecycleRegistry
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.glassstorm.phonemanager.battery.BatteryExemption
-import com.glassstorm.phonemanager.core.domain.adapter.config.AppConfig
 import com.glassstorm.phonemanager.core.domain.adapter.transport.HubServer
-import com.glassstorm.phonemanager.core.model.HotspotMode
 import com.google.common.truth.Truth.assertThat
 import org.junit.Rule
 import org.junit.Test
@@ -20,12 +23,12 @@ import org.robolectric.RobolectricTestRunner
  * Settings screen behaviour on the JVM, asserted on text selectors (no screenshots).
  *
  * Expected strings are LITERALS, never the screen's own constants. The screen talks
- * only to the domain `AppConfig` / `HubServer` / `BatteryExemption` ports, so these
- * tests drive fakes and never name an `:adapter` class.
+ * only to the domain `HubServer` / `BatteryExemption` ports, so these tests drive
+ * fakes and never name an `:adapter` class.
  *
- * There is no speech-engine selector and no API-key field any more: the hub runs a
- * single on-device engine with no cloud path, so the screen exposes only the hotspot
- * mode, the Doze exemption and the endpoint.
+ * There is no hotspot mode selector and no debug section any more: there is no
+ * programmatic hotspot, and the live relay diagnostics moved to the 即時 page. The
+ * screen exposes only the Doze exemption and the endpoint.
  */
 @RunWith(RobolectricTestRunner::class)
 class SettingsScreenTest {
@@ -33,39 +36,10 @@ class SettingsScreenTest {
     val composeRule = createComposeRule()
 
     @Test
-    fun `renders the unavailable state when the config port read fails`() {
-        composeRule.setSettingsContent(config = FakeAppConfig(failReads = true))
-
-        composeRule.assertText("系統設定")
-        composeRule.assertText("無法使用")
-    }
-
-    @Test
-    fun `the hotspot card renders the current mode`() {
-        composeRule.setSettingsContent(config = FakeAppConfig(mode = HotspotMode.MANUAL))
-
-        composeRule.assertText("手動模式")
-    }
-
-    @Test
-    fun `selecting the automatic hotspot mode persists it through the port`() {
-        val config = FakeAppConfig(mode = HotspotMode.MANUAL)
-
-        composeRule.setSettingsContent(config = config)
-        composeRule.assertText("手動模式")
-
-        composeRule.click("自動")
-
-        assertThat(config.hotspotMode()).isEqualTo(HotspotMode.AUTO)
-        composeRule.assertText("自動模式")
-    }
-
-    @Test
     fun `the exemption button reflects the current state and requests when pressed`() {
-        val config = FakeAppConfig()
         val battery = FakeBatteryExemption(exempt = false)
 
-        composeRule.setSettingsContent(config = config, battery = battery)
+        composeRule.setSettingsContent(battery = battery)
         composeRule.assertText("未排除")
 
         composeRule.click("要求排除電池最佳化")
@@ -91,21 +65,54 @@ class SettingsScreenTest {
     }
 
     @Test
-    fun `a stopped hub renders a zero port without crashing`() {
+    fun `a stopped hub does not display a port`() {
         composeRule.setSettingsContent(hub = FakeHubServer(boundPortValue = 40404))
 
-        composeRule.assertText("0")
+        composeRule.onNodeWithText("連接埠").assertDoesNotExist()
+        composeRule.onNodeWithText("0").assertDoesNotExist()
+    }
+
+    @Test
+    fun `returning to settings reflects a newly granted exemption`() {
+        val battery = FakeBatteryExemption(exempt = false)
+        val owner = ResumedLifecycleOwner()
+
+        composeRule.setSettingsContent(battery = battery, lifecycleOwner = owner)
+        composeRule.assertText("未排除")
+
+        // The exemption is granted while the screen is in the external settings app.
+        battery.setExempt(true)
+        owner.registry.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
+        owner.registry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
+        composeRule.waitForIdle()
+
+        composeRule.assertText("已排除")
+    }
+
+    private class ResumedLifecycleOwner : LifecycleOwner {
+        val registry = LifecycleRegistry(this)
+
+        init {
+            registry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
+            registry.handleLifecycleEvent(Lifecycle.Event.ON_START)
+            registry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
+        }
+
+        override val lifecycle: Lifecycle get() = registry
     }
 
     private fun ComposeContentTestRule.setSettingsContent(
-        config: AppConfig = FakeAppConfig(),
         hub: HubServer = FakeHubServer(),
         battery: BatteryExemption = FakeBatteryExemption(),
+        lifecycleOwner: LifecycleOwner? = null,
     ) {
-        val viewModel = SettingsViewModel(config, hub, battery)
+        val viewModel = SettingsViewModel(hub, battery)
         setContent {
-            HubTheme {
-                SettingsScreen(viewModelFactory = viewModelFactory(viewModel))
+            val owner = lifecycleOwner ?: LocalLifecycleOwner.current
+            CompositionLocalProvider(LocalLifecycleOwner provides owner) {
+                HubTheme {
+                    SettingsScreen(viewModelFactory = viewModelFactory(viewModel))
+                }
             }
         }
     }

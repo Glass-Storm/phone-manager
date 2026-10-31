@@ -32,6 +32,9 @@ class FakeSpeechPort : SpeechPort {
         closedSessions.add(sessionId)
     }
 
+    /** This fake has no streaming buffer, so there is never a pending utterance. */
+    override suspend fun flush(sessionId: String): SpeechUtterance? = null
+
     /** Adapter-local observability: whether [sessionId] has been closed. */
     fun isSessionClosed(sessionId: String): Boolean = sessionId in closedSessions
 }

@@ -26,12 +26,14 @@ the phone is to **start it, trust it, and see at a glance that it is working**.
 
 ## Product Purpose
 
-`phone-manager` is the phone-side hub of the offline device ecosystem: a local-only
-hotspot that discovers the two peers, runs on-device speech-to-text, speaker
-diarization, sign/gesture recognition and speech synthesis, and relays results
-between the necklace and the glasses. This app is the **control and status console**
-for that hub — turn the system on, see who is connected, watch what is being
-relayed, and configure the link.
+`phone-manager` is the phone-side hub of the offline device ecosystem. It adopts
+the user's manually-enabled phone hotspot (the hub never creates or configures
+one) and reports whether that hotspot and the hub are up. On-device speech-to-text,
+speaker diarization, sign/gesture recognition and speech synthesis run inside the
+hub, which relays results between the necklace and the glasses. This app is the
+**control and status console** for that hub: a three-page console (總覽 / 即時 /
+設定) to turn the system on, see who is connected, watch what is being relayed, and
+check the health of the link.
 
 Success: a user starts a session and can trust the current state in **under three
 seconds**, without reading a single log line or protocol term. The intended bar is

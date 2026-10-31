@@ -22,9 +22,9 @@ internal data class QueuedImage(
  *    is NEVER dropped.
  *  * [video] — drop-oldest. [admitVideo] evicts the oldest queued frame when
  *    the buffer is full, so the live edge keeps flowing.
- *  * [image] — SUSPEND. [admitImage] parks until the buffer has room, so a still
- *    is never dropped without a counter (a mirrored 10 fps source is naturally
- *    rate-limited by recognition latency).
+ *  * [image] — drop-oldest (LATEST WINS). [admitImage] evicts the oldest queued
+ *    still when the buffer is full, so a supersonic producer can never park the
+ *    peer's `pushImage`; the caller counts the eviction as `imageDropped`.
  */
 internal class RelayQueue(
     audioCapacity: Int,
@@ -42,9 +42,20 @@ internal class RelayQueue(
         audio.send(pcm)
     }
 
-    /** Park until [image] fits. A still is never dropped silently. */
-    suspend fun admitImage(image: QueuedImage) {
-        this.image.send(image)
+    /**
+     * Admit [still] with the LATEST-WINS policy: when the buffer is full, the
+     * oldest queued still is evicted so the newest one always fits.
+     *
+     * Returns `true` only when an eviction was performed, matching [admitVideo]'s
+     * shape. It NEVER suspends, so a sustained 10 fps source can never park the
+     * peer's `pushImage`. The re-offer is best-effort under a concurrent consumer
+     * race; the caller still counts the eviction it observed.
+     */
+    fun admitImage(still: QueuedImage): Boolean {
+        if (image.trySend(still).isSuccess) return false
+        if (image.tryReceive().isFailure) return false
+        image.trySend(still)
+        return true
     }
 
     /**

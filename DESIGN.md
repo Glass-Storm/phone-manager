@@ -158,19 +158,33 @@ icon + label; the selected item uses `primary` for icon + label **and** a
 
 ## Screens (blueprints)
 
-- **Dashboard** — a status **hero** first: a `StatusChip` (運作中 / 已停止) plus
-  the bound port as a `StatTile`; then a _連線_ card (hotspot SSID / passphrase /
-  gateway as `InfoRow`s, with a copy affordance and the passphrase masked by
-  default, revealed on explicit action) and hub start/stop actions (primary
-  `Button` + `SecondaryOutlined`). Failing ports → the calm "無法使用" line.
-- **Stream** — live session status hero (`StatusChip`), a relay counter row of
-  `StatTile`s (audio in, video in, dropped, transcripts out), and the **latest
-  transcript** as the largest readable text with its **speaker tag** as a chip.
-  Empty transcript → `EmptyState` ("尚無字幕").
-- **Devices** — known devices as rows (name, role chip, last-seen as `label2`)
-  with a `DestructiveOutlined` revoke action per row; empty → `EmptyState`.
-  (Note: pairing is removed from the runtime, so this list is typically empty —
-  flagged for a follow-up product decision.)
-- **Settings** — grouped `SectionCard`s: _熱點_ (mode as a segmented
-  primary/secondary choice), _電池_ (exemption state + request action), _端點_
-  (protocol + port as `InfoRow`s). All copy plain-language.
+The app is a three-page console: 總覽, 即時 and 設定. Every screen derives its
+availability from a tri-state read: `null` renders a quiet `檢查中` placeholder,
+`true` renders content, and only a resolved `false` renders the calm `無法使用`
+line. The placeholder must never flash an error while a read is still in flight.
+
+- **總覽 (Dashboard)**: `ScreenHeader` ("系統總覽" / "硬體中樞狀態"), then a
+  _中樞_ `SectionCard`: a status `StatusChip` (運作中 / 已停止 / 檢查中 / 無法使用),
+  the bound port as a `StatTile` (未啟動 before the hub runs), and the 啟動中樞 /
+  停止中樞 actions (primary `Button` + `SecondaryOutlined`). A second _熱點_
+  `SectionCard` reports the user's manually-enabled hotspot: `熱點已開啟` /
+  `熱點未開啟` / `檢查中` / `無法使用`, and when detected, only the gateway address
+  as an `InfoRow`. Credentials are owned by Android settings and never appear
+  here: there is no copy affordance and no hotspot control. When the hotspot is
+  off, the copy tells the user to enable it in Android settings and come back.
+- **即時 (Stream)**: `ScreenHeader` ("即時轉送" / "連線裝置與辨識結果"). _連線裝置_
+  is a `StatusChip` (`已連線` only while the hub runs and at least one peer is
+  bound, otherwise `待機`) plus one `TagChip` per live peer (role · device id);
+  no peers renders `EmptyState` ("尚無裝置"). _轉送統計_ is five `StatTile`s in
+  the fixed set 音訊 / 影像 / 手勢 / 字幕 / H.264 (audio frames, JPEG-still/image
+  frames, gesture results, transcripts and offered H.264 NALs). _最新字幕_ shows
+  the speaker tag as a `TagChip` over the transcript in `h1` with a
+  `最後更新 HH:mm:ss` line, or `EmptyState` ("尚無字幕"). _最新手勢_ shows the
+  gesture in `h2` with the same `最後更新` line, or `EmptyState` ("尚無手勢").
+  Results are cleared when the hub stops or the peer list empties, so a stale
+  value is never presented as live.
+- **設定 (Settings)**: `ScreenHeader` ("系統設定" / "中樞與連線偏好"). _電池_ is a
+  `SectionCard` with the Doze exemption `InfoRow` and the 要求排除電池最佳化
+  action, or `無法使用` when the read fails. _端點_ is a `SectionCard` with the
+  protocol `InfoRow` and the port when bound. Hotspot and speech-to-text
+  configuration are absent, because neither is configurable at runtime.

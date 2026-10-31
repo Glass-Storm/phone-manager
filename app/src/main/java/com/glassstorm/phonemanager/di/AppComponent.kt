@@ -4,7 +4,6 @@ import android.app.Application
 import androidx.lifecycle.ViewModelProvider
 import com.glassstorm.phonemanager.adapter.android.di.AndroidAdapterModule
 import com.glassstorm.phonemanager.adapter.android.di.ApplicationContext
-import com.glassstorm.phonemanager.adapter.jvm.di.AiModule
 import com.glassstorm.phonemanager.adapter.jvm.di.JvmAdapterModule
 import com.glassstorm.phonemanager.core.domain.adapter.config.AppConfig
 import com.glassstorm.phonemanager.core.domain.adapter.enrollment.EnrollmentStore
@@ -56,7 +55,7 @@ import javax.inject.Singleton
         ServiceModule::class,
         TransportModule::class,
         JvmAdapterModule::class,
-        AiModule::class,
+        DeviceAiModule::class,
         AndroidAdapterModule::class,
         AppModule::class,
         ViewModelModule::class,

@@ -40,7 +40,11 @@ dependencies {
     // local checkout at the pinned commit is substituted for these coordinates, so there is
     // no released artifact to depend on and no drifting engine. The versions are nominal —
     // the substitution matches group:name, not the version.
-    implementation("hk.edu.hkmu:core:0.0.1-alpha.1")
+    // `api`: the public constructors expose core's `AsrConfig` / `DiarizationConfig` /
+    // `SpeakerEmbeddingConfig` / `TtsConfig` through their default parameters, so a consumer
+    // that calls those constructors (the app's DeviceAiModule) needs them on its compile
+    // classpath. The remaining engines stay `implementation`.
+    api("hk.edu.hkmu:core:0.0.1-alpha.1")
     implementation("hk.edu.hkmu:sign:0.0.1-alpha.1")
     implementation("hk.edu.hkmu:asr:0.0.1-alpha.1")
     implementation("hk.edu.hkmu:diarize:0.0.1-alpha.1")

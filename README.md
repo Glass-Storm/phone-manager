@@ -74,26 +74,25 @@ the protobuf conflict there (exclude `protobuf-javalite` and supply full
 
 ### Model provisioning
 
-The device adapter needs three model files, fetched and SHA-256-verified by
-`scripts/fetch-ai-models.sh [DEST_DIR]` (`DEST_DIR` defaults to
-`./build/ai-models`):
+The device adapter reads its models from
+`context.getExternalFilesDir(null)/models` on an arm64 device.
+`scripts/fetch-ai-models.sh [DEST_DIR]` downloads and SHA-256-verifies all four
+engine trees into `DEST_DIR` (`DEST_DIR` defaults to `./build/ai-models`):
 
-| File                                                                | License    | Source                           |
-| ------------------------------------------------------------------- | ---------- | -------------------------------- |
-| `gesture/gesture_recognizer.task`                                   | Apache-2.0 | MediaPipe Tasks (Google)         |
-| `diarization/sherpa-onnx-pyannote-segmentation-3-0/model.int8.onnx` | MIT        | pyannote/segmentation-3.0        |
-| `diarization/3dspeaker_speech_campplus_sv_zh-cn_16k-common.onnx`    | Apache-2.0 | 3D-Speaker CAM++ (zh-cn, 16 kHz) |
+| Tree                                                                                    | License               | Source                                       |
+| --------------------------------------------------------------------------------------- | --------------------- | -------------------------------------------- |
+| `asr/model.int8.onnx` + `asr/tokens.txt`                                                | Apache-2.0            | SenseVoice int8 (WSYue variant)              |
+| `tts/vits-cantonese-hf-xiaomaiiwn/{onnx,tokens.txt,lexicon.txt,rule.fst}`               | Not declared upstream | Cantonese VITS (xiaomaiiwn)                  |
+| `gesture/gesture_recognizer.task`                                                       | Apache-2.0            | MediaPipe Tasks (Google)                     |
+| `diarization/sherpa-onnx-pyannote-segmentation-3-0/model.int8.onnx` plus the CAM++ ONNX | MIT + Apache-2.0      | pyannote/segmentation-3.0 + 3D-Speaker CAM++ |
 
-Copy the tree into an app-private directory on an arm64 device, for example:
+[`docs/ai-model-provisioning.md`](docs/ai-model-provisioning.md) has the exact
+on-device tree, every pinned SHA-256, the ASR/TTS release sources, the licence
+caveats, and the `adb push` commands for
+`/sdcard/Android/data/com.glassstorm.phonemanager/files/models`.
 
-```bash
-adb push build/ai-models /data/local/tmp/ai-models
-adb shell run-as com.glassstorm.phonemanager cp -r /data/local/tmp/ai-models files/ai-models
-```
-
-Large ASR/TTS voices are separate downloads and are not needed for the T4
-adapter; only the gesture bundle and the two diarization graphs are provisioned
-here.
+The Cantonese VITS voice declares no upstream licence; treat it as
+local-evaluation-only and do not redistribute it.
 
 ## The Gradle preamble (JDK 21 + Android SDK)
 

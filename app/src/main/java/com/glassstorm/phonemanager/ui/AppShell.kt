@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
@@ -48,19 +47,17 @@ import com.glassstorm.phonemanager.ui.hub.HubMotion
 
 const val ROUTE_DASHBOARD = "dashboard"
 const val ROUTE_STREAM = "stream"
-const val ROUTE_DEVICES = "devices"
 const val ROUTE_SETTINGS = "settings"
 
 val ROUTES: List<String> =
     listOf(
         ROUTE_DASHBOARD,
         ROUTE_STREAM,
-        ROUTE_DEVICES,
         ROUTE_SETTINGS,
     )
 
 /**
- * The app shell: one [NavHost] over the four routes the hub exposes.
+ * The app shell: one [NavHost] over the three routes the hub exposes.
  *
  * [viewModelFactory] is the Dagger-backed [ViewModelProvider.Factory] the
  * composition root owns, handed down so each screen can resolve its ViewModel and
@@ -94,7 +91,6 @@ fun AppShell(
         ) {
             composable(ROUTE_DASHBOARD) { DashboardScreen(viewModelFactory, Modifier.padding(insets)) }
             composable(ROUTE_STREAM) { StreamScreen(viewModelFactory, Modifier.padding(insets)) }
-            composable(ROUTE_DEVICES) { DevicesScreen(viewModelFactory, Modifier.padding(insets)) }
             composable(ROUTE_SETTINGS) { SettingsScreen(viewModelFactory, Modifier.padding(insets)) }
         }
     }
@@ -189,8 +185,7 @@ private object HubNavigationDefaults {
 private fun routeLabel(route: String): String =
     when (route) {
         ROUTE_DASHBOARD -> "總覽"
-        ROUTE_STREAM -> "串流"
-        ROUTE_DEVICES -> "裝置"
+        ROUTE_STREAM -> "即時"
         ROUTE_SETTINGS -> "設定"
         else -> route
     }
@@ -199,7 +194,6 @@ private fun routeIcon(route: String): ImageVector =
     when (route) {
         ROUTE_DASHBOARD -> Icons.Default.Home
         ROUTE_STREAM -> Icons.Default.PlayArrow
-        ROUTE_DEVICES -> Icons.AutoMirrored.Filled.List
         ROUTE_SETTINGS -> Icons.Default.Settings
         else -> Icons.Default.Home
     }
