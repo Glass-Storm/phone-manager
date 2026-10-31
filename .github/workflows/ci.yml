@@ -240,18 +240,3 @@ jobs:
 
             - name: Run E2E suites
               run: ./gradlew e2e --stacktrace
-
-            # The machine-checkable transcript BOTH harnesses append to. This path MUST
-            # stay equal to `FullE2eTest.EVIDENCE_RELATIVE` (the identical constant in
-            # transport/grpc/.../FullE2eTest.kt and app/.../FullE2eTest.kt); the tests own
-            # the filename and are out of scope for this change. Verified present: a fresh
-            # `./gradlew e2e` recreates `.omo/evidence/` and appends the transcript, so
-            # `if-no-files-found: error` is a real gate, not a formality.
-            - name: Upload E2E evidence
-              if: always()
-              uses: actions/upload-artifact@v4
-              with:
-                  name: e2e-evidence-${{ github.sha }}
-                  path: .omo/evidence/task-18-phone-manager-bootstrap.txt
-                  if-no-files-found: error
-                  retention-days: 14
