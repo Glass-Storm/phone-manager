@@ -30,12 +30,14 @@ jobs:
 
             # The hub consumes ai-android as a pinned composite build at ../../ai-android
             # (settings.gradle.kts asserts this exact commit and fails configuration
-            # otherwise). ai-android is a public repo, so no token is needed.
+            # otherwise). ai-android is a public repo, so no token is needed. Its
+            # vendored sherpa-onnx AAR is gitignored upstream and must be fetched.
             - name: Check out the pinned ai-android engine
               run: |
                   git clone --depth 1 https://github.com/Glass-Storm/ai-android.git "${{ github.workspace }}/../../ai-android"
                   git -C "${{ github.workspace }}/../../ai-android" fetch --depth 1 origin c0644eada44c242604e07546ff93aef80d9563f8
                   git -C "${{ github.workspace }}/../../ai-android" checkout --detach c0644eada44c242604e07546ff93aef80d9563f8
+                  bash "${{ github.workspace }}/../../ai-android/scripts/fetch-sherpa-aar.sh"
 
             # This project builds on JDK 21 (Gradle 8.13 toolchain); the reference repo
             # pins 17 because that is ITS toolchain, not ours. No Android SDK is set up
@@ -92,12 +94,14 @@ jobs:
 
             # The hub consumes ai-android as a pinned composite build at ../../ai-android
             # (settings.gradle.kts asserts this exact commit and fails configuration
-            # otherwise). ai-android is a public repo, so no token is needed.
+            # otherwise). ai-android is a public repo, so no token is needed. Its
+            # vendored sherpa-onnx AAR is gitignored upstream and must be fetched.
             - name: Check out the pinned ai-android engine
               run: |
                   git clone --depth 1 https://github.com/Glass-Storm/ai-android.git "${{ github.workspace }}/../../ai-android"
                   git -C "${{ github.workspace }}/../../ai-android" fetch --depth 1 origin c0644eada44c242604e07546ff93aef80d9563f8
                   git -C "${{ github.workspace }}/../../ai-android" checkout --detach c0644eada44c242604e07546ff93aef80d9563f8
+                  bash "${{ github.workspace }}/../../ai-android/scripts/fetch-sherpa-aar.sh"
 
             - name: Set up JDK 21
               uses: actions/setup-java@v5
@@ -205,12 +209,14 @@ jobs:
 
             # The hub consumes ai-android as a pinned composite build at ../../ai-android
             # (settings.gradle.kts asserts this exact commit and fails configuration
-            # otherwise). ai-android is a public repo, so no token is needed.
+            # otherwise). ai-android is a public repo, so no token is needed. Its
+            # vendored sherpa-onnx AAR is gitignored upstream and must be fetched.
             - name: Check out the pinned ai-android engine
               run: |
                   git clone --depth 1 https://github.com/Glass-Storm/ai-android.git "${{ github.workspace }}/../../ai-android"
                   git -C "${{ github.workspace }}/../../ai-android" fetch --depth 1 origin c0644eada44c242604e07546ff93aef80d9563f8
                   git -C "${{ github.workspace }}/../../ai-android" checkout --detach c0644eada44c242604e07546ff93aef80d9563f8
+                  bash "${{ github.workspace }}/../../ai-android/scripts/fetch-sherpa-aar.sh"
 
             - name: Set up JDK 21
               uses: actions/setup-java@v5
