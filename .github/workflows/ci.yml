@@ -129,6 +129,13 @@ jobs:
                   yes | sdkmanager --licenses
                   sdkmanager "platform-tools" "platforms;android-36" "platforms;android-29" "build-tools;36.0.0"
 
+            # :app:testDebugUnitTest includes FullE2eTest, which spawns the Go mockpeer
+            # as a real child process; without Go the suite fails (by design, not skip).
+            - name: Set up Go
+              uses: actions/setup-go@v5
+              with:
+                  go-version: "1.25"
+
             # JVM -> `:task`; Android -> `:taskDebugUnitTest`. `:adapter:android` and
             # `:app` are the only Android modules. `lint` is scoped to `:app` (the only
             # module with an Android application surface); it consumes the library's lint
