@@ -1,24 +1,19 @@
 package com.glassstorm.phonemanager
 
+import android.util.Log
 import com.glassstorm.phonemanager.core.domain.adapter.network.Discovery
 import com.glassstorm.phonemanager.core.domain.adapter.network.HotspotController
 import com.glassstorm.phonemanager.core.domain.adapter.transport.HubServer
-import com.glassstorm.phonemanager.core.domain.network.HotspotUnavailableException
 import com.glassstorm.phonemanager.core.model.HotspotInfo
 
 /**
  * How the access point came up (or why it did not).
  *
- * A `manual-tether` outcome is a first-class SUCCESS: OEMs (MIUI/Knox/EMUI)
- * frequently block programmatic LocalOnlyHotspot, so "the user turned the system
- * hotspot on" is the documented primary development path — not an error.
+ * The ONLY supported success is [ManualTether]: the hub adopts the user's
+ * manually-enabled phone Mobile Hotspot. The hub never creates an access point of
+ * its own, and there is no credential channel that could publish one.
  */
 sealed interface HotspotBringUp {
-    /** The programmatic LocalOnlyHotspot reservation is live. */
-    data class Hotspot(
-        val info: HotspotInfo,
-    ) : HotspotBringUp
-
     /** An already-active system tether was detected and adopted. */
     data class ManualTether(
         val info: HotspotInfo,
@@ -41,7 +36,7 @@ data class HubBringUpReport(
  * Brings the whole hub up in a fixed order and tears it down in reverse.
  *
  * The order is forced by the data dependencies:
- *   1. the access point (or an adopted manual tether) — peers need a LAN to reach;
+ *   1. the user's manual hotspot (detected and adopted) — peers need a LAN to reach;
  *   2. the gRPC listener — it produces the bound port;
  *   3. discovery advertising — it advertises THAT bound port.
  *
@@ -54,15 +49,14 @@ data class HubBringUpReport(
  * identities, and Dagger supplies the ports from the compile-time graph — a
  * missing port is a build failure, not a runtime branch.
  *
- * A refused or permission-blocked access point is NOT fatal to the listener: the
- * hub degrades to "listener up, hotspot unavailable" and reports that honestly
- * instead of claiming an access point it never brought up.
+ * A missing manual hotspot is NOT fatal to the listener: the hub degrades to
+ * "listener up, hotspot unavailable" and reports that honestly instead of claiming
+ * an access point it never detected.
  */
 class HubBringUp(
     private val hub: HubServer,
     private val hotspot: HotspotController,
     private val discovery: Discovery,
-    private val permissionBlocker: () -> String?,
 ) {
     private var wasStarted: Boolean = false
 
@@ -85,19 +79,40 @@ class HubBringUp(
         stopHotspot()
     }
 
+    /**
+     * Adopt the user's manually-enabled Mobile Hotspot, or report it unavailable.
+     *
+     * There is no programmatic start and no runtime hotspot permission to check:
+     * the product uses ONLY the hotspot the user turned on by hand. The interface
+     * scan is the single source of truth, and its absence is reported with the
+     * exact action the user must take.
+     */
     private fun bringUpHotspot(): HotspotBringUp {
-        detectManualTether()?.let { return it }
+        val outcome =
+            detectManualTether()
+                ?: HotspotBringUp.Unavailable(
+                    "no manual hotspot; enable the phone's Mobile Hotspot",
+                )
+        return loggedOutcome(outcome)
+    }
 
-        val blocker = permissionBlocker()
-        if (blocker != null) {
-            return HotspotBringUp.Unavailable("missing runtime permission $blocker")
-        }
+    /**
+     * Record WHICH path produced the outcome plus the SSID and whether a passphrase
+     * is present. The passphrase itself is NEVER logged: it is a live credential.
+     */
+    private fun loggedOutcome(outcome: HotspotBringUp): HotspotBringUp {
+        when (outcome) {
+            is HotspotBringUp.ManualTether ->
+                Log.i(
+                    TAG,
+                    "hotspot bring-up: path=manual-tether ssid=${outcome.info.ssid} " +
+                        "hasPassphrase=${outcome.info.passphrase.isNotBlank()}",
+                )
 
-        return try {
-            HotspotBringUp.Hotspot(hotspot.startHotspot())
-        } catch (refused: HotspotUnavailableException) {
-            HotspotBringUp.Unavailable(refused.failure.toString())
+            is HotspotBringUp.Unavailable ->
+                Log.i(TAG, "hotspot bring-up: path=unavailable reason=${outcome.reason}")
         }
+        return outcome
     }
 
     private fun detectManualTether(): HotspotBringUp? =
@@ -134,6 +149,8 @@ class HubBringUp(
     }
 
     companion object {
+        private const val TAG: String = "HubBringUp"
+
         /** The DNS-SD instance name this hub advertises. */
         const val DISCOVERY_NAME: String = "phone-manager"
     }

@@ -42,6 +42,15 @@ android {
     }
 }
 
+// ai-android uses FULL protobuf-java (MediaPipe), while `:contract` and
+// `:transport:grpc` generate lite bindings. Full protobuf-java bundles
+// `GeneratedMessageLite`, so it satisfies both call sites; the lite RUNTIME
+// (protobuf-javalite) must be removed from every configuration or the duplicate
+// `com.google.protobuf.*` classes break dexing.
+configurations.configureEach {
+    exclude(group = "com.google.protobuf", module = "protobuf-javalite")
+}
+
 dependencies {
     implementation(libs.core.ktx)
 
@@ -55,6 +64,9 @@ dependencies {
     // config store). The composition root wires both.
     implementation(project(":adapter:jvm"))
     implementation(project(":adapter:android"))
+    // The REAL on-device engines (ai-android). DeviceAiModule selects these when
+    // the models are provisioned and falls back to the `:adapter:jvm` fakes otherwise.
+    implementation(project(":adapter:ai"))
 
     // The GO gRPC transport (T6 spike verdict: netty-shaded, IPv4 explicit, plaintext).
     // Declared here as well because every dependency above is `implementation`, so
@@ -63,7 +75,7 @@ dependencies {
     implementation(libs.grpc.stub)
     implementation(libs.grpc.protobuf.lite)
     implementation(libs.grpc.kotlin.stub)
-    implementation(libs.protobuf.javalite)
+    implementation(libs.protobuf.java)
 
     coreLibraryDesugaring(libs.desugar.jdk.libs)
 
@@ -73,6 +85,7 @@ dependencies {
     implementation(libs.activity.compose)
     implementation(libs.navigation.compose)
     implementation(libs.lifecycle.viewmodel.compose)
+    implementation(libs.lifecycle.runtime.compose)
     implementation(libs.lifecycle.runtime.ktx)
     implementation(libs.kotlinx.coroutines.android)
 
@@ -83,6 +96,7 @@ dependencies {
     implementation(libs.compose.ui.util)
     implementation(libs.compose.ui.tooling.preview)
     implementation(libs.compose.material.ripple)
+    implementation(libs.compose.material.icons.core)
 
     debugImplementation(libs.compose.ui.tooling)
     debugImplementation(libs.compose.ui.test.manifest)
@@ -91,6 +105,11 @@ dependencies {
     // Shared E2E kit (mockpeer runner + deterministic media generators), used by
     // FullE2eTest to drive the real Go peer against the Robolectric-hosted hub.
     testImplementation(project(":testing:testkit"))
+    // The in-process `ecosys.v1` peer fixture for the cross-repo Python E2E
+    // (T23). It has to come from `:transport:grpc`'s testFixtures because
+    // `ecosys.v1.*` may only be named by `:transport:grpc`/`:contract`; `:app`
+    // consumes only the fixture's plain `PeerEvent` types (Konsist law b).
+    testImplementation(testFixtures(project(":transport:grpc")))
     testImplementation(libs.compose.ui.test.junit4)
     // `org.json` is already on the `:app` test classpath via `:adapter:jvm`, but
     // the T14 harness reads the Pi token cache with it directly, so depend on it

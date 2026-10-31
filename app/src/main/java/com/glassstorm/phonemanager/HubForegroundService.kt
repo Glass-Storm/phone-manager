@@ -5,7 +5,12 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.os.IBinder
-import com.glassstorm.phonemanager.permission.HubPermissions
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 
 /**
  * Hosts the whole hub (access point, gRPC listener, discovery) behind a
@@ -22,7 +27,12 @@ import com.glassstorm.phonemanager.permission.HubPermissions
  * This class names no concrete adapter.
  */
 class HubForegroundService : Service() {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var bringUp: HubBringUp? = null
+    private var bringUpJob: Job? = null
+
+    /** Test seam: lets a test substitute the ordered bring-up without the graph. */
+    internal var bringUpFactory: () -> HubBringUp = { newBringUp() }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -43,7 +53,11 @@ class HubForegroundService : Service() {
         // `stopService`, which runs onDestroy and clears this field, so a later start
         // is NOT blocked by a stale bring-up.
         if (bringUp == null) {
-            bringUp = newBringUp().also { it.bringUp(requestedPort(intent)) }
+            val hubBringUp = bringUpFactory()
+            bringUp = hubBringUp
+            // The listener's stop() can wait up to 5 s for active calls; bring-up and
+            // teardown therefore never run on the main thread (ANR threshold).
+            bringUpJob = scope.launch { hubBringUp.bringUp(requestedPort(intent)) }
         }
         // Restart the hub after the OS reclaims the process: the hub is the whole
         // point of this service, so a stolen process must come back.
@@ -51,8 +65,19 @@ class HubForegroundService : Service() {
     }
 
     override fun onDestroy() {
-        bringUp?.tearDown()
+        val hubBringUp = bringUp
+        val pendingBringUp = bringUpJob
         bringUp = null
+        bringUpJob = null
+        if (hubBringUp == null) {
+            scope.cancel()
+        } else {
+            scope.launch {
+                pendingBringUp?.join()
+                hubBringUp.tearDown()
+                scope.cancel()
+            }
+        }
         super.onDestroy()
     }
 
@@ -63,9 +88,6 @@ class HubForegroundService : Service() {
             hub = component.hubServer(),
             hotspot = component.hotspotController(),
             discovery = component.discovery(),
-            permissionBlocker = {
-                HubPermissions.blockingHotspotPermission(applicationContext)
-            },
         )
     }
 

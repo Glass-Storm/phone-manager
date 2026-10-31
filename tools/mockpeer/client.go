@@ -5,26 +5,20 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
-	"strings"
+	"time"
 
 	ecosysv1 "phone-manager/tools/mockpeer/gen/ecosys/v1"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
-// tokenFileMode is read/write for the owner only: the bearer token is an
-// ephemeral loopback test secret and must not be world-readable.
-const tokenFileMode = 0o600
-
-// The three scenarios the CLI can run.
+// The two scenarios the CLI can run. They behave identically now that auth is
+// gone; both are kept so existing automation flags keep resolving.
 const (
 	scenarioFull   = "full"
-	scenarioPair   = "pair"
 	scenarioStream = "stream"
 )
 
@@ -35,24 +29,38 @@ const (
 	modeBoth  = "both"
 )
 
-// errUnauthenticated marks a run that was legitimately refused by the hub's auth
-// gate. main maps it to the machine-checkable `UNAUTHENTICATED` line + exit 2.
-var errUnauthenticated = errors.New("unauthenticated")
+// The roles a peer can claim on the stream bootstrap.
+const (
+	roleGlass  = "glass"
+	roleDaemon = "daemon"
+)
 
-// pairRejectedError carries the hub's typed rejection reason for a bad PIN.
-type pairRejectedError struct{ reason string }
+// The synthetic device id/role this peer claims on the stream bootstrap.
+const mockPeerDeviceID = "mockpeer"
 
-func (e *pairRejectedError) Error() string { return "pair rejected: " + e.reason }
+// How the receive loop ended. An EOF is the server closing the stream; a
+// deadline is this peer's own --timeout; drain-grace is the bounded read window
+// that --half-close opens after the send side is closed.
+const (
+	inboundEndEOF        = "eof"
+	inboundEndDeadline   = "deadline"
+	inboundEndDrainGrace = "drain-grace"
+)
 
-// scenarioResult reports what a run accomplished: media frames SENT and
-// transcript frames RECEIVED.
+// scenarioResult reports what a run accomplished: media frames SENT and the
+// inbound hub output RECEIVED.
 type scenarioResult struct {
-	frames      int
-	transcripts int
+	frames         int
+	transcripts    int
+	sentImage      int
+	sentAudioBytes int
+	gestures       int
+	tts            int
+	results        int
+	inboundEnd     string
 }
 
-// runScenario drives the requested RPC sequence and returns the counts a caller
-// renders as the machine-checkable stdout line.
+// runScenario dials the hub and drives the unauthenticated relay.
 //
 // Plaintext only: the LAN hub is cleartext by design and TLS on Android is the
 // known-broken path, so no credentials beyond insecure are configured.
@@ -63,165 +71,199 @@ func runScenario(ctx context.Context, cfg config) (scenarioResult, error) {
 	}
 	defer conn.Close()
 
-	pairing := ecosysv1.NewPairingServiceClient(conn)
+	return openStream(ctx, conn, cfg)
+}
 
-	if cfg.noToken {
-		// Deliberately unauthenticated: the hub MUST refuse and say so.
-		if err := heartbeat(ctx, pairing, ""); err != nil {
-			return scenarioResult{}, err
-		}
-		return scenarioResult{}, errors.New("hub accepted a heartbeat with no token")
-	}
+// openStream sends the `stream_open` bootstrap frame, pushes synthetic and/or
+// preset media, then drains result frames and counts/prints what the hub sent
+// back. No `authorization` metadata is ever attached.
+func openStream(ctx context.Context, conn *grpc.ClientConn, cfg config) (scenarioResult, error) {
+	streamCtx, streamCancel := context.WithCancel(ctx)
+	defer streamCancel()
 
-	token, err := resolveToken(ctx, pairing, cfg)
+	stream, err := ecosysv1.NewStreamServiceClient(conn).OpenStream(streamCtx)
 	if err != nil {
 		return scenarioResult{}, err
 	}
 
-	if cfg.expectUnaut {
-		// The revoked-token leg: the token was valid at Pair time and has since
-		// been revoked, so the hub MUST now refuse. A success here is the bug.
-		if err := heartbeat(ctx, pairing, token); err != nil {
-			return scenarioResult{}, err
-		}
-		return scenarioResult{}, errors.New("hub accepted a REVOKED token")
+	result := scenarioResult{}
+
+	// With bearer-token auth removed this is the ONLY thing that tells the hub who
+	// is on the other end and how to route frames.
+	if err := stream.Send(streamOpenFrame(cfg.deviceID, cfg.deviceRole())); err != nil {
+		return result, err
 	}
 
-	if err := heartbeat(ctx, pairing, token); err != nil {
-		return scenarioResult{}, err
-	}
-	if cfg.scenario == scenarioPair {
-		return scenarioResult{}, nil
-	}
-
-	return openStream(ctx, conn, cfg, token)
-}
-
-// resolveToken picks the bearer credential from the configured source: a
-// pre-issued token file (the post-revoke leg), a literal token, or a fresh Pair.
-// A freshly issued token is also written to --token-out when requested, which is
-// the only sanctioned way for it to leave the process.
-func resolveToken(ctx context.Context, pairing ecosysv1.PairingServiceClient, cfg config) (string, error) {
-	if cfg.tokenFile != "" {
-		raw, err := os.ReadFile(cfg.tokenFile)
-		if err != nil {
-			return "", fmt.Errorf("read token file %s: %w", cfg.tokenFile, err)
-		}
-		token := strings.TrimSpace(string(raw))
-		if token == "" {
-			return "", fmt.Errorf("token file %s was empty", cfg.tokenFile)
-		}
-		return token, nil
-	}
-	if cfg.token != "" {
-		return cfg.token, nil
-	}
-
-	token, err := pair(ctx, pairing, cfg.pin)
-	if err != nil {
-		return "", err
-	}
-	if cfg.tokenOut != "" {
-		if err := os.WriteFile(cfg.tokenOut, []byte(token+"\n"), tokenFileMode); err != nil {
-			return "", fmt.Errorf("write token file %s: %w", cfg.tokenOut, err)
-		}
-	}
-	return token, nil
-}
-
-// pair redeems the window PIN. A rejection is expected (bad/expired/replayed
-// PIN), so it is returned as a typed error rather than a transport failure.
-func pair(ctx context.Context, client ecosysv1.PairingServiceClient, pin string) (string, error) {
-	resp, err := client.Pair(ctx, &ecosysv1.PairRequest{
-		Pin:        pin,
-		DeviceName: "mockpeer",
-		Role:       ecosysv1.DeviceRole_DEVICE_ROLE_GLASS,
-	})
-	if err != nil {
-		return "", mapStatus(err)
-	}
-	if !resp.GetOk() {
-		return "", &pairRejectedError{reason: resp.GetRejectReason()}
-	}
-	if resp.GetToken() == "" {
-		return "", errors.New("hub reported ok but issued an empty token")
-	}
-	return resp.GetToken(), nil
-}
-
-// heartbeat proves liveness with (or without) a bearer token. An empty token
-// sends NO metadata, which is exactly the `--no-token` rejection case.
-func heartbeat(ctx context.Context, client ecosysv1.PairingServiceClient, token string) error {
-	callCtx := ctx
-	if token != "" {
-		callCtx = metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+token)
-	}
-	resp, err := client.Heartbeat(callCtx, &ecosysv1.HeartbeatRequest{})
-	if err != nil {
-		return mapStatus(err)
-	}
-	if !resp.GetOk() {
-		return errors.New("hub refused heartbeat without a status")
-	}
-	return nil
-}
-
-// openStream pushes synthetic media and drains result frames until the hub
-// closes the stream, counting the transcripts it produced.
-func openStream(ctx context.Context, conn *grpc.ClientConn, cfg config, token string) (scenarioResult, error) {
-	callCtx := metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+token)
-	stream, err := ecosysv1.NewStreamServiceClient(conn).OpenStream(callCtx)
-	if err != nil {
-		return scenarioResult{}, mapStatus(err)
-	}
-
-	sent := 0
 	for i := 0; i < cfg.frames; i++ {
 		if cfg.hasAudio() {
 			frame := &ecosysv1.StreamFrame{
 				Payload: &ecosysv1.StreamFrame_AudioPcm16_16K{AudioPcm16_16K: SyntheticAudioFrame(i)},
 			}
 			if err := stream.Send(frame); err != nil {
-				return scenarioResult{frames: sent}, mapStatus(err)
+				return result, err
 			}
-			sent++
+			result.frames++
 		}
 		if cfg.hasVideo() {
 			frame := &ecosysv1.StreamFrame{
 				Payload: &ecosysv1.StreamFrame_VideoH264Nal{VideoH264Nal: SyntheticVideoNAL(i)},
 			}
 			if err := stream.Send(frame); err != nil {
-				return scenarioResult{frames: sent}, mapStatus(err)
+				return result, err
 			}
-			sent++
+			result.frames++
 		}
 	}
 
-	if err := stream.CloseSend(); err != nil {
-		return scenarioResult{frames: sent}, mapStatus(err)
+	if cfg.imagePath != "" {
+		image, err := loadImageFrame(cfg.imagePath, cfg.ptsMs, int32(cfg.imageWidth), int32(cfg.imageHeight))
+		if err != nil {
+			return result, fmt.Errorf("image %s: %w", cfg.imagePath, err)
+		}
+		if err := stream.Send(&ecosysv1.StreamFrame{
+			Payload: &ecosysv1.StreamFrame_Image{Image: image},
+		}); err != nil {
+			return result, err
+		}
+		result.frames++
+		result.sentImage = 1
 	}
 
-	transcripts := 0
+	if cfg.audioFile != "" {
+		frames, bytesSent, err := streamWAVAudio(ctx, stream, cfg.audioFile)
+		result.frames += frames
+		result.sentAudioBytes = bytesSent
+		if err != nil {
+			return result, fmt.Errorf("audio file %s: %w", cfg.audioFile, err)
+		}
+	}
+
+	if cfg.halfClose {
+		return drainAfterHalfClose(stream, streamCtx, ctx, cfg.drainGrace, streamCancel, &result)
+	}
+
+	// Default: a real peer keeps the bidirectional stream open after its sends,
+	// so hub work that finishes AFTER the sends (e.g. ~2 s TTS synthesis) still
+	// has a live session to be delivered on. Stay open and keep reading until
+	// the server ends the stream (io.EOF) or the configured deadline expires.
+	result.inboundEnd = inboundEndDeadline
 	for {
 		resp, err := stream.Recv()
 		if errors.Is(err, io.EOF) {
+			result.inboundEnd = inboundEndEOF
 			break
 		}
 		if err != nil {
-			return scenarioResult{frames: sent, transcripts: transcripts}, mapStatus(err)
+			// The deadline elapsing is a normal end for an indefinitely-open
+			// stream, not a failure: report what was collected.
+			if isStreamDeadline(ctx, err) {
+				break
+			}
+			return result, err
 		}
-		if resp.GetTranscript() != "" {
-			transcripts++
-		}
+		recordInbound(resp, &result)
 	}
-	return scenarioResult{frames: sent, transcripts: transcripts}, nil
+	return result, nil
 }
 
-// mapStatus converts a gRPC transport failure into either the
-// errUnauthenticated sentinel (the expected refusal) or a descriptive error.
-func mapStatus(err error) error {
-	if status.Code(err) == codes.Unauthenticated {
-		return fmt.Errorf("%w: %s", errUnauthenticated, status.Convert(err).Message())
+// drainAfterHalfClose closes the SEND side, then keeps reading for a bounded
+// window so late tts_audio/result frames produced after this peer stopped
+// sending are still counted. This mirrors the real Pi's teardown.
+func drainAfterHalfClose(
+	stream ecosysv1.StreamService_OpenStreamClient,
+	streamCtx context.Context,
+	parent context.Context,
+	grace time.Duration,
+	cancelStream context.CancelFunc,
+	result *scenarioResult,
+) (scenarioResult, error) {
+	if err := stream.CloseSend(); err != nil {
+		return *result, err
 	}
-	return err
+
+	// The drain window is a TIMER on top of the stream context: when it fires,
+	// cancel the stream and treat the resulting cancellation as the normal end
+	// of the grace period rather than a transport failure.
+	graceTimer := time.AfterFunc(grace, cancelStream)
+	defer graceTimer.Stop()
+
+	result.inboundEnd = inboundEndDrainGrace
+	for {
+		resp, err := stream.Recv()
+		if errors.Is(err, io.EOF) {
+			result.inboundEnd = inboundEndEOF
+			break
+		}
+		if err != nil {
+			if !isStreamDeadline(streamCtx, err) {
+				return *result, err
+			}
+			if parent.Err() != nil {
+				result.inboundEnd = inboundEndDeadline
+			}
+			break
+		}
+		recordInbound(resp, result)
+	}
+	return *result, nil
+}
+
+// isStreamDeadline reports whether a Recv error is the configured deadline (or a
+// parent cancel) rather than a real transport failure.
+func isStreamDeadline(ctx context.Context, err error) bool {
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+		return true
+	}
+	if ctx.Err() != nil {
+		return true
+	}
+	code := status.Code(err)
+	return code == codes.DeadlineExceeded || code == codes.Canceled
+}
+
+func recordInbound(frame *ecosysv1.StreamFrame, result *scenarioResult) {
+	if frame.GetTranscript() != "" || frame.GetResult().GetText() != "" {
+		result.transcripts++
+	}
+	switch payload := frame.GetPayload().(type) {
+	case *ecosysv1.StreamFrame_Gesture:
+		gesture := payload.Gesture
+		fmt.Printf(
+			"gesture text=%s label=%s confidence=%v\n",
+			gesture.GetText(),
+			gesture.GetLabel(),
+			gesture.GetConfidence(),
+		)
+		result.gestures++
+	case *ecosysv1.StreamFrame_TtsAudio:
+		fmt.Printf("tts bytes=%d\n", len(payload.TtsAudio.GetPcm16_16K()))
+		result.tts++
+	case *ecosysv1.StreamFrame_Result:
+		fmt.Printf(
+			"result text=%s speaker=%s\n",
+			payload.Result.GetText(),
+			payload.Result.GetSpeakerLabel(),
+		)
+		result.results++
+	}
+}
+
+// deviceRole maps the CLI role onto the frozen wire enum.
+func (c config) deviceRole() ecosysv1.DeviceRole {
+	if c.role == roleGlass {
+		return ecosysv1.DeviceRole_DEVICE_ROLE_GLASS
+	}
+	return ecosysv1.DeviceRole_DEVICE_ROLE_DAEMON
+}
+
+// streamOpenFrame is the session-binding bootstrap sent as the first stream frame.
+func streamOpenFrame(deviceID string, role ecosysv1.DeviceRole) *ecosysv1.StreamFrame {
+	return &ecosysv1.StreamFrame{
+		Payload: &ecosysv1.StreamFrame_StreamOpen{
+			StreamOpen: &ecosysv1.StreamOpenRequest{
+				DeviceId: deviceID,
+				Role:     role,
+			},
+		},
+	}
 }

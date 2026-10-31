@@ -4,10 +4,13 @@ import android.app.Application
 import androidx.test.core.app.ApplicationProvider
 import com.glassstorm.phonemanager.adapter.android.config.RuntimeConfigStore
 import com.glassstorm.phonemanager.adapter.android.repository.sqlite.SqliteDeviceRepository
+import com.glassstorm.phonemanager.adapter.jvm.ai.FakeEnrollmentStore
+import com.glassstorm.phonemanager.adapter.jvm.ai.FakeGesturePort
+import com.glassstorm.phonemanager.adapter.jvm.ai.FakeSpeechPort
+import com.glassstorm.phonemanager.adapter.jvm.ai.FakeTtsPort
 import com.glassstorm.phonemanager.core.domain.adapter.config.AppConfig
 import com.glassstorm.phonemanager.core.domain.adapter.repository.DeviceRepository
 import com.glassstorm.phonemanager.core.model.HotspotMode
-import com.glassstorm.phonemanager.core.model.SttEngine
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -19,8 +22,9 @@ import org.robolectric.annotation.Config
  *
  * Two facts are asserted independently: the persistent SQLite repository is what
  * the graph binds for [DeviceRepository], and the app-private [RuntimeConfigStore]
- * is the [AppConfig] the Settings screen reads and writes — so `:app/ui` can read
- * and write settings without ever importing `:adapter`.
+ * is the [AppConfig] the graph binds — so a consumer reads and writes config
+ * without ever importing `:adapter`. The Settings screen no longer has a hotspot
+ * mode to configure, but the port stays bound for persisted runtime settings.
  *
  * The registry-era cases that asserted "no Android Context keeps the in-memory
  * fallback" and "the config port is absent without an Android Context" are GONE
@@ -47,20 +51,30 @@ class AppComponentWiringTest {
     }
 
     @Test
-    fun `the app config port round-trips an engine choice through the adapter store`() {
+    fun `the app config port round-trips a hotspot mode through the adapter store`() {
         // Given the production component
         val component = component()
 
-        // When the config port is resolved and a non-default engine is stored
+        // When the config port is resolved and the hotspot mode is stored
         val config: AppConfig = component.appConfig()
-        config.setSttEngine(SttEngine.SPEECHMATICS)
-        config.setRegion("eu")
         config.setHotspotMode(HotspotMode.AUTO)
 
-        // Then it is the adapter-backed store and the values read back through the port
+        // Then it is the adapter-backed store and the value reads back through the port
         assertThat(config).isInstanceOf(RuntimeConfigStore::class.java)
-        assertThat(config.sttEngine()).isEqualTo(SttEngine.SPEECHMATICS)
-        assertThat(config.region()).isEqualTo("eu")
         assertThat(config.hotspotMode()).isEqualTo(HotspotMode.AUTO)
+    }
+
+    @Test
+    fun `the ai ports are bound to the deterministic jvm fakes by default`() {
+        // Given the production component with a real Android Application
+        val component = component()
+
+        // When each ai port is resolved by type
+        // Then the DEFAULT graph binds the JVM fakes, so unit builds never touch
+        // ai-android's arm64-only native (see DeviceAiModule).
+        assertThat(component.gesturePort()).isInstanceOf(FakeGesturePort::class.java)
+        assertThat(component.speechPort()).isInstanceOf(FakeSpeechPort::class.java)
+        assertThat(component.ttsPort()).isInstanceOf(FakeTtsPort::class.java)
+        assertThat(component.enrollmentStore()).isInstanceOf(FakeEnrollmentStore::class.java)
     }
 }

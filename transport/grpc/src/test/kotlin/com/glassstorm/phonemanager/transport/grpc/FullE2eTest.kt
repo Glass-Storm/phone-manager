@@ -1,15 +1,12 @@
 package com.glassstorm.phonemanager.transport.grpc
 
 import com.glassstorm.phonemanager.core.domain.adapter.transport.HubServer
-import com.glassstorm.phonemanager.core.service.PairingServiceImpl
-import com.glassstorm.phonemanager.core.service.StreamServiceImpl
 import com.glassstorm.phonemanager.testing.testkit.MockPeerDriver
 import com.glassstorm.phonemanager.testing.testkit.MockPeerTranscript
 import com.glassstorm.phonemanager.testing.testkit.goBinary
 import com.glassstorm.phonemanager.testing.testkit.repoRoot
 import com.glassstorm.phonemanager.testing.testkit.run
 import com.glassstorm.phonemanager.testing.testkit.syntheticVideoNal
-import com.glassstorm.phonemanager.transport.grpc.security.AuthInterceptor
 import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
 import org.junit.After
@@ -24,7 +21,9 @@ import java.io.File
  *
  * Same real-socket posture as T6's [HubServerE2ETest] — a REAL netty-shaded
  * listener on `127.0.0.1:0` driven by the REAL Go peer — but now over the WHOLE
- * protocol, including the two legs T6 never covered:
+ * protocol. The stream is UNAUTHENTICATED: pairing, PIN and bearer tokens were
+ * removed from the hub runtime, so there is no pair/heartbeat/revoke leg and the
+ * peer bootstraps with a `stream_open` frame.
  *
  * ## The E2E override pattern (shared with the `:app` harness, deliberately)
  *
@@ -37,25 +36,18 @@ import java.io.File
  * `:app` side; this module hand-wires the same ports. `:app`'s `FullE2eTest` uses
  * the identical shape over its component, so the two are directly comparable.
  *
- *
- *  1. the ordered success transcript `pair-ok` / `heartbeat-ok` /
- *     `session-ok frames=N` / `video-bytes-match`, where byte-equality is a REAL
- *     comparison of the recorded NALs against the Go generator's output;
- *  2. revocation: the token minted in leg 1 is revoked, and a second invocation
- *     using that token MUST be refused with `UNAUTHENTICATED`.
- *
- * The ordered lines are both ASSERTED here and appended to the shared evidence
- * file. The `:app` Robolectric harness writes its own block with the same
- * contract, so the two are directly comparable.
+ * The ordered success transcript `stream-open-ok` / `session-ok frames=N` /
+ * `video-bytes-match` is both ASSERTED here and appended to the shared evidence
+ * file. Byte-equality is a REAL comparison of the recorded NALs against the Go
+ * generator's output. The `:app` Robolectric harness writes its own block with the
+ * same contract, so the two are directly comparable.
  */
 class FullE2eTest {
     @get:Rule
     val deadline: Timeout = Timeout.seconds(300)
 
     private lateinit var hub: HubServer
-    private lateinit var pairing: PairingServiceImpl
-    private lateinit var repo: FakeDeviceRepository
-    private lateinit var stt: FakeSttPort
+    private lateinit var speech: FakeSpeechPort
     private lateinit var sink: FakeFrameSink
     private var driver: MockPeerDriver? = null
     private var port: Int = 0
@@ -67,20 +59,16 @@ class FullE2eTest {
             .that(probe.ok)
             .isTrue()
 
-        repo = FakeDeviceRepository()
-        stt = FakeSttPort("full e2e utterance")
+        speech = FakeSpeechPort("full e2e utterance")
         sink = FakeFrameSink()
-        pairing = PairingServiceImpl.withClock(repo, clock = { System.currentTimeMillis() })
-        val stream = StreamServiceImpl(stt, sink)
+        val stream = relayStream(speech = speech, sink = sink)
 
         // The PRODUCTION adapter with an explicit loopback bind, exactly as the
         // `:app` harness composes it. The wildcard production bind is never used
         // in a test; only the bind address differs from `TransportModule`.
         hub =
             HubServerAdapter(
-                pairingService = PairingGrpcService(pairing),
                 streamService = StreamGrpcService(stream),
-                authInterceptor = AuthInterceptor(pairing),
                 bindAddress = HubServerAdapter.LOOPBACK_ADDRESS,
             )
         hub.start(0)
@@ -97,33 +85,22 @@ class FullE2eTest {
 
     @Test
     fun `the full scenario produces the ordered transcript and byte exact video`() {
-        // Given an open pairing window and a driver bound to the live hub
-        driver =
-            MockPeerDriver(
-                port = port,
-                openWindow = { pairing.openWindow(ttlMs = 120_000).pin },
-                revokeAll = { pairing.listPaired().forEach { pairing.revoke(it.deviceId) } },
-            )
+        // Given a driver bound to the live hub
+        driver = MockPeerDriver(port = port)
 
-        // When the peer pairs, heartbeats and streams 10 audio + 10 video frames
-        val run = driver!!.pairHeartbeatStream(frames = 10)
+        // When the peer opens the unauthenticated stream and sends 10 audio + 10 video frames
+        val run = driver!!.openStream(frames = 10)
         println("[QA] mockpeer full stdout:\n${run.stdout.trim()}")
         assertWithMessage("mockpeer stderr: ${run.stderr}")
             .that(run.exitCode)
             .isEqualTo(0)
 
-        // Then its RAW stdout carries the ordered pair/heartbeat/session lines
-        val lines =
-            run.stdout
-                .lines()
-                .map { it.trim() }
-                .filter { it.isNotEmpty() }
-        assertThat(lines).containsAtLeast("pair-ok", "heartbeat-ok").inOrder()
+        // Then its RAW stdout carries the ordered bootstrap/session lines
+        assertThat(run.stdout).contains("stream-open-ok")
         assertThat(run.stdout).contains("session-ok frames=")
         assertThat(driver!!.fullLines(run))
             .containsExactly(
-                "pair-ok",
-                "heartbeat-ok",
+                "stream-open-ok",
                 "session-ok frames=20",
             ).inOrder()
 
@@ -141,75 +118,25 @@ class FullE2eTest {
         }
         assertThat(bytesMatch).isTrue()
 
-        // And the audio really reached STT and produced transcripts on the wire
-        assertThat(stt.audioFrameCount).isAtLeast(10)
+        // And the audio really reached speech and produced results on the wire
+        assertThat(speech.audioFrameCount).isAtLeast(10)
         assertThat(run.stdout).contains("transcripts=")
 
-        // When the paired device is revoked and the SAME token is replayed
-        val revoked = driver!!.revokedLeg()
-
-        // Then the hub refuses it with the machine-checkable rejection
-        println("[QA] mockpeer revoked stdout: ${revoked.stdout.trim()} (exit=${revoked.exitCode})")
-        assertThat(revoked.exitCode).isNotEqualTo(0)
-        assertThat(revoked.stdout).contains("UNAUTHENTICATED")
-        val revokedOk = revoked.exitCode != 0 && revoked.stdout.contains("UNAUTHENTICATED")
-
-        // And the ordered evidence transcript is emitted exactly once
+        // And the ordered evidence transcript is emitted
         val transcript =
             MockPeerTranscript.lines(
-                pairOk = true,
-                heartbeatOk = true,
+                streamOpenOk = true,
                 frames = 20,
                 videoBytesMatch = bytesMatch,
-                revokedUnauthenticated = revokedOk,
             )
         println("[QA] service evidence transcript: $transcript")
         MockPeerTranscript.write(evidencePath(), "service-full-e2e (jvm harness)", transcript)
         assertThat(transcript)
             .containsExactly(
-                "pair-ok",
-                "heartbeat-ok",
+                "stream-open-ok",
                 "session-ok frames=20",
                 "video-bytes-match",
-                "revoked->UNAUTHENTICATED",
             ).inOrder()
-    }
-
-    @Test
-    fun `a wrong pin still fails pairing with a reason and a non zero exit`() {
-        // Given an open window whose PIN is NOT 000000
-        val window = pairing.openWindow(ttlMs = 120_000)
-        assertThat(window.pin).isNotEqualTo("000000")
-        val driver =
-            MockPeerDriver(
-                port = port,
-                openWindow = { window.pin },
-                revokeAll = {},
-            )
-        this.driver = driver
-
-        // When the peer pairs with the wrong PIN
-        val run =
-            run(
-                listOf(goBinary(), "run", "./tools/mockpeer") +
-                    listOf(
-                        "--addr",
-                        "127.0.0.1:$port",
-                        "--pin",
-                        "000000",
-                        "--scenario",
-                        "pair",
-                        "--timeout",
-                        "30",
-                    ),
-                repoRoot(),
-            )
-        run.process?.let { driver.registerForReaping(it) }
-
-        // Then the hub rejects with a machine-checkable reason, never a success
-        println("[QA] mockpeer wrong-pin stdout: ${run.stdout.trim()} (exit=${run.exitCode})")
-        assertThat(run.exitCode).isNotEqualTo(0)
-        assertThat(run.stdout).contains("pair-rejected reason=")
     }
 
     private fun evidencePath(): String = File(repoRoot(), EVIDENCE_RELATIVE).absolutePath

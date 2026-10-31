@@ -3,23 +3,18 @@ package com.glassstorm.phonemanager.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.glassstorm.phonemanager.battery.BatteryExemption
-import com.glassstorm.phonemanager.core.domain.adapter.config.AppConfig
 import com.glassstorm.phonemanager.core.domain.adapter.network.HotspotController
-import com.glassstorm.phonemanager.core.domain.adapter.repository.DeviceRepository
 import com.glassstorm.phonemanager.core.domain.adapter.transport.HubServer
 import com.glassstorm.phonemanager.core.domain.network.HotspotFailure
 import com.glassstorm.phonemanager.core.domain.network.HotspotUnavailableException
-import com.glassstorm.phonemanager.core.domain.service.PairingService
 import com.glassstorm.phonemanager.core.domain.service.StreamService
-import com.glassstorm.phonemanager.core.model.Device
 import com.glassstorm.phonemanager.core.model.HotspotInfo
-import com.glassstorm.phonemanager.core.model.HotspotMode
-import com.glassstorm.phonemanager.core.model.PairOutcome
-import com.glassstorm.phonemanager.core.model.Pairing
+import com.glassstorm.phonemanager.core.model.LivePeer
+import com.glassstorm.phonemanager.core.model.PeerRole
+import com.glassstorm.phonemanager.core.model.RelayOutput
 import com.glassstorm.phonemanager.core.model.RelayResult
 import com.glassstorm.phonemanager.core.model.RelaySession
 import com.glassstorm.phonemanager.core.model.RelayStats
-import com.glassstorm.phonemanager.core.model.SttEngine
 import com.glassstorm.phonemanager.hub.HubStarter
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -38,11 +33,12 @@ import kotlinx.coroutines.flow.emptyFlow
 class FakeHubServer(
     private val boundPortValue: Int = 40404,
     private val failOnRead: Boolean = false,
+    initiallyRunning: Boolean = false,
 ) : HubServer {
     var startCalls: Int = 0
         private set
 
-    private var running: Boolean = false
+    private var running: Boolean = initiallyRunning
 
     override fun start(port: Int) {
         startCalls += 1
@@ -79,20 +75,30 @@ class FakeHotspotController(
         ),
     private val failWith: HotspotFailure? = null,
     private val failOnDetect: Boolean = false,
+    private val manualTetherInfo: HotspotInfo? = null,
+    initiallyActive: Boolean = false,
+    private val startDelayMs: Long = 0L,
+    private val stopDelayMs: Long = 0L,
 ) : HotspotController {
-    private var active: Boolean = false
+    private var active: Boolean = initiallyActive
 
     var startCalls: Int = 0
         private set
 
+    var stopCalls: Int = 0
+        private set
+
     override fun startHotspot(): HotspotInfo {
         startCalls += 1
+        if (startDelayMs > 0L) Thread.sleep(startDelayMs)
         failWith?.let { throw HotspotUnavailableException(it) }
         active = true
         return info
     }
 
     override fun stopHotspot() {
+        stopCalls += 1
+        if (stopDelayMs > 0L) Thread.sleep(stopDelayMs)
         active = false
     }
 
@@ -100,82 +106,7 @@ class FakeHotspotController(
 
     override fun detectManualTether(): HotspotInfo? {
         if (failOnDetect) throw IllegalStateException("hotspot unavailable")
-        return if (active) info else null
-    }
-}
-
-/**
- * [PairingService] fake with the same one-window-at-a-time semantics as the real
- * service: [openWindow] REPLACES the previous window and returns the next PIN in
- * [pinSequence], so a UI that rendered a stale PIN would fail the two-open test.
- */
-class FakePairingService(
-    private val pinSequence: List<String> = listOf("428193", "999999"),
-    private val clock: () -> Long = { 1_000_000L },
-    seed: List<Device> = emptyList(),
-    private val failOnList: Boolean = false,
-) : PairingService {
-    private val rows: MutableMap<String, Device> = linkedMapOf()
-
-    private var window: Pairing? = null
-
-    var openCalls: Int = 0
-        private set
-
-    init {
-        seed.forEach { rows[it.deviceId] = it }
-    }
-
-    fun seedDevice(
-        deviceId: String,
-        deviceName: String,
-        role: String = "GLASS",
-    ) {
-        rows[deviceId] =
-            Device(
-                deviceId = deviceId,
-                deviceName = deviceName,
-                role = role,
-                tokenHash = "hash-$deviceId",
-                pairedAtMs = clock(),
-                lastSeenMs = null,
-            )
-    }
-
-    override fun openWindow(ttlMs: Long): Pairing {
-        val index = openCalls.coerceAtMost(pinSequence.lastIndex)
-        openCalls += 1
-        val fresh =
-            Pairing(
-                pin = pinSequence[index],
-                expiresAtMs = clock() + ttlMs,
-            )
-        window = fresh
-        return fresh
-    }
-
-    override fun stopWindow() {
-        window = null
-    }
-
-    override fun pair(
-        pin: String,
-        deviceName: String,
-        role: String,
-    ): PairOutcome = PairOutcome.Rejected(reason = PairOutcome.REASON_PIN_INVALID)
-
-    override fun touchLastSeen(
-        deviceId: String,
-        seenAtMs: Long,
-    ) = Unit
-
-    override fun revoke(deviceId: String) {
-        rows.remove(deviceId)
-    }
-
-    override fun listPaired(): List<Device> {
-        if (failOnList) throw IllegalStateException("pairing store unavailable")
-        return rows.values.toList()
+        return manualTetherInfo ?: if (active) info else null
     }
 }
 
@@ -192,12 +123,20 @@ class FakePairingService(
  * Results are published on a [MutableSharedFlow] with `replay = 1`: the fake's
  * `results` is collected by the ViewModel while the session is live, and the
  * latest utterance is what the screen renders with its speaker label.
+ *
+ * The process-wide diagnostics flow has NO replay by default, matching
+ * production: a fresh ViewModel must not be seeded by an output emitted before it
+ * attached. A test that models a relay which DOES replay its latest output (the
+ * display race where a replayed result arrives before the first poll) opts in with
+ * [outputReplay] = 1 and publishes with [emitTranscript] before construction.
  */
 class FakeStreamService(
     private val sessionIds: List<String> = listOf("s-1", "s-2", "s-3"),
     private val failStats: Boolean = false,
+    outputReplay: Int = 0,
 ) : StreamService {
-    private val resultsFlow = MutableSharedFlow<RelayResult>(replay = 1)
+    private val resultsFlow = MutableSharedFlow<RelayOutput>(replay = 1)
+    private val outputsFlow = MutableSharedFlow<RelayOutput>(replay = outputReplay, extraBufferCapacity = 64)
 
     private var statsValue =
         RelayStats(
@@ -211,6 +150,10 @@ class FakeStreamService(
     private var openCalls: Int = 0
     private var closed: MutableList<String> = mutableListOf()
 
+    /** The peers the fake reports as attached to live sessions. */
+    var livePeersValue: List<LivePeer> = emptyList()
+        private set
+
     /** How many sessions the fake currently believes are live. */
     var liveSessions: Int = 0
         private set
@@ -219,12 +162,24 @@ class FakeStreamService(
 
     fun closedIds(): List<String> = closed.toList()
 
+    /** Replaces the peers [livePeers] returns, as if a peer had just connected. */
+    fun reportLivePeers(peers: List<LivePeer>) {
+        livePeersValue = peers
+    }
+
+    /** Publish one relay output on the shared diagnostics flow. */
+    fun emitOutput(output: RelayOutput) {
+        outputsFlow.tryEmit(output)
+    }
+
     /** Replaces the snapshot [stats] returns, as if the peer had pushed more media. */
     fun reportStats(
         audioFrames: Long,
         videoFrames: Long,
         videoDropped: Long,
         transcripts: Long,
+        imageFrames: Long = 0L,
+        gestures: Long = 0L,
     ) {
         statsValue =
             RelayStats(
@@ -233,17 +188,19 @@ class FakeStreamService(
                 videoDropped = videoDropped,
                 transcripts = transcripts,
                 liveSessions = liveSessions,
+                imageFrames = imageFrames,
+                gestures = gestures,
             )
     }
 
-    /** Publish a recognized utterance, as the STT engine would mid-stream. */
+    /** Publish a recognized utterance, as the speech engine would mid-stream. */
     fun emitTranscript(
         text: String,
         speakerLabel: String = "Speaker 1",
     ) {
-        resultsFlow.tryEmit(
-            RelayResult(text = text, speakerLabel = speakerLabel, ptsMs = 0L),
-        )
+        val output = RelayOutput.Speech(RelayResult(text = text, speakerLabel = speakerLabel, ptsMs = 0L))
+        resultsFlow.tryEmit(output)
+        outputsFlow.tryEmit(output)
     }
 
     override fun openSession(deviceId: String): RelaySession {
@@ -252,6 +209,11 @@ class FakeStreamService(
         liveSessions += 1
         return RelaySession(sessionId = sessionIds[index], deviceId = deviceId)
     }
+
+    override fun bindRole(
+        sessionId: String,
+        role: PeerRole,
+    ) = Unit
 
     override suspend fun pushAudio(
         sessionId: String,
@@ -264,7 +226,24 @@ class FakeStreamService(
         h264Nal: ByteArray,
     ) = Unit
 
-    override fun results(sessionId: String): Flow<RelayResult> = if (liveSessions > 0) resultsFlow else emptyFlow()
+    override suspend fun pushImage(
+        sessionId: String,
+        jpeg: ByteArray,
+        ptsMs: Long,
+    ) = Unit
+
+    override suspend fun pushEnroll(
+        sessionId: String,
+        name: String,
+        pcm16: ByteArray,
+        ptsMs: Long,
+    ) = Unit
+
+    override fun results(sessionId: String): Flow<RelayOutput> = if (liveSessions > 0) resultsFlow else emptyFlow()
+
+    override fun outputs(): Flow<RelayOutput> = outputsFlow
+
+    override fun livePeers(): List<LivePeer> = livePeersValue
 
     override suspend fun closeSession(sessionId: String) {
         closed.add(sessionId)
@@ -274,130 +253,6 @@ class FakeStreamService(
     override fun stats(): RelayStats {
         if (failStats) throw IllegalStateException("relay unavailable")
         return statsValue.copy(liveSessions = liveSessions)
-    }
-}
-
-/**
- * [DeviceRepository] fake for the Devices screen, implementing the DOMAIN port.
- *
- * [failOnList] lets a test drive the "repository unavailable" path: the screen
- * must degrade to an unavailable state rather than crash when the store throws.
- * Deletes are tracked in [deletedIds] so a revoke can be proven independently of
- * the list mutation it causes.
- */
-class FakeDeviceRepository(
-    seed: List<Device> = emptyList(),
-    private val failOnList: Boolean = false,
-) : DeviceRepository {
-    private val rows: MutableMap<String, Device> = linkedMapOf()
-
-    val deletedIds: MutableList<String> = mutableListOf()
-
-    init {
-        seed.forEach { rows[it.deviceId] = it }
-    }
-
-    fun seedDevice(
-        deviceId: String,
-        deviceName: String,
-        role: String = "GLASS",
-        lastSeenMs: Long? = null,
-    ) {
-        rows[deviceId] =
-            Device(
-                deviceId = deviceId,
-                deviceName = deviceName,
-                role = role,
-                tokenHash = "hash-$deviceId",
-                pairedAtMs = 1_000L,
-                lastSeenMs = lastSeenMs,
-            )
-    }
-
-    override fun upsert(device: Device) {
-        rows[device.deviceId] = device
-    }
-
-    override fun get(deviceId: String): Device? = rows[deviceId]
-
-    override fun getByTokenHash(tokenHash: String): Device? = rows.values.firstOrNull { it.tokenHash == tokenHash }
-
-    override fun list(): List<Device> {
-        if (failOnList) throw IllegalStateException("device store unavailable")
-        return rows.values.toList()
-    }
-
-    override fun touch(
-        deviceId: String,
-        seenAtMs: Long,
-    ) {
-        rows[deviceId]?.let { rows[deviceId] = it.copy(lastSeenMs = seenAtMs) }
-    }
-
-    override fun delete(deviceId: String) {
-        deletedIds.add(deviceId)
-        rows.remove(deviceId)
-    }
-}
-
-/**
- * [AppConfig] fake implementing the DOMAIN port only.
- *
- * [storedKey] is what a real store would hold; the screen must never render it in
- * cleartext by default, so the value is a recognizable sentinel the test can search
- * for in the semantics tree.
- */
-class FakeAppConfig(
-    storedKey: String = "",
-    engine: SttEngine = SttEngine.MOCK,
-    regionValue: String = AppConfig.DEFAULT_REGION,
-    mode: HotspotMode = HotspotMode.MANUAL,
-    private val failReads: Boolean = false,
-) : AppConfig {
-    private var keyValue: String = storedKey
-    private var engineValue: SttEngine = engine
-    private var regionValue: String = regionValue
-    private var modeValue: HotspotMode = mode
-
-    var setSttAdapterCalls: Int = 0
-        private set
-
-    var setRegionCalls: Int = 0
-        private set
-
-    var setHotspotModeCalls: Int = 0
-        private set
-
-    override fun sttEngine(): SttEngine {
-        if (failReads) throw IllegalStateException("config store unavailable")
-        return engineValue
-    }
-
-    override fun setSttEngine(kind: SttEngine) {
-        setSttAdapterCalls += 1
-        engineValue = kind
-    }
-
-    override fun apiKey(): String = keyValue
-
-    override fun setApiKey(apiKey: String?) {
-        keyValue = apiKey?.trim().orEmpty()
-    }
-
-    override fun region(): String = regionValue
-
-    override fun setRegion(region: String?) {
-        setRegionCalls += 1
-        region?.trim()?.lowercase()?.takeIf { it.isNotEmpty() }?.let {
-            if (it in setOf("global", "eu", "us", "au")) regionValue = it
-        }
-    }
-
-    override fun hotspotMode(): HotspotMode = modeValue
-
-    override fun setHotspotMode(mode: HotspotMode) {
-        setHotspotModeCalls += 1
-        modeValue = mode
     }
 }
 

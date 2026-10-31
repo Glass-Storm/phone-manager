@@ -3,7 +3,7 @@ package com.glassstorm.phonemanager.adapter.android.di
 import android.content.Context
 import com.glassstorm.phonemanager.adapter.android.config.RuntimeConfigStore
 import com.glassstorm.phonemanager.adapter.android.network.nsd.NsdDiscoveryAdapter
-import com.glassstorm.phonemanager.adapter.android.network.wifi.LocalOnlyHotspotAdapter
+import com.glassstorm.phonemanager.adapter.android.network.wifi.ManualTetherHotspotAdapter
 import com.glassstorm.phonemanager.adapter.android.repository.sqlite.SqliteDeviceRepository
 import com.glassstorm.phonemanager.core.domain.adapter.config.AppConfig
 import com.glassstorm.phonemanager.core.domain.adapter.network.Discovery
@@ -25,7 +25,7 @@ import javax.inject.Singleton
  *
  * All bindings are `@Singleton` to match the registry's one-instance-per-port
  * semantics: one SQLite handle, one hotspot reservation owner, one NSD advertiser,
- * and one config store the settings screen and the STT factory both read.
+ * and one config store the settings screen reads.
  *
  * ## Deliberately absent
  *
@@ -42,7 +42,7 @@ object AndroidAdapterModule {
         @ApplicationContext context: Context,
     ): DeviceRepository = SqliteDeviceRepository(context)
 
-    /** App-private runtime configuration (STT engine, API key, region, hotspot mode). */
+    /** App-private runtime configuration (the hotspot mode). */
     @Provides
     @Singleton
     fun provideAppConfig(
@@ -50,15 +50,15 @@ object AndroidAdapterModule {
     ): AppConfig = RuntimeConfigStore(context)
 
     /**
-     * The access-point controller. The gateway fallback in discovery is a
-     * settings-owned value left unconfigured (`null`): the hub's own use of the
-     * port is advertising, which needs no fallback.
+     * The access-point controller.
+     *
+     * The hub adopts the user's manually-enabled Mobile Hotspot and never creates
+     * one, so this adapter only discovers the tether interface; it takes no
+     * Android [Context] and holds no platform reservation.
      */
     @Provides
     @Singleton
-    fun provideHotspotController(
-        @ApplicationContext context: Context,
-    ): HotspotController = LocalOnlyHotspotAdapter(context)
+    fun provideHotspotController(): HotspotController = ManualTetherHotspotAdapter()
 
     /** DNS-SD advertiser over NsdManager; the mDNS-miss gateway fallback is unset. */
     @Provides

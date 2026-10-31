@@ -1,18 +1,15 @@
 package com.glassstorm.phonemanager.transport.grpc
 
 import com.glassstorm.phonemanager.core.domain.service.StreamService
-import com.glassstorm.phonemanager.core.service.PairingServiceImpl
+import com.glassstorm.phonemanager.core.model.RelayOutput
 import com.glassstorm.phonemanager.core.service.StreamServiceImpl
-import com.glassstorm.phonemanager.transport.grpc.security.AuthInterceptor
 import com.google.common.truth.Truth.assertThat
 import com.google.protobuf.ByteString
 import ecosys.v1.DeviceRole
-import ecosys.v1.PairRequest
-import ecosys.v1.PairingServiceGrpcKt
 import ecosys.v1.StreamFrame
+import ecosys.v1.StreamOpenRequest
 import ecosys.v1.StreamServiceGrpcKt
 import io.grpc.ManagedChannel
-import io.grpc.Metadata
 import io.grpc.Server
 import io.grpc.inprocess.InProcessChannelBuilder
 import io.grpc.inprocess.InProcessServerBuilder
@@ -37,7 +34,7 @@ import java.util.concurrent.TimeUnit
 
 /**
  * Relay hardening suite: bounded queues, drop-oldest video, park-based audio,
- * drain-on-close, and exactly-once STT teardown.
+ * drain-on-close, and exactly-once speech teardown.
  *
  * The queue-policy cases drive a [StreamServiceImpl] whose `scope` is a
  * `StandardTestDispatcher` the test controls, so the drop/backpressure outcomes are
@@ -50,21 +47,23 @@ class StreamRelayTest {
     @get:Rule
     val deadline: Timeout = Timeout.seconds(60)
 
-    private val authKey: Metadata.Key<String> =
-        Metadata.Key.of("authorization", Metadata.ASCII_STRING_MARSHALLER)
-
     // -------------------------------------------------------- queue policy cases
 
     @Test
-    fun `twenty audio frames all reach the stt port and emit transcripts`() =
+    fun `twenty audio frames all reach the speech port and emit transcripts`() =
         runTest {
             // Given a relay with a controlled scope and 20 queued audio frames
             val wired = wiredPorts()
             val scope = testScope(testScheduler)
-            val stream = StreamServiceImpl.forTesting(wired.stt, wired.sink, scope = scope)
+            val stream = wired.newStream(scope)
             val session = stream.openSession("device-audio")
             val seen = mutableListOf<String>()
-            val collector = launch { stream.results(session.sessionId).collect { seen += it.text } }
+            val collector =
+                launch {
+                    stream.results(session.sessionId).collect { output ->
+                        seen += (output as RelayOutput.Speech).result.text
+                    }
+                }
 
             // When they are pushed and the pumps run
             repeat(20) { stream.pushAudio(session.sessionId, pcm(it), StreamService.AUDIO_SAMPLE_RATE_HZ) }
@@ -88,7 +87,7 @@ class StreamRelayTest {
             // Given 20 distinct opaque H.264 NALs
             val wired = wiredPorts()
             val scope = testScope(testScheduler)
-            val stream = StreamServiceImpl.forTesting(wired.stt, wired.sink, scope = scope)
+            val stream = wired.newStream(scope)
             val session = stream.openSession("device-video")
             val inputs = (0 until 20).map { nal(it) }
 
@@ -116,14 +115,7 @@ class StreamRelayTest {
             // Given a relay with a tiny video buffer and a PAUSED scope (no consumer yet)
             val wired = wiredPorts()
             val scope = testScope(testScheduler)
-            val stream =
-                StreamServiceImpl.forTesting(
-                    sttPort = wired.stt,
-                    frameSink = wired.sink,
-                    audioCapacity = 64,
-                    videoCapacity = 4,
-                    scope = scope,
-                )
+            val stream = wired.newStream(scope, audioCapacity = 64, videoCapacity = 4)
             val session = stream.openSession("device-pressure")
 
             // When 5 audio frames and 20 video NALs are pushed before any pump runs
@@ -158,20 +150,20 @@ class StreamRelayTest {
             // Given frames enqueued while the pumps are not yet scheduled
             val wired = wiredPorts()
             val scope = testScope(testScheduler)
-            val stream = StreamServiceImpl.forTesting(wired.stt, wired.sink, scope = scope)
+            val stream = wired.newStream(scope)
             val session = stream.openSession("device-drain")
             repeat(8) { stream.pushAudio(session.sessionId, pcm(it), StreamService.AUDIO_SAMPLE_RATE_HZ) }
             repeat(8) { stream.pushVideo(session.sessionId, nal(it)) }
 
             // Then nothing has been consumed yet (proves the frames really were queued)
-            assertThat(wired.stt.audioFrameCount).isEqualTo(0)
+            assertThat(wired.speech.audioFrameCount).isEqualTo(0)
             assertThat(wired.sink.videoNals).isEmpty()
 
             // When the session is closed
             stream.closeSession(session.sessionId)
 
             // Then the queued frames were DRAINED (not discarded) before close returned
-            assertThat(wired.stt.audioFrameCount).isEqualTo(8)
+            assertThat(wired.speech.audioFrameCount).isEqualTo(8)
             assertThat(wired.sink.videoNals).hasSize(8)
             assertThat(stream.stats().audioFrames).isEqualTo(8L)
             scope.cancel()
@@ -180,12 +172,12 @@ class StreamRelayTest {
     // ------------------------------------------------------- teardown / no-op cases
 
     @Test
-    fun `closing twice is a no-op and the stt session is released exactly once`() =
+    fun `closing twice is a no-op and the speech session is released exactly once`() =
         runTest {
             // Given an open session
             val wired = wiredPorts()
             val scope = testScope(testScheduler)
-            val stream = StreamServiceImpl.forTesting(wired.stt, wired.sink, scope = scope)
+            val stream = wired.newStream(scope)
             val session = stream.openSession("device-close")
 
             // When it is closed twice
@@ -193,8 +185,8 @@ class StreamRelayTest {
             stream.closeSession(session.sessionId)
             advanceUntilIdle()
 
-            // Then the STT port was released exactly once and the session is gone
-            assertThat(wired.stt.closedSessions).containsExactly(session.sessionId)
+            // Then the speech port was released exactly once and the session is gone
+            assertThat(wired.speech.closedSessions).containsExactly(session.sessionId)
             assertThat(stream.stats().liveSessions).isEqualTo(0)
             scope.cancel()
         }
@@ -204,7 +196,7 @@ class StreamRelayTest {
         runTest {
             // Given a relay with no sessions
             val wired = wiredPorts()
-            val stream = StreamServiceImpl(wired.stt, wired.sink)
+            val stream = relayStream(speech = wired.speech, sink = wired.sink)
             val before = stream.stats()
 
             // When audio and video are pushed against an unknown id
@@ -224,38 +216,41 @@ class StreamRelayTest {
     fun `mid stream disconnect closes the session and leaves no live work`() {
         // Given a real in-process gRPC surface whose relay runs on an inspectable scope
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-        val repo = FakeDeviceRepository()
-        val stt = FakeSttPort("relay utterance")
+        val speech = FakeSpeechPort("relay utterance")
         val sink = FakeFrameSink()
-        val pairing = PairingServiceImpl.withClock(repo, clock = { System.currentTimeMillis() })
-        val stream = StreamServiceImpl.forTesting(stt, sink, scope = scope)
+        val stream =
+            StreamServiceImpl.forTesting(
+                speechPort = speech,
+                gesturePort = FakeGesturePort(),
+                ttsPort = FakeTtsPort(),
+                enrollmentStore = FakeEnrollmentStore(),
+                frameSink = sink,
+                scope = scope,
+            )
 
         val name = InProcessServerBuilder.generateName()
         val server: Server =
             InProcessServerBuilder
                 .forName(name)
                 .directExecutor()
-                .addService(PairingGrpcService(pairing))
                 .addService(StreamGrpcService(stream))
-                .intercept(AuthInterceptor(pairing))
                 .build()
                 .start()
         val channel: ManagedChannel = InProcessChannelBuilder.forName(name).directExecutor().build()
 
         try {
-            val token = runBlocking { pair(channel, pairing) }
-
-            // When the peer ends the stream early (two frames, then completion)
+            // When the peer bootstraps, ends the stream early (two frames, then
+            // completion), carrying NO token
             runBlocking {
                 StreamServiceGrpcKt
                     .StreamServiceCoroutineStub(channel)
-                    .openStream(flowOf(audioFrame(1), audioFrame(2)), bearer(token))
+                    .openStream(flowOf(streamOpenFrame(), audioFrame(1), audioFrame(2)))
                     .toList()
             }
 
             // Then the session was torn down exactly once and no scope child is left active
             assertThat(stream.stats().liveSessions).isEqualTo(0)
-            assertThat(stt.closedSessions).hasSize(1)
+            assertThat(speech.closedSessions).hasSize(1)
             val live =
                 scope.coroutineContext[Job]!!
                     .children
@@ -274,11 +269,27 @@ class StreamRelayTest {
     // ---------------------------------------------------------------------- helpers
 
     private class WiredPorts(
-        val stt: FakeSttPort,
+        val speech: FakeSpeechPort,
         val sink: FakeFrameSink,
-    )
+    ) {
+        fun newStream(
+            scope: CoroutineScope,
+            audioCapacity: Int = StreamServiceImpl.DEFAULT_AUDIO_CAPACITY,
+            videoCapacity: Int = StreamServiceImpl.DEFAULT_VIDEO_CAPACITY,
+        ): StreamServiceImpl =
+            StreamServiceImpl.forTesting(
+                speechPort = speech,
+                gesturePort = FakeGesturePort(),
+                ttsPort = FakeTtsPort(),
+                enrollmentStore = FakeEnrollmentStore(),
+                frameSink = sink,
+                audioCapacity = audioCapacity,
+                videoCapacity = videoCapacity,
+                scope = scope,
+            )
+    }
 
-    private fun wiredPorts(): WiredPorts = WiredPorts(FakeSttPort("relay utterance"), FakeFrameSink())
+    private fun wiredPorts(): WiredPorts = WiredPorts(FakeSpeechPort("relay utterance"), FakeFrameSink())
 
     private fun testScope(scheduler: TestCoroutineScheduler): CoroutineScope = CoroutineScope(StandardTestDispatcher(scheduler))
 
@@ -293,22 +304,14 @@ class StreamRelayTest {
             .setAudioPcm1616K(ByteString.copyFrom(pcm(index)))
             .build()
 
-    private fun bearer(token: String): Metadata = Metadata().apply { put(authKey, "Bearer $token") }
-
-    private suspend fun pair(
-        channel: ManagedChannel,
-        pairing: PairingServiceImpl,
-    ): String {
-        val window = pairing.openWindow(ttlMs = 60_000)
-        val request =
-            PairRequest
-                .newBuilder()
-                .setPin(window.pin)
-                .setDeviceName("relay-peer")
-                .setRole(DeviceRole.DEVICE_ROLE_GLASS)
-                .build()
-        val paired = PairingServiceGrpcKt.PairingServiceCoroutineStub(channel).pair(request)
-        check(paired.ok) { "test setup failed to pair: ${paired.rejectReason}" }
-        return paired.token
-    }
+    private fun streamOpenFrame(): StreamFrame =
+        StreamFrame
+            .newBuilder()
+            .setStreamOpen(
+                StreamOpenRequest
+                    .newBuilder()
+                    .setDeviceId("relay-peer")
+                    .setRole(DeviceRole.DEVICE_ROLE_GLASS)
+                    .build(),
+            ).build()
 }

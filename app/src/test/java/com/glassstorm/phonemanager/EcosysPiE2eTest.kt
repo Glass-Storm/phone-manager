@@ -2,29 +2,18 @@ package com.glassstorm.phonemanager
 
 import android.app.Application
 import androidx.test.core.app.ApplicationProvider
-import com.glassstorm.phonemanager.adapter.jvm.speech.SttFactory
 import com.glassstorm.phonemanager.core.domain.adapter.relay.FrameSink
 import com.glassstorm.phonemanager.core.domain.adapter.transport.HubServer
-import com.glassstorm.phonemanager.core.service.PairingServiceImpl
+import com.glassstorm.phonemanager.core.model.AudioFormat
+import com.glassstorm.phonemanager.core.model.GestureMeaningTable
+import com.glassstorm.phonemanager.core.model.PeerRole
 import com.glassstorm.phonemanager.core.service.StreamServiceImpl
-import com.glassstorm.phonemanager.core.service.security.TokenCodec
 import com.glassstorm.phonemanager.transport.grpc.HubServerAdapter
-import com.glassstorm.phonemanager.transport.grpc.PairingGrpcService
 import com.glassstorm.phonemanager.transport.grpc.StreamGrpcService
-import com.glassstorm.phonemanager.transport.grpc.security.AuthInterceptor
+import com.glassstorm.phonemanager.transport.grpc.peer.HubPeerClient
+import com.glassstorm.phonemanager.transport.grpc.peer.PeerEvent
 import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
-import io.grpc.CallOptions
-import io.grpc.ClientInterceptors
-import io.grpc.ManagedChannel
-import io.grpc.Metadata
-import io.grpc.MethodDescriptor
-import io.grpc.Status
-import io.grpc.StatusRuntimeException
-import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder
-import io.grpc.stub.ClientCalls
-import io.grpc.stub.MetadataUtils
-import org.json.JSONObject
 import org.junit.After
 import org.junit.Assume.assumeTrue
 import org.junit.Before
@@ -36,380 +25,205 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import java.io.File
 import java.nio.file.Files
-import java.util.Collections
-import java.util.concurrent.TimeUnit
 
 /**
- * T14 harness: the REAL Python `ecosys_pi` CLI driven against the REAL hub.
+ * T23: the CROSS-REPO end-to-end harness.
  *
- * This is the only automated proof that the out-of-scope Pi client pairs,
- * heartbeats and streams against the ACTUAL hub: there is no emulator on this
- * host and the pairing window is not an RPC, so the composition mirrors the
- * Robolectric `:app` E2E harness exactly —
+ * It drives the REAL Python `ecosys_pi` CLI (the necklace) against the REAL hub
+ * (Robolectric-hosted, wired from the `:app` graph whose `DeviceAiModule` binds the
+ * deterministic `:adapter:jvm` fakes), over a REAL loopback socket with NO token.
+ * A second, in-process `ecosys.v1` peer — [HubPeerClient], supplied by
+ * `:transport:grpc`'s test fixtures — plays the glasses and, later, the
+ * subtitle sender/receiver.
  *
- *  * the graph comes from the real [PhoneManagerApplication] component
- *    (SQLite repository, real `SttFactory` -> `MockSttAdapter`, real
- *    `PairingServiceImpl`), with [PairingServiceImpl.withClock] NOT needed
- *    because the app component already supplies the real service;
- *  * the listener is the production [HubServerAdapter] bound to
- *    [HubServerAdapter.LOOPBACK_ADDRESS] on an ephemeral port (the wildcard
- *    production bind is forbidden in tests);
- *  * the [FrameSink] is a RECORDING sink (video is dropped in production, so the
- *    observable double is the only way to see the relayed bytes).
+ * ## Two loops are asserted
  *
- * The CHILD is the frozen CLI (`uv run python -m ecosys_pi`) launched from the Pi
- * repo root, non-interactively with `--pin` (ONE Pair attempt, no re-prompt). Its
- * stdout is a frozen contract: `pair-ok device=<id>`, `heartbeat-ok`,
- * `transcript <text>`, `pair-rejected reason=<r>`, `re-pair-requested`,
- * `error: <detail>`; exit 0 success / 2 hub refusal / 1 other.
+ *  * **Gesture loop**: the necklace (Pi) sends `image` (JPEG) frames. The hub
+ *    decodes each still inside the gesture adapter and fans the result out by
+ *    role: a `gesture` frame (with a non-empty spoken meaning) to the GLASSES
+ *    session, and a `tts_audio` frame back to the NECKLACE session. The glasses
+ *    half is observed through [HubPeerClient]; the necklace half through a tiny
+ *    `aplay` shim on the Pi's `PATH`, which captures the PCM the hub told the
+ *    necklace to play (the CLI plays hub-synthesized audio, it does not
+ *    synthesize its own).
+ *  * **Subtitle loop**: the glasses session sends `audio_pcm16_16k`; the hub
+ *    transcribes it and returns a `StreamResult` on the SAME session. The default
+ *    speech fake never invents a speaker, so an unregistered speaker yields the
+ *    EMPTY `speaker_label`.
  *
- * ## Determinism
+ * ## Deliberate posture
  *
- * There is no mic, so the CLI's audio source falls back to `SyntheticAudioSource`
- * whose frames are BYTE-IDENTICAL to the hub's Go/mockpeer generator; the hub's
- * `MockSttAdapter` answers each 640-byte chunk with its content hash, so the
- * transcript per frame index is a constant (see [EcosysPi.EXPECTED_TRANSCRIPTS]).
+ * No device, no camera, no `nmcli`, no real AI models, no network/hotspot: the
+ * Pi is pointed at `127.0.0.1` with its synthetic JPEG source and a recording
+ * playback backend, and the hub's engines are the deterministic JVM fakes.
  *
- * ## Gate
+ * ## Skip-vs-fail
  *
- * If this host lacks the Pi repo / `uv` / Python 3.11+ the whole class SKIPS
- * loudly with a named reason ([ecosysPiUnavailableReason]) — never a silent pass,
- * and never a failure of the hub suite. This class is run ONLY by the dedicated
- * `:app:ecosysPiE2e` task; [`testDebugUnitTest`] excludes it.
+ * The ONLY permitted skip is a host without the Pi repo / `uv` / CPython 3.11+
+ * ([ecosysPiUnavailableReason] names the reason and `Assume` skips LOUDLY). Every
+ * other prerequisite — the hub graph, a bindable loopback port, the Pi CLI
+ * exiting 0 — FAILS the test. The dedicated `:app:ecosysPiE2e` task runs only
+ * this class; `test`, `testDebugUnitTest` and `e2e` exclude it, so the plain hub
+ * suite stays green on a host without the Pi repo.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [29])
 class EcosysPiE2eTest {
     @get:Rule
-    val deadline: Timeout = Timeout.seconds(600)
+    val deadline: Timeout = Timeout.seconds(300)
 
-    /** Records every opaque video NAL the relay hands over, across pump threads. */
-    private class RecordingFrameSink : FrameSink {
-        private val nals = Collections.synchronizedList(mutableListOf<ByteArray>())
-        val videoNals: List<ByteArray> get() = synchronized(nals) { nals.toList() }
-
+    /** A [FrameSink] that simply discards the opaque NALs; video is not the point here. */
+    private class DiscardingSink : FrameSink {
         override fun acceptVideo(
             sessionId: String,
             h264Nal: ByteArray,
-        ) {
-            nals += h264Nal
-        }
+        ) = Unit
     }
 
-    private lateinit var pairing: PairingServiceImpl
     private lateinit var hub: HubServer
-    private lateinit var sink: RecordingFrameSink
-    private var port: Int = 0
-    private val tempDirs = mutableListOf<File>()
-    private var channel: ManagedChannel? = null
-
-    private val authKey: Metadata.Key<String> =
-        Metadata.Key.of("authorization", Metadata.ASCII_STRING_MARSHALLER)
-
-    /**
-     * A raw protobuf method descriptor, so this `:app` suite names `ecosys.v1`
-     * ONLY as a string (the frozen full-method name) rather than importing the
-     * generated types — the architecture law confines `ecosys.v1.*` imports to
-     * `:transport:grpc` and `:contract`, and `AuthInterceptor`'s own
-     * `PAIR_METHOD` constant is likewise asserted as a string elsewhere.
-     */
-    private val heartbeatMethod: MethodDescriptor<ByteArray, ByteArray> =
-        MethodDescriptor
-            .newBuilder<ByteArray, ByteArray>()
-            .setType(MethodDescriptor.MethodType.UNARY)
-            .setFullMethodName("ecosys.v1.PairingService/Heartbeat")
-            .setRequestMarshaller(BYTES_MARSHALLER)
-            .setResponseMarshaller(BYTES_MARSHALLER)
-            .build()
+    private var glasses: HubPeerClient? = null
+    private lateinit var shimDir: File
+    private lateinit var aplayEvidence: File
 
     @Before
-    fun startAppHub() {
-        val reason = ecosysPiUnavailableReason()
-        if (reason != null) {
-            // Mandated LOUD skip: never a silent pass on a host without uv/the Pi repo.
-            println("[task-14 SKIP] $reason")
-        }
-        assumeTrue(reason ?: "task-14: the Python E2E host gate passed", reason == null)
+    fun startHubAndShimAplay() {
+        // The Pi repo / uv / python gate: skip LOUDLY only when genuinely absent.
+        val unavailable = ecosysPiUnavailableReason()
+        assumeTrue(unavailable, unavailable == null)
 
         val app: Application = ApplicationProvider.getApplicationContext()
         val component = (app as PhoneManagerApplication).component
-        // The app component binds PairingService to ONE @Singleton
-        // PairingServiceImpl, shared with the AuthInterceptor; the concrete type
-        // is what exposes revoke/listPaired for the negative cases.
-        pairing = component.pairingService() as PairingServiceImpl
 
-        sink = RecordingFrameSink()
-        val stt = SttFactory(component.appConfig()).createSttPort()
-        val stream = StreamServiceImpl(stt, sink)
+        // The REAL hub graph, wired from the app component's DeviceAiModule fakes. Only
+        // the listener (loopback, never the 0.0.0.0 production bind) and the
+        // media sink are chosen for the test, exactly as the sibling FullE2eTest
+        // composes them; the engines are the deterministic adapter:jvm fakes.
+        val stream =
+            StreamServiceImpl(
+                speechPort = component.speechPort(),
+                gesturePort = component.gesturePort(),
+                ttsPort = component.ttsPort(),
+                enrollmentStore = component.enrollmentStore(),
+                frameSink = DiscardingSink(),
+            )
         hub =
             HubServerAdapter(
-                pairingService = PairingGrpcService(pairing),
                 streamService = StreamGrpcService(stream),
-                authInterceptor = AuthInterceptor(component.tokenVerifier()),
                 bindAddress = HubServerAdapter.LOOPBACK_ADDRESS,
             )
         hub.start(0)
-        port = hub.boundPort()
-        assertThat(port).isGreaterThan(0)
+        assertThat(hub.boundPort()).isGreaterThan(0)
+
+        // A fake `aplay` on the Pi's PATH captures the PCM the necklace is told to
+        // play, proving the hub-synthesized `tts_audio` reached the necklace. The
+        // shim is authoritative only in the child's environment.
+        shimDir = Files.createTempDirectory("ecosys-aplay").toFile()
+        aplayEvidence = File.createTempFile("ecosys-aplay-evidence", ".pcm")
+        aplayEvidence.delete()
+        val shim = File(shimDir, "aplay")
+        shim.writeText(
+            "#!/bin/sh\n" +
+                "cat > \"\$${EcosysPi.APLAY_EVIDENCE_ENV}\"\n" +
+                "exit 0\n",
+        )
+        shim.setExecutable(true)
     }
 
     @After
-    fun stopAppHub() {
-        channel?.shutdownNow()
-        channel = null
+    fun stopHubAndGlasses() {
+        glasses?.close()
+        glasses = null
         if (this::hub.isInitialized) hub.stop()
-        tempDirs.forEach { dir -> dir.deleteRecursively() }
-        tempDirs.clear()
     }
 
-    // ---------------------------------------------------------------- happy path
-
     @Test
-    fun `the python CLI pairs heartbeats and streams the deterministic mock transcript`() {
-        // Given the hub with an open single-use pairing window
-        val pin = pairing.openWindow(ttlMs = 120_000).pin
-        val xdg = newTempConfigHome()
+    fun `necklace gesture loop and glasses subtitle loop over one fake engined hub`() {
+        val port = hub.boundPort()
+        val hubAddress = "127.0.0.1:$port"
 
-        // When the REAL CLI pairs non-interactively and streams 3 audio frames
+        // Given an in-process GLASSES session bound by its `stream_open` frame,
+        // connected BEFORE the (slow-starting) Pi so the role is bound in time.
+        val glassesClient = HubPeerClient(host = "127.0.0.1", port = port, deviceId = "e2e-glasses", role = PeerRole.GLASS)
+        glassesClient.open()
+        glasses = glassesClient
+
+        // When the REAL necklace CLI streams synthetic JPEG stills at the hub
         val run =
             runEcosysPi(
-                args = cliArgs(pin, frames = EcosysPi.HAPPY_FRAMES),
-                environment = syntheticEnv(xdg),
+                args = listOf("--hub", hubAddress, "--mode", "video", "--frames", NECKLACE_FRAMES.toString()),
+                environment = piEnvironment(hubAddress),
             )
-        printRun("happy", run)
+        println("[QA] ecosys_pi stdout:\n${run.stdout.trim()}")
+        println("[QA] ecosys_pi stderr:\n${run.stderr.trim()}")
 
-        // Then it exits 0 and its RAW stdout carries the frozen contract lines
-        assertWithMessage("CLI stderr: ${run.stderr}")
+        // Then the client ran cleanly with no contract error
+        assertWithMessage("ecosys_pi stderr:\n${run.stderr}")
             .that(run.exitCode)
             .isEqualTo(EcosysPi.EXIT_OK)
+        assertThat(run.stdout).doesNotContain("error:")
 
-        val lines = run.lines()
-        val pairLine = lines.firstOrNull { it.startsWith(EcosysPi.PAIR_OK_PREFIX) }
-        assertWithMessage("no 'pair-ok device=<id>' line in stdout: $lines")
-            .that(pairLine)
+        // ---- Loop 1a: the necklace image reached the GLASSES as a gesture frame.
+        val gesture = glassesClient.await<PeerEvent.Gesture>(GESTURE_TIMEOUT_MS)
+        assertWithMessage("no gesture frame reached the glasses session")
+            .that(gesture)
             .isNotNull()
-        val deviceId = pairLine!!.removePrefix(EcosysPi.PAIR_OK_PREFIX)
-        assertThat(deviceId).matches("[0-9a-f]{32}")
+        val meaning = gesture!!
+        assertWithMessage("the gesture text (spoken meaning) must be non-empty")
+            .that(meaning.text)
+            .isNotEmpty()
+        assertWithMessage("the gesture label must be one of the canned recognizer labels")
+            .that(GestureMeaningTable.cannedLabels)
+            .contains(meaning.label)
+        assertThat(meaning.confidence).isAtLeast(0.0f)
+        assertThat(meaning.confidence).isAtMost(1.0f)
 
-        assertThat(lines).contains("heartbeat-ok")
-
-        // And the transcript text EXACTLY equals the deterministic mock value per
-        // frame index — a real equality, never a bare "contains transcript".
-        assertThat(run.transcripts())
-            .containsExactlyElementsIn(EcosysPi.EXPECTED_TRANSCRIPTS.take(EcosysPi.HAPPY_FRAMES))
-            .inOrder()
-
-        // And the hub really paired the device that the CLI reported.
-        val paired = pairing.listPaired()
-        assertThat(paired.map { it.deviceId }).contains(deviceId)
-    }
-
-    // ------------------------------------------------------ negative (i) wrong PIN
-
-    @Test
-    fun `a wrong pin is refused with the frozen reason and exit 2`() {
-        // Given an open window and a PIN that is NOT the window's
-        val window = pairing.openWindow(ttlMs = 120_000)
-        val wrongPin = flipLastDigit(window.pin)
-        val xdg = newTempConfigHome()
-
-        // When the CLI pairs with the wrong PIN (ONE attempt, non-interactive)
-        val run =
-            runEcosysPi(
-                args = cliArgs(wrongPin, frames = 1),
-                environment = syntheticEnv(xdg),
-            )
-        printRun("wrong-pin", run)
-
-        // Then the hub's typed refusal is on stdout and the exit is 2
-        assertThat(run.exitCode).isEqualTo(EcosysPi.EXIT_REFUSED)
-        assertThat(run.lines()).contains(EcosysPi.PAIR_REJECTED_PIN_INVALID)
-        // A rejection must not have persisted a device or minted a token.
-        assertThat(File(xdg, "ecosys-pi/credentials.json").exists()).isFalse()
-    }
-
-    // --------------------------------------------- negative (ii) revoked token
-
-    @Test
-    fun `a revoked cached token yields re-pair-requested and exit 2`() {
-        // Given ONE shared config home for both runs, so the first run's cached
-        // token is reused by the second (the plan's deliberate shared-temp case).
-        val sharedXdg = newTempConfigHome()
-
-        // When the CLI pairs once and caches the token
-        val first =
-            runEcosysPi(
-                args = cliArgs(pairing.openWindow(ttlMs = 120_000).pin, frames = 1),
-                environment = syntheticEnv(sharedXdg),
-            )
-        printRun("revoked-first", first)
-        assertThat(first.exitCode).isEqualTo(EcosysPi.EXIT_OK)
-
-        // And the hub revokes the exact device that token belongs to
-        val token = readCachedToken(sharedXdg)
-        val device = pairing.listPaired().firstOrNull { it.tokenHash == TokenCodec.hashToken(token) }
-        assertWithMessage("no paired device owns the cached token")
-            .that(device)
-            .isNotNull()
-        pairing.revoke(device!!.deviceId)
-
-        // When the CLI runs again WITHOUT a PIN, reusing the cached (now revoked) token
-        val second =
-            runEcosysPi(
-                args = listOf("--hub", "127.0.0.1:$port", "--mode", "audio", "--frames", "1"),
-                environment = syntheticEnv(sharedXdg),
-            )
-        printRun("revoked-second", second)
-
-        // Then the hub refuses the token and the CLI requests a re-pair, exit 2
-        assertThat(second.exitCode).isEqualTo(EcosysPi.EXIT_REFUSED)
-        assertThat(second.lines()).contains(EcosysPi.RE_PAIR_REQUESTED)
-    }
-
-    // ------------------------------------- negative (iii) bare auth scheme (gRPC)
-
-    @Test
-    fun `a bare token without the Bearer scheme is refused while the Bearer form is accepted`() {
-        // Given a device paired through the REAL CLI, so the token is genuine
-        val xdg = newTempConfigHome()
-        val pairRun =
-            runEcosysPi(
-                args = cliArgs(pairing.openWindow(ttlMs = 120_000).pin, frames = 1),
-                environment = syntheticEnv(xdg),
-            )
-        printRun("bare-token-setup", pairRun)
-        assertThat(pairRun.exitCode).isEqualTo(EcosysPi.EXIT_OK)
-        val token = readCachedToken(xdg)
-
-        channel =
-            NettyChannelBuilder
-                .forAddress("127.0.0.1", port)
-                .usePlaintext()
-                .build()
-
-        // When the SAME token is presented WITH the Bearer scheme, the hub accepts
-        val withBearer = callHeartbeat("Bearer $token")
-
-        // Then that call really reached the service (a non-empty HeartbeatResponse)
-        assertWithMessage("bearer-authenticated Heartbeat failed: ${withBearer.failure}")
-            .that(withBearer.status)
-            .isNull()
-        assertThat(withBearer.response).isNotNull()
-        assertThat(withBearer.response!!).isNotEmpty()
-
-        // And when the token is presented BARE (no scheme), the hub refuses it on
-        // the exact strict-scheme status — never an oracle for why.
-        val bare = callHeartbeat(token)
-        println("[QA] bare-token raw status = ${bare.status}")
-
-        // Prove the two are discriminated by the scheme, then assert the refusal
-        assertThat(withBearer.status).isNull()
-        assertThat(bare.status?.code).isEqualTo(Status.Code.UNAUTHENTICATED)
-        assertThat(bare.status?.description).isEqualTo("missing or invalid bearer token")
-    }
-
-    // ---------------------------------------------------------------- helpers
-
-    private fun cliArgs(
-        pin: String,
-        frames: Int,
-    ): List<String> =
-        listOf(
-            "--hub",
-            "127.0.0.1:$port",
-            "--pin",
-            pin,
-            "--mode",
-            "audio",
-            "--frames",
-            frames.toString(),
-        )
-
-    /**
-     * The environment every case runs with: the per-case XDG config home for the
-     * token cache, and the deterministic synthetic audio source (no mic host).
-     * `--no-cache` is deliberately absent from the happy path.
-     */
-    private fun syntheticEnv(xdg: File): Map<String, String> =
-        mapOf(
-            "XDG_CONFIG_HOME" to xdg.absolutePath,
-            EcosysPi.AUDIO_SOURCE_ENV to "synthetic",
-        )
-
-    private fun newTempConfigHome(): File {
-        val dir = Files.createTempDirectory("ecosys-pi-e2e-").toFile()
-        tempDirs += dir
-        return dir
-    }
-
-    /** Read `credentials.json` and return its `token` field. */
-    private fun readCachedToken(xdg: File): String {
-        val file = File(xdg, "ecosys-pi/credentials.json")
-        assertWithMessage("the CLI did not cache a token at ${file.absolutePath}")
-            .that(file.isFile)
+        // ---- Loop 1b: the same image synthesized TTS audio back to the NECKLACE.
+        assertWithMessage("the necklace was never handed hub-synthesized TTS audio")
+            .that(aplayEvidence.isFile && aplayEvidence.length() > 0L)
             .isTrue()
-        val token = JSONObject(file.readText()).getString("token")
-        assertThat(token).isNotEmpty()
-        return token
-    }
 
-    private data class HeartbeatCall(
-        val response: ByteArray?,
-        val status: Status?,
-    ) {
-        val failure: String? get() = status?.let { "${it.code}: ${it.description}" }
-    }
-
-    /**
-     * Call `PairingService/Heartbeat` over the real socket with [rawHeader] as the
-     * raw `authorization` metadata (exactly [AuthGrpcTest]'s strict-scheme case).
-     */
-    private fun callHeartbeat(rawHeader: String): HeartbeatCall {
-        val metadata = Metadata().apply { put(authKey, rawHeader) }
-        val intercepted =
-            ClientInterceptors.intercept(
-                channel,
-                MetadataUtils.newAttachHeadersInterceptor(metadata),
-            )
-        return try {
-            val response =
-                ClientCalls.blockingUnaryCall(
-                    intercepted,
-                    heartbeatMethod,
-                    CallOptions.DEFAULT.withDeadlineAfter(30, TimeUnit.SECONDS),
-                    ByteArray(0),
-                )
-            HeartbeatCall(response, null)
-        } catch (failure: StatusRuntimeException) {
-            HeartbeatCall(null, failure.status)
+        // ---- Loop 2: the glasses audio produced a StreamResult on the SAME stream.
+        repeat(SUBTITLE_FRAMES) { index ->
+            glassesClient.sendAudio(pcmChunk(index), ptsMs = (index * AudioFormat.CHUNK_BYTES).toLong())
         }
+        val subtitle = glassesClient.await<PeerEvent.Speech>(SUBTITLE_TIMEOUT_MS)
+        assertWithMessage("no StreamResult reached the glasses session for its own audio")
+            .that(subtitle)
+            .isNotNull()
+        val speech = subtitle!!
+        assertThat(speech.text).isNotEmpty()
+        // The default speech fake never invents a name: an unregistered speaker is
+        // the EMPTY label, never a fabricated one.
+        assertWithMessage("an unregistered speaker must carry the empty label")
+            .that(speech.speakerLabel)
+            .isEmpty()
+
+        // Scenario 3: the glasses PLAY the synthesized audio, so the SAME image also
+        // reaches the glasses session as a `tts_audio` frame (in addition to the
+        // necklace, which played it through the shimmed `aplay`).
+        assertWithMessage("the glasses session never received the hub-synthesized TTS audio")
+            .that(glassesClient.drain().filterIsInstance<PeerEvent.TtsAudio>())
+            .isNotEmpty()
     }
 
-    private fun printRun(
-        label: String,
-        run: CliRun,
-    ) {
-        println(
-            "[QA] ecosys-pi $label: exit=${run.exitCode}\n" +
-                "----- RAW stdout -----\n${run.stdout.trim()}\n" +
-                "----- end stdout -----\n" +
-                "[QA] ecosys-pi $label stderr:\n${run.stderr.trim()}",
+    private fun piEnvironment(hubAddress: String): Map<String, String> {
+        val inheritedPath = System.getenv("PATH").orEmpty()
+        return mapOf(
+            EcosysPi.HUB_ENV to hubAddress,
+            EcosysPi.VIDEO_SOURCE_ENV to EcosysPi.VIDEO_SOURCE_SYNTHETIC,
+            EcosysPi.PLAYER_ENV to EcosysPi.PLAYER_APLAY,
+            EcosysPi.APLAY_EVIDENCE_ENV to aplayEvidence.absolutePath,
+            "PATH" to (shimDir.absolutePath + File.pathSeparator + inheritedPath),
         )
     }
 
-    private fun flipLastDigit(pin: String): String {
-        val last = pin.last()
-        val replacement = if (last == '0') '1' else '0'
-        return pin.dropLast(1) + replacement
-    }
+    /** A deterministic, non-empty 20 ms PCM16 chunk (the canonical wire framing). */
+    private fun pcmChunk(index: Int): ByteArray = ByteArray(AudioFormat.CHUNK_BYTES) { byte -> ((index * 31 + byte * 7) % 127).toByte() }
 
     private companion object {
-        /** Raw-bytes marshaller: the CLI/hub protobuf is irrelevant for auth tests. */
-        val BYTES_MARSHALLER: MethodDescriptor.Marshaller<ByteArray> =
-            object : MethodDescriptor.Marshaller<ByteArray> {
-                override fun stream(value: ByteArray) = java.io.ByteArrayInputStream(value)
-
-                override fun parse(stream: java.io.InputStream) = stream.readBytes()
-            }
+        const val NECKLACE_FRAMES: Int = 3
+        const val SUBTITLE_FRAMES: Int = 3
+        const val GESTURE_TIMEOUT_MS: Long = 20_000
+        const val SUBTITLE_TIMEOUT_MS: Long = 10_000
     }
 }

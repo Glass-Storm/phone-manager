@@ -9,3 +9,14 @@ captures/
 bin/
 .vscode/
 out/
+
+# Agent runtime state (OpenCode work plans, evidence, boulder state) is
+# local-only and must never be committed.
+.omo/
+
+# Local development scratch: downloaded model trees and ad-hoc E2E presets.
+# The tracked, licensed presets live under tools/e2e-media/ instead.
+.dev/
+
+# Stray Python linter cache (no Python is tracked in this repo).
+.ruff_cache/

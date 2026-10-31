@@ -1,25 +1,18 @@
 package com.glassstorm.phonemanager.ui
 
 /**
- * Everything the Settings screen renders, derived from the domain `AppConfig`,
- * `HubServer` and `BatteryExemption` ports.
+ * Everything the Settings screen renders, derived from the domain `HubServer` and
+ * `BatteryExemption` ports.
  *
- * [configAvailable] is `false` when no `AppConfig` was registered, which drives
- * the "not available" line instead of a crash.
+ * [batteryAvailable] is `false` when the battery read fails, which drives the
+ * "not available" line instead of a crash.
  *
- * [apiKeyDraft] mirrors the reference client: the stored key is loaded into an
- * editable field so it can be replaced, but the field is rendered through a password
- * transformation while [apiKeyVisible] is `false`. Revealing it takes an explicit
- * action, so the cleartext key is never on screen by default.
+ * The hotspot mode is gone with the programmatic hotspot: the user enables the
+ * system Mobile Hotspot by hand, so there is nothing for this screen to configure
+ * there. Speech-to-text is not configurable either: the hub runs a single
+ * on-device engine with no cloud path.
  */
 data class SettingsUiState(
-    val configAvailable: Boolean = false,
-    val sttEngine: String = "",
-    val region: String = "",
-    val hotspotMode: String = "",
-    val apiKeyConfigured: Boolean = false,
-    val apiKeyDraft: String = "",
-    val apiKeyVisible: Boolean = false,
     val batteryExempt: Boolean = false,
     val batteryAvailable: Boolean = false,
     val protocol: String = "",

@@ -1,17 +1,20 @@
 package com.glassstorm.phonemanager.ui
 
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.junit4.ComposeContentTestRule
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.lifecycle.ViewModelStore
 import com.glassstorm.phonemanager.core.domain.adapter.network.HotspotController
 import com.glassstorm.phonemanager.core.domain.adapter.transport.HubServer
-import com.glassstorm.phonemanager.core.domain.network.HotspotFailure
-import com.glassstorm.phonemanager.core.domain.service.PairingService
+import com.glassstorm.phonemanager.core.model.HotspotInfo
 import com.glassstorm.phonemanager.hub.HubStarter
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.Dispatchers
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -26,9 +29,10 @@ import java.time.Duration
  * shared constant is tautological and passes even when the UI renders the wrong
  * text. One `setContent` per test method — `createComposeRule()` allows no more.
  *
- * Under compile-time DI a port cannot be ABSENT, so the "not available" rendering
- * is driven by a port that FAILS instead. The doubles implement the DOMAIN ports
- * only; `:app`'s test sources never touch a concrete `:adapter` class.
+ * There is no programmatic hotspot and no credential display any more: the
+ * dashboard keeps the hub start/stop controls and reports the detected gateway
+ * only. Under compile-time DI a port cannot be ABSENT, so the "not available"
+ * rendering is driven by a port that FAILS instead.
  */
 @RunWith(RobolectricTestRunner::class)
 class DashboardScreenTest {
@@ -39,34 +43,46 @@ class DashboardScreenTest {
     fun `renders the unavailable state when the hub and hotspot ports fail`() {
         composeRule.setDashboardContent(FakeHubServer(failOnRead = true), FakeHotspotController(failOnDetect = true))
 
-        composeRule.onNodeWithText("Dashboard").assertIsDisplayed()
-        composeRule.onNodeWithText("Hub server not available").assertIsDisplayed()
-        composeRule.onNodeWithText("Hotspot not available").assertIsDisplayed()
+        composeRule.onNodeWithText("系統總覽").assertIsDisplayed()
+        // Both the hub card and the hotspot card degrade to the same calm status.
+        composeRule.onAllNodesWithText("無法使用").assertCountEquals(2)
     }
 
     @Test
-    fun `starting the hub shows the bound port and the paired device count`() {
-        val pairing =
-            FakePairingService().also {
-                it.seedDevice(deviceId = "d-1", deviceName = "Glass One")
-                it.seedDevice(deviceId = "d-2", deviceName = "Ubuntu Daemon", role = "DAEMON")
-            }
+    fun `the pre-read state is a quiet checking placeholder, not an error`() {
+        composeRule.setDashboardContent(refreshOnInit = false)
 
+        // A cold start must not flash the red failure state before the first read.
+        composeRule.onAllNodesWithText("檢查中").assertCountEquals(2)
+        composeRule.onNodeWithText("無法使用").assertDoesNotExist()
+    }
+
+    @Test
+    fun `a stopped hub does not display a zero port`() {
         composeRule.setDashboardContent(
             hub = FakeHubServer(boundPortValue = 40404),
             hotspot = FakeHotspotController(failOnDetect = true),
-            pairing = pairing,
         )
-        composeRule.onNodeWithText("Hub: stopped").assertIsDisplayed()
 
-        composeRule.onNodeWithText("Start hub").performClick()
-        composeRule.waitForIdle()
+        composeRule.onNodeWithText("已停止").assertIsDisplayed()
+        composeRule.onNodeWithText("0").assertDoesNotExist()
+        composeRule.onNodeWithText("未啟動").assertIsDisplayed()
+    }
 
-        composeRule.onNodeWithText("Hub: running").assertIsDisplayed()
-        composeRule.onNodeWithText("Port: 40404").assertIsDisplayed()
-        composeRule.onNodeWithText("Paired devices: 2").assertIsDisplayed()
+    @Test
+    fun `starting the hub shows the bound port`() {
+        composeRule.setDashboardContent(
+            hub = FakeHubServer(boundPortValue = 40404),
+            hotspot = FakeHotspotController(failOnDetect = true),
+        )
+        composeRule.onNodeWithText("已停止").assertIsDisplayed()
+
+        composeRule.clickButton("啟動中樞")
+
+        composeRule.onNodeWithText("運作中").assertIsDisplayed()
+        composeRule.onNodeWithText("40404").assertIsDisplayed()
         // The failing hotspot port degrades, it does not crash the shell.
-        composeRule.onNodeWithText("Hotspot not available").assertIsDisplayed()
+        composeRule.onAllNodesWithText("無法使用").assertCountEquals(1)
     }
 
     @Test
@@ -75,8 +91,7 @@ class DashboardScreenTest {
         val starter = FakeHubStarter()
 
         composeRule.setDashboardContent(hub = hub, hubStarter = starter)
-        composeRule.onNodeWithText("Start hub").performClick()
-        composeRule.waitForIdle()
+        composeRule.clickButton("啟動中樞")
 
         assertThat(starter.startCalls).isEqualTo(1)
         // The ViewModel must cross the seam rather than start the listener itself:
@@ -90,17 +105,15 @@ class DashboardScreenTest {
         val starter = FakeHubStarter(onStart = { hub.start(0) }, onStop = { hub.stop() })
 
         composeRule.setDashboardContent(hub = hub, hubStarter = starter)
-        composeRule.onNodeWithText("Start hub").performClick()
-        composeRule.waitForIdle()
-        composeRule.onNodeWithText("Hub: running").assertIsDisplayed()
+        composeRule.clickButton("啟動中樞")
+        composeRule.onNodeWithText("運作中").assertIsDisplayed()
 
-        composeRule.onNodeWithText("Stop hub").performClick()
-        composeRule.waitForIdle()
+        composeRule.clickButton("停止中樞")
 
         // Teardown must be delegated to the service too: a direct hub.stop() would
         // leave the service's bring-up state stale and discovery advertising.
         assertThat(starter.stopCalls).isEqualTo(1)
-        composeRule.onNodeWithText("Hub: stopped").assertIsDisplayed()
+        composeRule.onNodeWithText("已停止").assertIsDisplayed()
     }
 
     @Test
@@ -108,8 +121,7 @@ class DashboardScreenTest {
         val starter = FakeHubStarter(startFailure = IllegalStateException("background start denied"))
 
         composeRule.setDashboardContent(hub = FakeHubServer(), hubStarter = starter)
-        composeRule.onNodeWithText("Start hub").performClick()
-        composeRule.waitForIdle()
+        composeRule.clickButton("啟動中樞")
 
         assertThat(starter.startCalls).isEqualTo(1)
         composeRule.onNodeWithText("Hub failed to start: background start denied").assertIsDisplayed()
@@ -121,22 +133,22 @@ class DashboardScreenTest {
         // The service does NOT bind synchronously; the poll is what must notice it.
         composeRule.setDashboardContent(hub = hub, hubStarter = FakeHubStarter())
 
-        composeRule.onNodeWithText("Start hub").performClick()
-        composeRule.onNodeWithText("Hub: stopped").assertIsDisplayed()
+        composeRule.clickButton("啟動中樞")
+        composeRule.onNodeWithText("已停止").assertIsDisplayed()
 
         // The foreground service binds the listener on a LATER main-loop turn.
         hub.start(0)
         composeRule.advancePollClock()
 
-        composeRule.onNodeWithText("Hub: running").assertIsDisplayed()
-        composeRule.onNodeWithText("Port: 40404").assertIsDisplayed()
+        composeRule.onNodeWithText("運作中").assertIsDisplayed()
+        composeRule.onNodeWithText("40404").assertIsDisplayed()
     }
 
     @Test
     fun `clearing the dashboard mid-poll leaves no live coroutine behind`() {
         val hub = FakeHubServer()
         val store = ViewModelStore()
-        val viewModel = DashboardViewModel(hub, FakeHotspotController(), FakePairingService(), FakeHubStarter())
+        val viewModel = DashboardViewModel.forTesting(hub, FakeHotspotController(), FakeHubStarter(), io = Dispatchers.Unconfined)
         store.put("dashboard", viewModel)
         assertThat(viewModel.uiState.value.running).isFalse()
 
@@ -151,45 +163,73 @@ class DashboardScreenTest {
     }
 
     @Test
-    fun `starting the hotspot shows the credentials and the gateway ip`() {
-        composeRule.setDashboardContent(hub = FakeHubServer(), hotspot = FakeHotspotController())
+    fun `a detected manual tether shows only its gateway address`() {
+        val manual =
+            HotspotInfo(
+                ssid = "EcoSys-Phone",
+                passphrase = "hunter2-phone",
+                gatewayIp = "192.168.43.1",
+            )
 
-        composeRule.onNodeWithText("Start hotspot").performClick()
-        composeRule.waitForIdle()
+        composeRule.setDashboardContent(
+            hub = FakeHubServer(),
+            hotspot = FakeHotspotController(manualTetherInfo = manual),
+        )
 
-        composeRule.onNodeWithText("SSID: EcoSys-Phone").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("Passphrase: hunter2-phone").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("Gateway: 192.168.43.1").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("閘道位址").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("192.168.43.1").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("熱點已開啟").performScrollTo().assertIsDisplayed()
+        // The hotspot credentials belong to the system settings, not this screen.
+        composeRule.onNodeWithText("EcoSys-Phone").assertDoesNotExist()
+        composeRule.onNodeWithText("hunter2-phone").assertDoesNotExist()
+        // An access point is not a connected peer.
+        composeRule.onNodeWithText("已連線").assertDoesNotExist()
     }
 
     @Test
-    fun `a failing hotspot start renders the typed reason instead of crashing`() {
+    fun `an absent hotspot shows actionable copy and never claims a connection`() {
         composeRule.setDashboardContent(
             hub = FakeHubServer(),
-            hotspot = FakeHotspotController(failWith = HotspotFailure.StartFailed(reason = "denied")),
+            hotspot = FakeHotspotController(manualTetherInfo = null),
         )
 
-        composeRule.onNodeWithText("Start hotspot").performClick()
-        composeRule.waitForIdle()
-
-        composeRule.onNodeWithText("Hotspot failed: denied").assertIsDisplayed()
+        composeRule.onNodeWithText("熱點未開啟").performScrollTo().assertIsDisplayed()
+        composeRule
+            .onNodeWithText("請到 Android 設定開啟行動熱點，再回到此頁。")
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule.onNodeWithText("已連線").assertDoesNotExist()
+        composeRule.onNodeWithText("未偵測到手機熱點。").assertDoesNotExist()
     }
 
-    private fun androidx.compose.ui.test.junit4.ComposeContentTestRule.setDashboardContent(
+    private fun ComposeContentTestRule.setDashboardContent(
         hub: HubServer = FakeHubServer(),
         hotspot: HotspotController = FakeHotspotController(),
-        pairing: PairingService = FakePairingService(),
         hubStarter: HubStarter = FakeHubStarter { hub.start(0) },
+        refreshOnInit: Boolean = true,
     ) {
-        val viewModel = DashboardViewModel(hub, hotspot, pairing, hubStarter)
+        val viewModel =
+            DashboardViewModel.forTesting(
+                hub,
+                hotspot,
+                hubStarter,
+                io = Dispatchers.Unconfined,
+                refreshOnInit = refreshOnInit,
+            )
         setContent {
-            AppTheme {
+            HubTheme {
                 DashboardScreen(viewModelFactory = viewModelFactory(viewModel))
             }
         }
+        waitForIdle()
     }
 
-    private fun androidx.compose.ui.test.junit4.ComposeContentTestRule.advancePollClock() {
+    private fun ComposeContentTestRule.clickButton(text: String) {
+        onNodeWithText(text).performScrollTo().performClick()
+        waitForIdle()
+    }
+
+    private fun ComposeContentTestRule.advancePollClock() {
         shadowOf(android.os.Looper.getMainLooper()).idleFor(Duration.ofMillis(1_000L))
         waitForIdle()
     }

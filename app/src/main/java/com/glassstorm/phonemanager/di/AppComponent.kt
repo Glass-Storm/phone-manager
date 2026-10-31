@@ -6,14 +6,16 @@ import com.glassstorm.phonemanager.adapter.android.di.AndroidAdapterModule
 import com.glassstorm.phonemanager.adapter.android.di.ApplicationContext
 import com.glassstorm.phonemanager.adapter.jvm.di.JvmAdapterModule
 import com.glassstorm.phonemanager.core.domain.adapter.config.AppConfig
+import com.glassstorm.phonemanager.core.domain.adapter.enrollment.EnrollmentStore
+import com.glassstorm.phonemanager.core.domain.adapter.gesture.GesturePort
 import com.glassstorm.phonemanager.core.domain.adapter.network.Discovery
 import com.glassstorm.phonemanager.core.domain.adapter.network.HotspotController
 import com.glassstorm.phonemanager.core.domain.adapter.network.PeerResolver
 import com.glassstorm.phonemanager.core.domain.adapter.repository.DeviceRepository
+import com.glassstorm.phonemanager.core.domain.adapter.speech.SpeechPort
+import com.glassstorm.phonemanager.core.domain.adapter.speech.TtsPort
 import com.glassstorm.phonemanager.core.domain.adapter.transport.HubServer
-import com.glassstorm.phonemanager.core.domain.security.TokenVerifier
 import com.glassstorm.phonemanager.core.domain.service.DeviceService
-import com.glassstorm.phonemanager.core.domain.service.PairingService
 import com.glassstorm.phonemanager.core.domain.service.StreamService
 import com.glassstorm.phonemanager.core.service.ServiceModule
 import com.glassstorm.phonemanager.transport.grpc.TransportModule
@@ -53,6 +55,7 @@ import javax.inject.Singleton
         ServiceModule::class,
         TransportModule::class,
         JvmAdapterModule::class,
+        DeviceAiModule::class,
         AndroidAdapterModule::class,
         AppModule::class,
         ViewModelModule::class,
@@ -64,15 +67,6 @@ interface AppComponent {
      * so each consumer gets its port by type.
      */
     fun deviceService(): DeviceService
-
-    fun pairingService(): PairingService
-
-    /**
-     * The interceptor's token authority. Resolving it alongside [pairingService]
-     * MUST return the SAME object: [ServiceModule] binds both to one `@Singleton`
-     * `PairingServiceImpl`, so the `Pair` path and the auth path can never disagree.
-     */
-    fun tokenVerifier(): TokenVerifier
 
     fun streamService(): StreamService
 
@@ -93,6 +87,18 @@ interface AppComponent {
 
     /** The peer resolver over the same NSD-backed adapter. */
     fun peerResolver(): PeerResolver
+
+    /** The gesture recognition port (the deterministic JVM fake in the default graph). */
+    fun gesturePort(): GesturePort
+
+    /** The speech + diarization port (the deterministic JVM fake in the default graph). */
+    fun speechPort(): SpeechPort
+
+    /** The text-to-speech port (the deterministic JVM fake in the default graph). */
+    fun ttsPort(): TtsPort
+
+    /** The hub-owned voiceprint enrollment directory. */
+    fun enrollmentStore(): EnrollmentStore
 
     /** The ViewModel factory the Compose shell threads down to every screen. */
     fun viewModelFactory(): ViewModelProvider.Factory

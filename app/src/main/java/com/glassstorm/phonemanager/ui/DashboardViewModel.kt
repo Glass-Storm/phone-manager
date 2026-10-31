@@ -4,29 +4,32 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.glassstorm.phonemanager.core.domain.adapter.network.HotspotController
 import com.glassstorm.phonemanager.core.domain.adapter.transport.HubServer
-import com.glassstorm.phonemanager.core.domain.network.HotspotFailure
-import com.glassstorm.phonemanager.core.domain.network.HotspotUnavailableException
-import com.glassstorm.phonemanager.core.domain.service.PairingService
+import com.glassstorm.phonemanager.core.model.HotspotInfo
 import com.glassstorm.phonemanager.hub.HubStarter
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 /**
  * Dashboard state holder.
  *
- * Every collaborator is a CONSTRUCTOR dependency. The three reads are typed as
+ * Every collaborator is a CONSTRUCTOR dependency. The two reads are typed as
  * DOMAIN ports; [hubStarter] is the app-owned seam the start AND stop actions
  * cross, so the ViewModel stays Android-free while the listener's lifetime is
  * owned by the foreground service. Under compile-time DI a missing collaborator
- * is impossible, so the "not available" flags now describe a port that is PRESENT
+ * is impossible, so a `false` availability flag describes a port that is PRESENT
  * but FAILING (a listener that cannot report its state, an access point whose
  * driver throws): each read is wrapped, so the failure is a state transition
- * rather than a crash.
+ * rather than a crash. Availability is TRI-STATE — `null` until the first read
+ * resolves, `false` only for a resolved failure — so a cold start never flashes
+ * a red error before the first snapshot arrives.
  *
  * ## Start is asynchronous
  *
@@ -35,28 +38,36 @@ import javax.inject.Inject
  * therefore starts a bounded poll that republishes the state once the service has
  * actually brought the hub up; without it the panel would show "stopped" forever.
  * A start that throws is surfaced as [DashboardUiState.startError] — never
- * swallowed — mirroring the hotspot path.
+ * swallowed.
  *
- * The domain ports are synchronous JVM APIs (the adapter does its own threading),
- * so the non-async actions stay synchronous: the UI state updates on the same
- * frame the user acted, which is also what makes the Robolectric tests
- * deterministic.
+ * ## The connection card shows the DETECTED hotspot
+ *
+ * There is no programmatic hotspot: the hub adopts the user's manually-enabled
+ * phone Mobile Hotspot. [refresh] reads [HotspotController.detectManualTether]
+ * only; the reported `manual-tether` placeholder carries the discovered gateway
+ * address and an empty passphrase (the user owns the real credentials). The hub
+ * never creates, stops, or reconfigures that access point, so the dashboard has no
+ * hotspot buttons.
+ *
+ * The detection walks the network interfaces, and [refresh] runs from
+ * `viewModelScope`, so the blocking read is dispatched to [io] and only the
+ * [uiState] write happens back on the main dispatcher.
  */
 class DashboardViewModel
     private constructor(
         private val hub: HubServer,
         private val hotspot: HotspotController,
-        private val pairing: PairingService,
         private val hubStarter: HubStarter,
         private val pollIntervalMs: Long,
+        private val io: CoroutineDispatcher,
+        refreshOnInit: Boolean,
     ) : ViewModel() {
         @Inject
         constructor(
             hub: HubServer,
             hotspot: HotspotController,
-            pairing: PairingService,
             hubStarter: HubStarter,
-        ) : this(hub, hotspot, pairing, hubStarter, DEFAULT_POLL_INTERVAL_MS)
+        ) : this(hub, hotspot, hubStarter, DEFAULT_POLL_INTERVAL_MS, Dispatchers.IO, refreshOnInit = true)
 
         private val state = MutableStateFlow(DashboardUiState())
 
@@ -65,7 +76,9 @@ class DashboardViewModel
         private var pollJob: Job? = null
 
         init {
-            refresh()
+            if (refreshOnInit) {
+                viewModelScope.launch { refresh() }
+            }
         }
 
         /**
@@ -81,7 +94,9 @@ class DashboardViewModel
          */
         fun onStartHub() {
             val failure = runCatching { hubStarter.start() }.exceptionOrNull()
-            refresh(startError = failure?.let { "Hub failed to start: ${it.message ?: "unknown"}" })
+            viewModelScope.launch {
+                refresh(startError = failure?.let { "Hub failed to start: ${it.message ?: "unknown"}" })
+            }
             if (failure == null) startPolling()
         }
 
@@ -96,20 +111,7 @@ class DashboardViewModel
         fun onStopHub() {
             cancelPolling()
             runCatching { hubStarter.stop() }
-            refresh(startError = null)
-        }
-
-        /** Bring the access point up, surfacing the typed failure reason as text. */
-        fun onStartHotspot() {
-            val error = runCatching { hotspot.startHotspot() }.errorMessage()
-            state.value = state.value.copy(hotspotError = error)
-            refresh()
-        }
-
-        /** Tear the access point down. */
-        fun onStopHotspot() {
-            runCatching { hotspot.stopHotspot() }
-            refresh()
+            viewModelScope.launch { refresh(startError = null) }
         }
 
         /**
@@ -139,11 +141,10 @@ class DashboardViewModel
             super.onCleared()
         }
 
-        private fun refresh(startError: String? = state.value.startError) {
+        private suspend fun refresh(startError: String? = state.value.startError) {
             val running = runCatching { hub.isRunning() }
             val port = runCatching { hub.boundPort() }
-            val paired = runCatching { pairing.listPaired() }
-            val detected = runCatching { hotspot.detectManualTether() }
+            val detected = readHotspot()
 
             state.value =
                 DashboardUiState(
@@ -151,12 +152,16 @@ class DashboardViewModel
                     hotspotAvailable = detected.isSuccess,
                     running = running.getOrDefault(false),
                     boundPort = port.getOrDefault(0),
-                    pairedCount = paired.getOrDefault(emptyList()).size,
                     hotspot = detected.getOrNull(),
-                    hotspotError = state.value.hotspotError,
                     startError = startError,
                 )
         }
+
+        /** The manually-enabled hotspot currently visible, or `null` when none is. */
+        private suspend fun readHotspot(): Result<HotspotInfo?> =
+            withContext(io) {
+                runCatching { hotspot.detectManualTether() }
+            }
 
         companion object {
             /** How often the dashboard re-reads the hub while waiting for start. */
@@ -166,37 +171,18 @@ class DashboardViewModel
             const val MAX_START_POLLS: Int = 80
 
             /**
-             * Test seam: builds the ViewModel with an explicit poll interval so the
-             * post-start cadence is deterministic. Production uses the `@Inject`
-             * constructor.
+             * Test seam: builds the ViewModel with an explicit poll interval and
+             * blocking-work dispatcher so the post-start cadence is deterministic and
+             * the hotspot read never races the main thread. [refreshOnInit] can be
+             * disabled to assert the pre-read `null` availability state.
              */
             fun forTesting(
                 hub: HubServer,
                 hotspot: HotspotController,
-                pairing: PairingService,
                 hubStarter: HubStarter,
                 pollIntervalMs: Long = DEFAULT_POLL_INTERVAL_MS,
-            ): DashboardViewModel = DashboardViewModel(hub, hotspot, pairing, hubStarter, pollIntervalMs)
+                io: CoroutineDispatcher = Dispatchers.IO,
+                refreshOnInit: Boolean = true,
+            ): DashboardViewModel = DashboardViewModel(hub, hotspot, hubStarter, pollIntervalMs, io, refreshOnInit)
         }
-    }
-
-/** Render a failed hotspot start as the short reason line the screen shows. */
-private fun Result<*>.errorMessage(): String? =
-    exceptionOrNull()?.let { cause ->
-        val reason =
-            if (cause is HotspotUnavailableException) {
-                cause.failure.reasonText()
-            } else {
-                cause.message ?: "unknown"
-            }
-        "Hotspot failed: $reason"
-    }
-
-/** The user-visible text for each typed hotspot failure. Exhaustive by design. */
-private fun HotspotFailure.reasonText(): String =
-    when (this) {
-        is HotspotFailure.StartFailed -> reason
-        HotspotFailure.PermissionDenied -> "permission-denied"
-        HotspotFailure.LocationServicesDisabled -> "location-off"
-        is HotspotFailure.IllegalTransition -> "illegal-transition"
     }

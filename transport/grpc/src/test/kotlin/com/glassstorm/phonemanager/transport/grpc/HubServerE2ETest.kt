@@ -1,14 +1,11 @@
 package com.glassstorm.phonemanager.transport.grpc
 
-import com.glassstorm.phonemanager.core.service.PairingServiceImpl
-import com.glassstorm.phonemanager.core.service.StreamServiceImpl
 import com.glassstorm.phonemanager.testing.testkit.ProcessRun
 import com.glassstorm.phonemanager.testing.testkit.REAP_SECONDS
 import com.glassstorm.phonemanager.testing.testkit.goBinary
 import com.glassstorm.phonemanager.testing.testkit.repoRoot
 import com.glassstorm.phonemanager.testing.testkit.run
 import com.glassstorm.phonemanager.testing.testkit.syntheticVideoNal
-import com.glassstorm.phonemanager.transport.grpc.security.AuthInterceptor
 import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
 import io.grpc.netty.shaded.io.grpc.netty.NettyServerBuilder
@@ -29,8 +26,9 @@ import java.util.concurrent.TimeUnit
  * on Android is unofficial and only the netty-shaded NIO plaintext path is
  * expected to work. Nothing here is mocked — no in-process transport, no fake
  * channel, no faked stdout. The only fakes are the T5 domain-port doubles
- * ([FakeDeviceRepository], [FakeSttPort], [FakeFrameSink]), exactly as an
- * Android composition would supply real adapters.
+ * ([FakeSpeechPort], [FakeFrameSink]), exactly as an Android composition would
+ * supply real adapters. The stream is UNAUTHENTICATED: pairing/auth were removed
+ * from the hub runtime, so the peer bootstraps with a `stream_open` frame.
  *
  * ## Hygiene (the adversarial classes)
  *
@@ -45,9 +43,7 @@ class HubServerE2ETest {
     val deadline: Timeout = Timeout.seconds(180)
 
     private lateinit var hub: GrpcHubServer
-    private lateinit var pairing: PairingServiceImpl
-    private lateinit var repo: FakeDeviceRepository
-    private lateinit var stt: FakeSttPort
+    private lateinit var speech: FakeSpeechPort
     private lateinit var sink: FakeFrameSink
     private var port: Int = 0
 
@@ -65,20 +61,16 @@ class HubServerE2ETest {
             .isTrue()
 
         // Given a hand-wired graph over domain-port fakes only (no :adapter edge)
-        repo = FakeDeviceRepository()
-        stt = FakeSttPort("mockpeer recognized utterance")
+        speech = FakeSpeechPort("mockpeer recognized utterance")
         sink = FakeFrameSink()
-        pairing = PairingServiceImpl.withClock(repo, clock = { System.currentTimeMillis() })
-        val stream = StreamServiceImpl(stt, sink)
+        val stream = relayStream(speech = speech, sink = sink)
 
         // The transport under test: netty-shaded NIO, IPv4 explicit, ephemeral port.
         hub =
             GrpcHubServer { port ->
                 NettyServerBuilder
                     .forAddress(InetSocketAddress("127.0.0.1", port))
-                    .addService(PairingGrpcService(pairing))
                     .addService(StreamGrpcService(stream))
-                    .intercept(AuthInterceptor(pairing))
             }
         hub.start(0)
         port = hub.boundPort()
@@ -100,17 +92,12 @@ class HubServerE2ETest {
     // ---------------------------------------------------------------- required cases
 
     @Test
-    fun `full scenario pairs heartbeats and streams ten audio frames to transcripts`() {
-        // Given an open pairing window on the real hub
-        val window = pairing.openWindow(ttlMs = 120_000)
-
-        // When the Go peer walks the full protocol over TCP
+    fun `full scenario opens an unauthenticated stream and returns transcripts`() {
+        // When the Go peer walks the full protocol over TCP with NO token
         val run =
             mockPeer(
                 "--addr",
                 "127.0.0.1:$port",
-                "--pin",
-                window.pin,
                 "--scenario",
                 "full",
                 "--mode",
@@ -136,22 +123,17 @@ class HubServerE2ETest {
             .that(count(run.stdout, "transcripts"))
             .isAtLeast(1)
 
-        // And the audio really reached the STT port on the hub side
-        assertThat(stt.audioFrameCount).isAtLeast(10)
+        // And the audio really reached the speech port on the hub side
+        assertThat(speech.audioFrameCount).isAtLeast(10)
     }
 
     @Test
     fun `full scenario with audio and video passes opaque video frames through byte for byte`() {
-        // Given an open pairing window
-        val window = pairing.openWindow(ttlMs = 120_000)
-
         // When the peer sends BOTH media kinds
         val run =
             mockPeer(
                 "--addr",
                 "127.0.0.1:$port",
-                "--pin",
-                window.pin,
                 "--scenario",
                 "full",
                 "--mode",
@@ -176,52 +158,6 @@ class HubServerE2ETest {
                 .that(nal)
                 .isEqualTo(syntheticVideoNal(index))
         }
-    }
-
-    @Test
-    fun `heartbeat with no token is rejected as UNAUTHENTICATED with a non zero exit`() {
-        // Given a paired hub and an open stream
-        pairing.openWindow(ttlMs = 120_000)
-
-        // When the peer deliberately sends NO bearer metadata
-        val run =
-            mockPeer(
-                "--addr",
-                "127.0.0.1:$port",
-                "--no-token",
-                "--timeout",
-                "30",
-            )
-
-        // Then the hub refuses and the CLI says exactly so
-        println("[QA] mockpeer no-token stdout: ${run.stdout.trim()} (exit=${run.exitCode})")
-        assertThat(run.exitCode).isNotEqualTo(0)
-        assertThat(run.stdout).contains("UNAUTHENTICATED")
-    }
-
-    @Test
-    fun `pairing with a wrong pin is rejected with a reason and a non zero exit`() {
-        // Given an open window whose PIN is NOT 000000
-        val window = pairing.openWindow(ttlMs = 120_000)
-        assertThat(window.pin).isNotEqualTo("000000")
-
-        // When the peer pairs with the wrong PIN
-        val run =
-            mockPeer(
-                "--addr",
-                "127.0.0.1:$port",
-                "--pin",
-                "000000",
-                "--scenario",
-                "pair",
-                "--timeout",
-                "30",
-            )
-
-        // Then the hub rejects with a machine-checkable reason
-        println("[QA] mockpeer wrong-pin stdout: ${run.stdout.trim()} (exit=${run.exitCode})")
-        assertThat(run.exitCode).isNotEqualTo(0)
-        assertThat(run.stdout).contains("pair-rejected reason=")
     }
 
     // ---------------------------------------------------------------- harness helpers

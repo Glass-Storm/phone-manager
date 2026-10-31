@@ -1,7 +1,6 @@
 package com.glassstorm.phonemanager.transport.grpc
 
 import com.glassstorm.phonemanager.core.domain.adapter.transport.HubServer
-import com.glassstorm.phonemanager.transport.grpc.security.AuthInterceptor
 import io.grpc.ServerBuilder
 import io.grpc.netty.shaded.io.grpc.netty.NettyServerBuilder
 import java.net.InetSocketAddress
@@ -15,12 +14,9 @@ import java.net.InetSocketAddress
  * builder the T6 spike proved GO with (issues.md R1: `io.grpc:grpc-netty-shaded`,
  * plaintext, IPv4 explicit).
  *
- * ## Collaborators are CONSTRUCTOR dependencies
- *
- * The two gRPC services and the [AuthInterceptor] arrive ready-built. Dagger
- * supplies them through `TransportModule`, which builds the production bind with
- * [ALL_INTERFACES_ADDRESS]; callers that need [LOOPBACK_ADDRESS] (the tests, and
- * the `:app` E2E harness) pass it explicitly.
+ * The listener serves the ONE streaming RPC the hub still exposes,
+ * [StreamGrpcService]; pairing (`Pair`/`Heartbeat`) and the bearer-token
+ * interceptor were removed from the runtime, so no service is authenticated.
  *
  * ## Bind-address decision (documented, deliberate)
  *
@@ -40,9 +36,7 @@ import java.net.InetSocketAddress
  * the frozen protocol contract for the documented upgrade path.
  */
 class HubServerAdapter(
-    private val pairingService: PairingGrpcService,
     private val streamService: StreamGrpcService,
-    private val authInterceptor: AuthInterceptor,
     private val bindAddress: String,
 ) : HubServer {
     private val hub: GrpcHubServer = GrpcHubServer { newBuilder(it) }
@@ -62,9 +56,7 @@ class HubServerAdapter(
     private fun newBuilder(port: Int): ServerBuilder<*> =
         NettyServerBuilder
             .forAddress(InetSocketAddress(bindAddress, port))
-            .addService(pairingService)
             .addService(streamService)
-            .intercept(authInterceptor)
 
     companion object {
         /** IPv4 loopback — tests only. */

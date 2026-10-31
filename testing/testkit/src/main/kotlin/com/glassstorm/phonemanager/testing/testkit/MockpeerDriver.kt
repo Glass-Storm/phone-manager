@@ -3,101 +3,54 @@ package com.glassstorm.phonemanager.testing.testkit
 import java.io.File
 
 /**
- * Drives the Go reference peer through the full T18 scenario and renders the
- * ordered, machine-checkable evidence transcript.
+ * Drives the Go reference peer through the full scenario and renders the ordered,
+ * machine-checkable evidence transcript.
  *
  * Shared by the `:transport:grpc` JVM harness and the `:app` Robolectric hub
  * suite so the two harnesses cannot drift: they differ ONLY in how the hub is
  * hosted, never in what the peer is asked to do or how the result is asserted.
  *
- * Dependency-free by design (no `:core:domain` edge), so an Android module can consume
- * it: the caller supplies closures for its own pairing surface.
- *
- * ## Token handling
- *
- * The bearer token is an ephemeral loopback secret. It is passed peer-to-peer via
- * `--token-out` / `--token-file` (0600) and NEVER appears on stdout, in a log, or
- * in the evidence transcript.
+ * Dependency-free by design (no `:core:domain` edge), so an Android module can
+ * consume it. The stream is UNAUTHENTICATED: the peer sends a `stream_open`
+ * bootstrap frame rather than pairing and carrying a bearer token.
  *
  * @param port the bound hub port the peer dials on `127.0.0.1`.
- * @param openWindow opens a pairing window and returns its PIN.
- * @param revokeAll revokes every paired device (the post-revoke leg).
  */
 class MockPeerDriver(
     private val port: Int,
-    private val openWindow: () -> String,
-    private val revokeAll: () -> Unit,
 ) {
     /** Every child process launched, so the caller can reap them in teardown. */
     private val children: MutableList<Process> = mutableListOf()
 
-    /** Per-driver token path: unique, so concurrent suites can never collide. */
-    private val tokenFile: File by lazy {
-        File(
-            File(System.getProperty("java.io.tmpdir"), "mockpeer-token").apply { mkdirs() },
-            "revoked-leg-${java.util.UUID.randomUUID()}.token",
-        )
-    }
-
-    /** The first invocation's result, read by the caller for byte-level assertions. */
+    /** The invocation's result, read by the caller for byte-level assertions. */
     lateinit var firstRun: ProcessRun
         private set
 
-    /** The post-revoke invocation's result. */
-    lateinit var revokedRun: ProcessRun
-        private set
-
     /**
-     * Invocation 1: pair -> heartbeat -> OpenStream (audio+video) -> session-ok.
-     * The freshly issued token is written to a 0600 temp file, never to stdout.
+     * The full scenario: OpenStream (audio+video) -> session-ok. The stream is
+     * opened with NO token; the `stream_open` frame binds the peer's identity.
      */
-    fun pairHeartbeatStream(frames: Int = 10): ProcessRun {
+    fun openStream(frames: Int = 10): ProcessRun {
         firstRun =
             mockPeer(
                 "--addr",
                 "127.0.0.1:$port",
-                "--pin",
-                openWindow(),
                 "--scenario",
                 "full",
                 "--mode",
                 "both",
                 "--frames",
                 "$frames",
-                "--token-out",
-                tokenFile.absolutePath,
                 "--timeout",
                 "60",
             )
         return firstRun
     }
 
-    /**
-     * Invocation 2: the SAME token, after every device has been revoked. The hub
-     * MUST now refuse, and the peer MUST say `UNAUTHENTICATED` with a non-zero exit.
-     */
-    fun revokedLeg(): ProcessRun {
-        revokeAll()
-        revokedRun =
-            mockPeer(
-                "--addr",
-                "127.0.0.1:$port",
-                "--scenario",
-                "full",
-                "--token-file",
-                tokenFile.absolutePath,
-                "--expect-unauthenticated",
-                "--timeout",
-                "30",
-            )
-        return revokedRun
-    }
-
-    /** The three media lines the full scenario prints, in order. */
+    /** The two lines the full scenario prints, in order. */
     fun fullLines(run: ProcessRun = firstRun): List<String> =
         listOf(
-            "pair-ok",
-            "heartbeat-ok",
+            "stream-open-ok",
             "session-ok frames=${count(run.stdout, "frames")}",
         )
 
@@ -106,9 +59,8 @@ class MockPeerDriver(
         children += process
     }
 
-    /** Delete the ephemeral token file and reap every child. Never throws. */
+    /** Reap every child. Never throws. */
     fun reap() {
-        runCatching { tokenFile.delete() }
         children.forEach { child ->
             runCatching {
                 if (child.isAlive) child.destroyForcibly()
@@ -146,18 +98,14 @@ class MockPeerDriver(
 object MockPeerTranscript {
     /** The frozen ordered sequence. */
     fun lines(
-        pairOk: Boolean,
-        heartbeatOk: Boolean,
+        streamOpenOk: Boolean,
         frames: Int,
         videoBytesMatch: Boolean,
-        revokedUnauthenticated: Boolean,
     ): List<String> =
         listOf(
-            if (pairOk) "pair-ok" else "pair-missing",
-            if (heartbeatOk) "heartbeat-ok" else "heartbeat-missing",
+            if (streamOpenOk) "stream-open-ok" else "stream-open-missing",
             "session-ok frames=$frames",
             if (videoBytesMatch) "video-bytes-match" else "video-bytes-mismatch",
-            if (revokedUnauthenticated) "revoked->UNAUTHENTICATED" else "revoked->ACCEPTED",
         )
 
     /** Append the harness's transcript to the evidence file as ONE atomic append. */

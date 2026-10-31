@@ -1,9 +1,16 @@
 package com.glassstorm.phonemanager.transport.grpc
 
+import com.glassstorm.phonemanager.core.domain.adapter.enrollment.EnrollmentStore
+import com.glassstorm.phonemanager.core.domain.adapter.gesture.GesturePort
 import com.glassstorm.phonemanager.core.domain.adapter.relay.FrameSink
 import com.glassstorm.phonemanager.core.domain.adapter.repository.DeviceRepository
-import com.glassstorm.phonemanager.core.domain.adapter.speech.SttPort
+import com.glassstorm.phonemanager.core.domain.adapter.speech.SpeechPort
+import com.glassstorm.phonemanager.core.domain.adapter.speech.TtsPort
 import com.glassstorm.phonemanager.core.model.Device
+import com.glassstorm.phonemanager.core.model.EnrollOutcome
+import com.glassstorm.phonemanager.core.model.EnrolledSpeaker
+import com.glassstorm.phonemanager.core.model.GestureOutcome
+import com.glassstorm.phonemanager.core.model.SpeechUtterance
 import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
@@ -47,13 +54,14 @@ class FakeDeviceRepository : DeviceRepository {
 }
 
 /**
- * [SttPort] fake that always recognizes the same utterance, counts audio frames,
+ * [SpeechPort] fake that always recognizes the same utterance, counts audio frames,
  * and records every session it was asked to close (so "exactly once" teardown is
  * assertable).
  */
-class FakeSttPort(
-    private val transcript: String = "hello from fake stt",
-) : SttPort {
+class FakeSpeechPort(
+    private val transcript: String = "hello from fake speech",
+    private val speakerName: String? = null,
+) : SpeechPort {
     private val audioCount = AtomicInteger()
 
     val audioFrameCount: Int get() = audioCount.get()
@@ -65,16 +73,43 @@ class FakeSttPort(
 
     override suspend fun transcribe(
         sessionId: String,
-        audioPcm16: ByteArray,
-        sampleRateHz: Int,
-    ): String? {
+        pcm16: ByteArray,
+    ): SpeechUtterance? {
         audioCount.incrementAndGet()
-        return transcript
+        return SpeechUtterance(text = transcript, speakerName = speakerName)
     }
 
     override suspend fun close(sessionId: String) {
         closing += sessionId
     }
+
+    override suspend fun flush(sessionId: String): SpeechUtterance? = null
+}
+
+/** [GesturePort] fake: a fixed outcome for a non-empty still, `null` for an empty one. */
+class FakeGesturePort(
+    private val outcome: GestureOutcome = GestureOutcome(label = "Thumb_Up", text = "Yes", confidence = 0.5f),
+) : GesturePort {
+    override suspend fun recognize(jpeg: ByteArray): GestureOutcome? = if (jpeg.isEmpty()) null else outcome
+}
+
+/** [TtsPort] fake: fixed PCM bytes for non-empty text, an empty array otherwise. */
+class FakeTtsPort(
+    private val pcm16: ByteArray = ByteArray(4) { 1 },
+) : TtsPort {
+    override suspend fun synthesize(text: String): ByteArray = if (text.isEmpty()) ByteArray(0) else pcm16
+}
+
+/** [EnrollmentStore] fake accepting every request. */
+class FakeEnrollmentStore : EnrollmentStore {
+    override suspend fun enroll(
+        name: String,
+        pcm16: ByteArray,
+    ): EnrollOutcome = EnrollOutcome.accepted
+
+    override suspend fun names(): List<String> = emptyList()
+
+    override suspend fun enrollments(): List<EnrolledSpeaker> = emptyList()
 }
 
 /** [FrameSink] fake that records every opaque video NAL it is handed. */

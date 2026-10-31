@@ -8,6 +8,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.glassstorm.phonemanager.core.domain.adapter.network.Discovery
 import com.glassstorm.phonemanager.core.domain.adapter.network.HotspotController
 import com.glassstorm.phonemanager.core.domain.adapter.transport.HubServer
+import com.glassstorm.phonemanager.core.model.HotspotInfo
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -46,6 +47,18 @@ class HubForegroundServiceTest {
             .create()
             .startCommand(0, 0)
             .get()
+    }
+
+    private fun awaitUntil(
+        timeoutMs: Long = 5_000L,
+        condition: () -> Boolean,
+    ) {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            if (condition()) return
+            Thread.sleep(10L)
+        }
+        assertThat(condition()).isTrue()
     }
 
     @Test
@@ -100,6 +113,7 @@ class HubForegroundServiceTest {
                 .create()
                 .startCommand(0, 0)
         val hub: HubServer = component().hubServer()
+        awaitUntil { hub.isRunning() }
         assertThat(hub.isRunning()).isTrue()
         val port = hub.boundPort()
 
@@ -107,6 +121,7 @@ class HubForegroundServiceTest {
         controller.destroy()
 
         // Then the listener is stopped and the port is gone
+        awaitUntil { !hub.isRunning() && hub.boundPort() == 0 }
         assertThat(hub.isRunning()).isFalse()
         assertThat(hub.boundPort()).isEqualTo(0)
         assertThat(port).isGreaterThan(0)
@@ -124,6 +139,7 @@ class HubForegroundServiceTest {
                 .create()
                 .startCommand(0, 0)
         val hub: HubServer = component().hubServer()
+        awaitUntil { hub.isRunning() }
         val port = hub.boundPort()
 
         // When the OS re-delivers the start command
@@ -138,12 +154,8 @@ class HubForegroundServiceTest {
     }
 
     @Test
-    fun `a missing hotspot permission never leaves the hotspot ACTIVE`() {
-        // Given the location permission is denied (Robolectric's default) and a
-        // started service that therefore cannot bring the access point up
-        shadowOf(context as Application).denyPermissions(
-            android.Manifest.permission.ACCESS_FINE_LOCATION,
-        )
+    fun `with no manual hotspot the service still starts the listener and never claims ACTIVE`() {
+        // Given a started service on a host with no soft-AP interface
         val controller =
             Robolectric
                 .buildService(
@@ -158,9 +170,78 @@ class HubForegroundServiceTest {
         // peers stay reachable
         assertThat(hotspot.isActive()).isFalse()
         val hub: HubServer = component().hubServer()
+        awaitUntil { hub.isRunning() }
         assertThat(hub.isRunning()).isTrue()
 
         controller.destroy()
+    }
+
+    @Test
+    fun `teardown does not block the caller while the listener drains a peer`() {
+        // Given a listener whose stop waits on an attached peer, driven through the
+        // foreground service's real lifecycle
+        val slowHub = SlowStopHubServer(stopDelayMs = 2_000L)
+        val controller =
+            Robolectric
+                .buildService(
+                    HubForegroundService::class.java,
+                    Intent(context, HubForegroundService::class.java).putExtra(HubForegroundService.EXTRA_PORT, 0),
+                ).create()
+        controller.get().bringUpFactory = {
+            HubBringUp(slowHub, NoopHotspotController(), NoopDiscovery())
+        }
+        controller.startCommand(0, 0)
+        awaitUntil { slowHub.isRunning() }
+
+        // When the service is destroyed on the caller thread
+        val elapsedMs = kotlin.system.measureTimeMillis { controller.destroy() }
+
+        // Then the caller returned promptly and the drain completed off-thread
+        assertThat(elapsedMs).isLessThan(1_000L)
+        awaitUntil { slowHub.stopped }
+        assertThat(slowHub.stopped).isTrue()
+    }
+
+    private class SlowStopHubServer(
+        private val stopDelayMs: Long,
+    ) : HubServer {
+        @Volatile private var running = false
+
+        @Volatile var stopped: Boolean = false
+            private set
+
+        override fun start(port: Int) {
+            running = true
+        }
+
+        override fun stop() {
+            Thread.sleep(stopDelayMs)
+            stopped = true
+            running = false
+        }
+
+        override fun isRunning(): Boolean = running
+
+        override fun boundPort(): Int = if (running) 40404 else 0
+    }
+
+    private class NoopHotspotController : HotspotController {
+        override fun startHotspot(): HotspotInfo = error("bring-up must not create a hotspot")
+
+        override fun stopHotspot() = Unit
+
+        override fun isActive(): Boolean = false
+
+        override fun detectManualTether(): HotspotInfo? = null
+    }
+
+    private class NoopDiscovery : Discovery {
+        override fun advertise(
+            name: String,
+            port: Int,
+        ) = Unit
+
+        override fun stopAdvertise() = Unit
     }
 
     @Test

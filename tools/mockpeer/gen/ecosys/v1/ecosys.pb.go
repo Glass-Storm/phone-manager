@@ -371,12 +371,16 @@ func (x *HeartbeatResponse) GetServerTimeMs() int64 {
 
 // StreamService/OpenStream bootstrap frame. Sent by the peer as the first
 // message on the bidi stream so the hub can bind the session to a device.
-// NOTE: this message is part of the frozen contract even though StreamFrame
-// does not (yet) carry it; peers may exchange it over their own side channel.
+// Carried as the `stream_open` StreamFrame oneof member (field 10): with
+// bearer-token auth removed, it is the only thing that tells the hub who is on
+// the other end of a session and how to route frames.
 type StreamOpenRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	DeviceId      string                 `protobuf:"bytes,1,opt,name=device_id,json=deviceId,proto3" json:"device_id,omitempty"`
-	Kind          StreamKind             `protobuf:"varint,2,opt,name=kind,proto3,enum=ecosys.v1.StreamKind" json:"kind,omitempty"`
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	DeviceId string                 `protobuf:"bytes,1,opt,name=device_id,json=deviceId,proto3" json:"device_id,omitempty"`
+	Kind     StreamKind             `protobuf:"varint,2,opt,name=kind,proto3,enum=ecosys.v1.StreamKind" json:"kind,omitempty"`
+	// The peer's role, so the hub can route by role (glass vs. daemon/necklace).
+	// Optional; an absent value is DEVICE_ROLE_UNSPECIFIED.
+	Role          DeviceRole `protobuf:"varint,3,opt,name=role,proto3,enum=ecosys.v1.DeviceRole" json:"role,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -423,6 +427,13 @@ func (x *StreamOpenRequest) GetKind() StreamKind {
 		return x.Kind
 	}
 	return StreamKind_STREAM_KIND_UNSPECIFIED
+}
+
+func (x *StreamOpenRequest) GetRole() DeviceRole {
+	if x != nil {
+		return x.Role
+	}
+	return DeviceRole_DEVICE_ROLE_UNSPECIFIED
 }
 
 // One recognized utterance returned to the peer.
@@ -486,10 +497,329 @@ func (x *StreamResult) GetPtsMs() int64 {
 	return 0
 }
 
+// A single JPEG still captured by the necklace camera. The hub DECODES each
+// image to run isolated gesture recognition; it never re-encodes or stores the
+// bytes, and the payload stays opaque to every other layer.
+type ImageFrame struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Jpeg          []byte                 `protobuf:"bytes,1,opt,name=jpeg,proto3" json:"jpeg,omitempty"`
+	PtsMs         int64                  `protobuf:"varint,2,opt,name=pts_ms,json=ptsMs,proto3" json:"pts_ms,omitempty"`
+	Width         int32                  `protobuf:"varint,3,opt,name=width,proto3" json:"width,omitempty"`
+	Height        int32                  `protobuf:"varint,4,opt,name=height,proto3" json:"height,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ImageFrame) Reset() {
+	*x = ImageFrame{}
+	mi := &file_ecosys_v1_ecosys_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ImageFrame) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ImageFrame) ProtoMessage() {}
+
+func (x *ImageFrame) ProtoReflect() protoreflect.Message {
+	mi := &file_ecosys_v1_ecosys_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ImageFrame.ProtoReflect.Descriptor instead.
+func (*ImageFrame) Descriptor() ([]byte, []int) {
+	return file_ecosys_v1_ecosys_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *ImageFrame) GetJpeg() []byte {
+	if x != nil {
+		return x.Jpeg
+	}
+	return nil
+}
+
+func (x *ImageFrame) GetPtsMs() int64 {
+	if x != nil {
+		return x.PtsMs
+	}
+	return 0
+}
+
+func (x *ImageFrame) GetWidth() int32 {
+	if x != nil {
+		return x.Width
+	}
+	return 0
+}
+
+func (x *ImageFrame) GetHeight() int32 {
+	if x != nil {
+		return x.Height
+	}
+	return 0
+}
+
+// One recognized isolated gesture. `label` is the raw recognizer class and
+// `text` is the spoken meaning; the hub emits this toward the glasses.
+type GestureResult struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Text          string                 `protobuf:"bytes,1,opt,name=text,proto3" json:"text,omitempty"`
+	Label         string                 `protobuf:"bytes,2,opt,name=label,proto3" json:"label,omitempty"`
+	Confidence    float32                `protobuf:"fixed32,3,opt,name=confidence,proto3" json:"confidence,omitempty"`
+	PtsMs         int64                  `protobuf:"varint,4,opt,name=pts_ms,json=ptsMs,proto3" json:"pts_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GestureResult) Reset() {
+	*x = GestureResult{}
+	mi := &file_ecosys_v1_ecosys_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GestureResult) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GestureResult) ProtoMessage() {}
+
+func (x *GestureResult) ProtoReflect() protoreflect.Message {
+	mi := &file_ecosys_v1_ecosys_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GestureResult.ProtoReflect.Descriptor instead.
+func (*GestureResult) Descriptor() ([]byte, []int) {
+	return file_ecosys_v1_ecosys_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *GestureResult) GetText() string {
+	if x != nil {
+		return x.Text
+	}
+	return ""
+}
+
+func (x *GestureResult) GetLabel() string {
+	if x != nil {
+		return x.Label
+	}
+	return ""
+}
+
+func (x *GestureResult) GetConfidence() float32 {
+	if x != nil {
+		return x.Confidence
+	}
+	return 0
+}
+
+func (x *GestureResult) GetPtsMs() int64 {
+	if x != nil {
+		return x.PtsMs
+	}
+	return 0
+}
+
+// Hub-synthesized speech as raw little-endian PCM16 mono @ 16 kHz, played by
+// the necklace or the glasses. The hub never sends another sample rate.
+type TtsAudio struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Pcm16_16K     []byte                 `protobuf:"bytes,1,opt,name=pcm16_16k,json=pcm1616k,proto3" json:"pcm16_16k,omitempty"`
+	PtsMs         int64                  `protobuf:"varint,2,opt,name=pts_ms,json=ptsMs,proto3" json:"pts_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TtsAudio) Reset() {
+	*x = TtsAudio{}
+	mi := &file_ecosys_v1_ecosys_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TtsAudio) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TtsAudio) ProtoMessage() {}
+
+func (x *TtsAudio) ProtoReflect() protoreflect.Message {
+	mi := &file_ecosys_v1_ecosys_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TtsAudio.ProtoReflect.Descriptor instead.
+func (*TtsAudio) Descriptor() ([]byte, []int) {
+	return file_ecosys_v1_ecosys_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *TtsAudio) GetPcm16_16K() []byte {
+	if x != nil {
+		return x.Pcm16_16K
+	}
+	return nil
+}
+
+func (x *TtsAudio) GetPtsMs() int64 {
+	if x != nil {
+		return x.PtsMs
+	}
+	return 0
+}
+
+// A voiceprint enrollment request from the glasses: a display name plus a raw
+// little-endian PCM16 mono @ 16 kHz sample. Enrollment rides the stream as a
+// frame, so no new RPC (and no token) is introduced.
+type EnrollRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Name           string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	AudioPcm16_16K []byte                 `protobuf:"bytes,2,opt,name=audio_pcm16_16k,json=audioPcm1616k,proto3" json:"audio_pcm16_16k,omitempty"`
+	PtsMs          int64                  `protobuf:"varint,3,opt,name=pts_ms,json=ptsMs,proto3" json:"pts_ms,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *EnrollRequest) Reset() {
+	*x = EnrollRequest{}
+	mi := &file_ecosys_v1_ecosys_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EnrollRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EnrollRequest) ProtoMessage() {}
+
+func (x *EnrollRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_ecosys_v1_ecosys_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EnrollRequest.ProtoReflect.Descriptor instead.
+func (*EnrollRequest) Descriptor() ([]byte, []int) {
+	return file_ecosys_v1_ecosys_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *EnrollRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *EnrollRequest) GetAudioPcm16_16K() []byte {
+	if x != nil {
+		return x.AudioPcm16_16K
+	}
+	return nil
+}
+
+func (x *EnrollRequest) GetPtsMs() int64 {
+	if x != nil {
+		return x.PtsMs
+	}
+	return 0
+}
+
+// The hub's reply to an EnrollRequest. On rejection `ok` is false and `reason`
+// carries a machine-checkable explanation.
+type EnrollResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Ok            bool                   `protobuf:"varint,1,opt,name=ok,proto3" json:"ok,omitempty"`
+	Reason        string                 `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EnrollResponse) Reset() {
+	*x = EnrollResponse{}
+	mi := &file_ecosys_v1_ecosys_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EnrollResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EnrollResponse) ProtoMessage() {}
+
+func (x *EnrollResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_ecosys_v1_ecosys_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EnrollResponse.ProtoReflect.Descriptor instead.
+func (*EnrollResponse) Descriptor() ([]byte, []int) {
+	return file_ecosys_v1_ecosys_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *EnrollResponse) GetOk() bool {
+	if x != nil {
+		return x.Ok
+	}
+	return false
+}
+
+func (x *EnrollResponse) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
 // A single frame on the bidirectional stream. Exactly one payload variant is
-// set at a time (oneof). Media payloads are OPAQUE to the hub: audio is raw
-// little-endian PCM16 mono @ 16 kHz, video is raw H.264 NAL units that the
-// phone NEVER decodes or re-encodes.
+// set at a time (oneof).
+//
+// Frame opacity:
+//   - audio (`audio_pcm16_16k`, and `tts_audio.pcm16_16k`) is raw little-endian
+//     PCM16 mono @ 16 kHz that the hub NEVER decodes: it relays the bytes to the
+//     STT engine or to a peer's speaker untouched.
+//   - video (`video_h264_nal`) is an opaque H.264 NAL unit that the phone NEVER
+//     decodes, re-encodes, transcodes, or renders.
+//   - image (`image`) is the one media kind the hub DOES decode, into a bitmap,
+//     solely to run isolated gesture recognition on the still.
 type StreamFrame struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to Payload:
@@ -498,6 +828,12 @@ type StreamFrame struct {
 	//	*StreamFrame_VideoH264Nal
 	//	*StreamFrame_Transcript
 	//	*StreamFrame_Result
+	//	*StreamFrame_Image
+	//	*StreamFrame_Gesture
+	//	*StreamFrame_TtsAudio
+	//	*StreamFrame_EnrollRequest
+	//	*StreamFrame_EnrollResponse
+	//	*StreamFrame_StreamOpen
 	Payload       isStreamFrame_Payload `protobuf_oneof:"payload"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -505,7 +841,7 @@ type StreamFrame struct {
 
 func (x *StreamFrame) Reset() {
 	*x = StreamFrame{}
-	mi := &file_ecosys_v1_ecosys_proto_msgTypes[6]
+	mi := &file_ecosys_v1_ecosys_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -517,7 +853,7 @@ func (x *StreamFrame) String() string {
 func (*StreamFrame) ProtoMessage() {}
 
 func (x *StreamFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_ecosys_v1_ecosys_proto_msgTypes[6]
+	mi := &file_ecosys_v1_ecosys_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -530,7 +866,7 @@ func (x *StreamFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StreamFrame.ProtoReflect.Descriptor instead.
 func (*StreamFrame) Descriptor() ([]byte, []int) {
-	return file_ecosys_v1_ecosys_proto_rawDescGZIP(), []int{6}
+	return file_ecosys_v1_ecosys_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *StreamFrame) GetPayload() isStreamFrame_Payload {
@@ -576,6 +912,60 @@ func (x *StreamFrame) GetResult() *StreamResult {
 	return nil
 }
 
+func (x *StreamFrame) GetImage() *ImageFrame {
+	if x != nil {
+		if x, ok := x.Payload.(*StreamFrame_Image); ok {
+			return x.Image
+		}
+	}
+	return nil
+}
+
+func (x *StreamFrame) GetGesture() *GestureResult {
+	if x != nil {
+		if x, ok := x.Payload.(*StreamFrame_Gesture); ok {
+			return x.Gesture
+		}
+	}
+	return nil
+}
+
+func (x *StreamFrame) GetTtsAudio() *TtsAudio {
+	if x != nil {
+		if x, ok := x.Payload.(*StreamFrame_TtsAudio); ok {
+			return x.TtsAudio
+		}
+	}
+	return nil
+}
+
+func (x *StreamFrame) GetEnrollRequest() *EnrollRequest {
+	if x != nil {
+		if x, ok := x.Payload.(*StreamFrame_EnrollRequest); ok {
+			return x.EnrollRequest
+		}
+	}
+	return nil
+}
+
+func (x *StreamFrame) GetEnrollResponse() *EnrollResponse {
+	if x != nil {
+		if x, ok := x.Payload.(*StreamFrame_EnrollResponse); ok {
+			return x.EnrollResponse
+		}
+	}
+	return nil
+}
+
+func (x *StreamFrame) GetStreamOpen() *StreamOpenRequest {
+	if x != nil {
+		if x, ok := x.Payload.(*StreamFrame_StreamOpen); ok {
+			return x.StreamOpen
+		}
+	}
+	return nil
+}
+
 type isStreamFrame_Payload interface {
 	isStreamFrame_Payload()
 }
@@ -596,6 +986,30 @@ type StreamFrame_Result struct {
 	Result *StreamResult `protobuf:"bytes,4,opt,name=result,proto3,oneof"`
 }
 
+type StreamFrame_Image struct {
+	Image *ImageFrame `protobuf:"bytes,5,opt,name=image,proto3,oneof"`
+}
+
+type StreamFrame_Gesture struct {
+	Gesture *GestureResult `protobuf:"bytes,6,opt,name=gesture,proto3,oneof"`
+}
+
+type StreamFrame_TtsAudio struct {
+	TtsAudio *TtsAudio `protobuf:"bytes,7,opt,name=tts_audio,json=ttsAudio,proto3,oneof"`
+}
+
+type StreamFrame_EnrollRequest struct {
+	EnrollRequest *EnrollRequest `protobuf:"bytes,8,opt,name=enroll_request,json=enrollRequest,proto3,oneof"`
+}
+
+type StreamFrame_EnrollResponse struct {
+	EnrollResponse *EnrollResponse `protobuf:"bytes,9,opt,name=enroll_response,json=enrollResponse,proto3,oneof"`
+}
+
+type StreamFrame_StreamOpen struct {
+	StreamOpen *StreamOpenRequest `protobuf:"bytes,10,opt,name=stream_open,json=streamOpen,proto3,oneof"`
+}
+
 func (*StreamFrame_AudioPcm16_16K) isStreamFrame_Payload() {}
 
 func (*StreamFrame_VideoH264Nal) isStreamFrame_Payload() {}
@@ -603,6 +1017,18 @@ func (*StreamFrame_VideoH264Nal) isStreamFrame_Payload() {}
 func (*StreamFrame_Transcript) isStreamFrame_Payload() {}
 
 func (*StreamFrame_Result) isStreamFrame_Payload() {}
+
+func (*StreamFrame_Image) isStreamFrame_Payload() {}
+
+func (*StreamFrame_Gesture) isStreamFrame_Payload() {}
+
+func (*StreamFrame_TtsAudio) isStreamFrame_Payload() {}
+
+func (*StreamFrame_EnrollRequest) isStreamFrame_Payload() {}
+
+func (*StreamFrame_EnrollResponse) isStreamFrame_Payload() {}
+
+func (*StreamFrame_StreamOpen) isStreamFrame_Payload() {}
 
 var File_ecosys_v1_ecosys_proto protoreflect.FileDescriptor
 
@@ -623,21 +1049,53 @@ const file_ecosys_v1_ecosys_proto_rawDesc = "" +
 	"\tdevice_id\x18\x01 \x01(\tR\bdeviceId\"I\n" +
 	"\x11HeartbeatResponse\x12\x0e\n" +
 	"\x02ok\x18\x01 \x01(\bR\x02ok\x12$\n" +
-	"\x0eserver_time_ms\x18\x02 \x01(\x03R\fserverTimeMs\"[\n" +
+	"\x0eserver_time_ms\x18\x02 \x01(\x03R\fserverTimeMs\"\x86\x01\n" +
 	"\x11StreamOpenRequest\x12\x1b\n" +
 	"\tdevice_id\x18\x01 \x01(\tR\bdeviceId\x12)\n" +
-	"\x04kind\x18\x02 \x01(\x0e2\x15.ecosys.v1.StreamKindR\x04kind\"^\n" +
+	"\x04kind\x18\x02 \x01(\x0e2\x15.ecosys.v1.StreamKindR\x04kind\x12)\n" +
+	"\x04role\x18\x03 \x01(\x0e2\x15.ecosys.v1.DeviceRoleR\x04role\"^\n" +
 	"\fStreamResult\x12\x12\n" +
 	"\x04text\x18\x01 \x01(\tR\x04text\x12#\n" +
 	"\rspeaker_label\x18\x02 \x01(\tR\fspeakerLabel\x12\x15\n" +
-	"\x06pts_ms\x18\x03 \x01(\x03R\x05ptsMs\"\xbf\x01\n" +
+	"\x06pts_ms\x18\x03 \x01(\x03R\x05ptsMs\"e\n" +
+	"\n" +
+	"ImageFrame\x12\x12\n" +
+	"\x04jpeg\x18\x01 \x01(\fR\x04jpeg\x12\x15\n" +
+	"\x06pts_ms\x18\x02 \x01(\x03R\x05ptsMs\x12\x14\n" +
+	"\x05width\x18\x03 \x01(\x05R\x05width\x12\x16\n" +
+	"\x06height\x18\x04 \x01(\x05R\x06height\"p\n" +
+	"\rGestureResult\x12\x12\n" +
+	"\x04text\x18\x01 \x01(\tR\x04text\x12\x14\n" +
+	"\x05label\x18\x02 \x01(\tR\x05label\x12\x1e\n" +
+	"\n" +
+	"confidence\x18\x03 \x01(\x02R\n" +
+	"confidence\x12\x15\n" +
+	"\x06pts_ms\x18\x04 \x01(\x03R\x05ptsMs\">\n" +
+	"\bTtsAudio\x12\x1b\n" +
+	"\tpcm16_16k\x18\x01 \x01(\fR\bpcm1616k\x12\x15\n" +
+	"\x06pts_ms\x18\x02 \x01(\x03R\x05ptsMs\"b\n" +
+	"\rEnrollRequest\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12&\n" +
+	"\x0faudio_pcm16_16k\x18\x02 \x01(\fR\raudioPcm1616k\x12\x15\n" +
+	"\x06pts_ms\x18\x03 \x01(\x03R\x05ptsMs\"8\n" +
+	"\x0eEnrollResponse\x12\x0e\n" +
+	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x16\n" +
+	"\x06reason\x18\x02 \x01(\tR\x06reason\"\xa2\x04\n" +
 	"\vStreamFrame\x12(\n" +
 	"\x0faudio_pcm16_16k\x18\x01 \x01(\fH\x00R\raudioPcm1616k\x12&\n" +
 	"\x0evideo_h264_nal\x18\x02 \x01(\fH\x00R\fvideoH264Nal\x12 \n" +
 	"\n" +
 	"transcript\x18\x03 \x01(\tH\x00R\n" +
 	"transcript\x121\n" +
-	"\x06result\x18\x04 \x01(\v2\x17.ecosys.v1.StreamResultH\x00R\x06resultB\t\n" +
+	"\x06result\x18\x04 \x01(\v2\x17.ecosys.v1.StreamResultH\x00R\x06result\x12-\n" +
+	"\x05image\x18\x05 \x01(\v2\x15.ecosys.v1.ImageFrameH\x00R\x05image\x124\n" +
+	"\agesture\x18\x06 \x01(\v2\x18.ecosys.v1.GestureResultH\x00R\agesture\x122\n" +
+	"\ttts_audio\x18\a \x01(\v2\x13.ecosys.v1.TtsAudioH\x00R\bttsAudio\x12A\n" +
+	"\x0eenroll_request\x18\b \x01(\v2\x18.ecosys.v1.EnrollRequestH\x00R\renrollRequest\x12D\n" +
+	"\x0fenroll_response\x18\t \x01(\v2\x19.ecosys.v1.EnrollResponseH\x00R\x0eenrollResponse\x12?\n" +
+	"\vstream_open\x18\n" +
+	" \x01(\v2\x1c.ecosys.v1.StreamOpenRequestH\x00R\n" +
+	"streamOpenB\t\n" +
 	"\apayload*X\n" +
 	"\n" +
 	"DeviceRole\x12\x1b\n" +
@@ -669,7 +1127,7 @@ func file_ecosys_v1_ecosys_proto_rawDescGZIP() []byte {
 }
 
 var file_ecosys_v1_ecosys_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_ecosys_v1_ecosys_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_ecosys_v1_ecosys_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
 var file_ecosys_v1_ecosys_proto_goTypes = []any{
 	(DeviceRole)(0),           // 0: ecosys.v1.DeviceRole
 	(StreamKind)(0),           // 1: ecosys.v1.StreamKind
@@ -679,23 +1137,35 @@ var file_ecosys_v1_ecosys_proto_goTypes = []any{
 	(*HeartbeatResponse)(nil), // 5: ecosys.v1.HeartbeatResponse
 	(*StreamOpenRequest)(nil), // 6: ecosys.v1.StreamOpenRequest
 	(*StreamResult)(nil),      // 7: ecosys.v1.StreamResult
-	(*StreamFrame)(nil),       // 8: ecosys.v1.StreamFrame
+	(*ImageFrame)(nil),        // 8: ecosys.v1.ImageFrame
+	(*GestureResult)(nil),     // 9: ecosys.v1.GestureResult
+	(*TtsAudio)(nil),          // 10: ecosys.v1.TtsAudio
+	(*EnrollRequest)(nil),     // 11: ecosys.v1.EnrollRequest
+	(*EnrollResponse)(nil),    // 12: ecosys.v1.EnrollResponse
+	(*StreamFrame)(nil),       // 13: ecosys.v1.StreamFrame
 }
 var file_ecosys_v1_ecosys_proto_depIdxs = []int32{
-	0, // 0: ecosys.v1.PairRequest.role:type_name -> ecosys.v1.DeviceRole
-	1, // 1: ecosys.v1.StreamOpenRequest.kind:type_name -> ecosys.v1.StreamKind
-	7, // 2: ecosys.v1.StreamFrame.result:type_name -> ecosys.v1.StreamResult
-	2, // 3: ecosys.v1.PairingService.Pair:input_type -> ecosys.v1.PairRequest
-	4, // 4: ecosys.v1.PairingService.Heartbeat:input_type -> ecosys.v1.HeartbeatRequest
-	8, // 5: ecosys.v1.StreamService.OpenStream:input_type -> ecosys.v1.StreamFrame
-	3, // 6: ecosys.v1.PairingService.Pair:output_type -> ecosys.v1.PairResponse
-	5, // 7: ecosys.v1.PairingService.Heartbeat:output_type -> ecosys.v1.HeartbeatResponse
-	8, // 8: ecosys.v1.StreamService.OpenStream:output_type -> ecosys.v1.StreamFrame
-	6, // [6:9] is the sub-list for method output_type
-	3, // [3:6] is the sub-list for method input_type
-	3, // [3:3] is the sub-list for extension type_name
-	3, // [3:3] is the sub-list for extension extendee
-	0, // [0:3] is the sub-list for field type_name
+	0,  // 0: ecosys.v1.PairRequest.role:type_name -> ecosys.v1.DeviceRole
+	1,  // 1: ecosys.v1.StreamOpenRequest.kind:type_name -> ecosys.v1.StreamKind
+	0,  // 2: ecosys.v1.StreamOpenRequest.role:type_name -> ecosys.v1.DeviceRole
+	7,  // 3: ecosys.v1.StreamFrame.result:type_name -> ecosys.v1.StreamResult
+	8,  // 4: ecosys.v1.StreamFrame.image:type_name -> ecosys.v1.ImageFrame
+	9,  // 5: ecosys.v1.StreamFrame.gesture:type_name -> ecosys.v1.GestureResult
+	10, // 6: ecosys.v1.StreamFrame.tts_audio:type_name -> ecosys.v1.TtsAudio
+	11, // 7: ecosys.v1.StreamFrame.enroll_request:type_name -> ecosys.v1.EnrollRequest
+	12, // 8: ecosys.v1.StreamFrame.enroll_response:type_name -> ecosys.v1.EnrollResponse
+	6,  // 9: ecosys.v1.StreamFrame.stream_open:type_name -> ecosys.v1.StreamOpenRequest
+	2,  // 10: ecosys.v1.PairingService.Pair:input_type -> ecosys.v1.PairRequest
+	4,  // 11: ecosys.v1.PairingService.Heartbeat:input_type -> ecosys.v1.HeartbeatRequest
+	13, // 12: ecosys.v1.StreamService.OpenStream:input_type -> ecosys.v1.StreamFrame
+	3,  // 13: ecosys.v1.PairingService.Pair:output_type -> ecosys.v1.PairResponse
+	5,  // 14: ecosys.v1.PairingService.Heartbeat:output_type -> ecosys.v1.HeartbeatResponse
+	13, // 15: ecosys.v1.StreamService.OpenStream:output_type -> ecosys.v1.StreamFrame
+	13, // [13:16] is the sub-list for method output_type
+	10, // [10:13] is the sub-list for method input_type
+	10, // [10:10] is the sub-list for extension type_name
+	10, // [10:10] is the sub-list for extension extendee
+	0,  // [0:10] is the sub-list for field type_name
 }
 
 func init() { file_ecosys_v1_ecosys_proto_init() }
@@ -703,11 +1173,17 @@ func file_ecosys_v1_ecosys_proto_init() {
 	if File_ecosys_v1_ecosys_proto != nil {
 		return
 	}
-	file_ecosys_v1_ecosys_proto_msgTypes[6].OneofWrappers = []any{
+	file_ecosys_v1_ecosys_proto_msgTypes[11].OneofWrappers = []any{
 		(*StreamFrame_AudioPcm16_16K)(nil),
 		(*StreamFrame_VideoH264Nal)(nil),
 		(*StreamFrame_Transcript)(nil),
 		(*StreamFrame_Result)(nil),
+		(*StreamFrame_Image)(nil),
+		(*StreamFrame_Gesture)(nil),
+		(*StreamFrame_TtsAudio)(nil),
+		(*StreamFrame_EnrollRequest)(nil),
+		(*StreamFrame_EnrollResponse)(nil),
+		(*StreamFrame_StreamOpen)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -715,7 +1191,7 @@ func file_ecosys_v1_ecosys_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_ecosys_v1_ecosys_proto_rawDesc), len(file_ecosys_v1_ecosys_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   7,
+			NumMessages:   12,
 			NumExtensions: 0,
 			NumServices:   2,
 		},

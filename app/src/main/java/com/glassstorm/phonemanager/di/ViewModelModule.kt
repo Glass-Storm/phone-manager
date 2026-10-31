@@ -3,8 +3,6 @@ package com.glassstorm.phonemanager.di
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.glassstorm.phonemanager.ui.DashboardViewModel
-import com.glassstorm.phonemanager.ui.DevicesViewModel
-import com.glassstorm.phonemanager.ui.PairingViewModel
 import com.glassstorm.phonemanager.ui.SettingsViewModel
 import com.glassstorm.phonemanager.ui.StreamViewModel
 import dagger.Binds
@@ -28,16 +26,6 @@ abstract class ViewModelModule {
     @IntoMap
     @ViewModelKey(DashboardViewModel::class)
     abstract fun bindDashboardViewModel(impl: DashboardViewModel): ViewModel
-
-    @Binds
-    @IntoMap
-    @ViewModelKey(DevicesViewModel::class)
-    abstract fun bindDevicesViewModel(impl: DevicesViewModel): ViewModel
-
-    @Binds
-    @IntoMap
-    @ViewModelKey(PairingViewModel::class)
-    abstract fun bindPairingViewModel(impl: PairingViewModel): ViewModel
 
     @Binds
     @IntoMap

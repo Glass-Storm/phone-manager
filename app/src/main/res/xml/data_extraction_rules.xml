@@ -3,13 +3,14 @@
   Cloud-backup and device-transfer exclusions (API 31+).
 
   The same two artifacts as backup_rules.xml, for the same reasons:
-  * `runtime_config.xml` holds the Speechmatics API key;
-  * `phone_manager.db` holds the paired devices' token hashes and is device-bound
-    security state that must not travel to another device.
+  * `runtime_config.xml` is the device-local runtime config store (the hotspot mode);
+  * `phone_manager.db` holds device-bound security state that must not travel to
+    another device.
 
+  The hub stores no cloud credentials: it runs a single on-device speech engine
+  with no third-party STT/TTS cloud path.
   `device-transfer` is deliberately excluded too: a direct phone-to-phone copy is
-  no safer for a credential or for device-bound pairing state than a cloud backup.
-  Mirrors the reference repo's data_extraction_rules.xml posture.
+  no safer for device-bound state than a cloud backup.
 
   XML NOTE: an XML comment may not contain a double hyphen run.
 -->

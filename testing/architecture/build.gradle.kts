@@ -27,6 +27,7 @@ val governedSources =
         "transport/grpc",
         "adapter/jvm",
         "adapter/android",
+        "adapter/ai",
         "testing/testkit",
         "testing/architecture",
     ).map { rootProject.file("$it/src") }

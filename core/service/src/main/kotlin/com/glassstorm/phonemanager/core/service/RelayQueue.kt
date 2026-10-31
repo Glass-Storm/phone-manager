@@ -2,6 +2,12 @@ package com.glassstorm.phonemanager.core.service
 
 import kotlinx.coroutines.channels.Channel
 
+/** One queued JPEG still plus the capture timestamp its gesture output inherits. */
+internal data class QueuedImage(
+    val jpeg: ByteArray,
+    val ptsMs: Long,
+)
+
 /**
  * Per-session media queue for one relay session.
  *
@@ -16,18 +22,40 @@ import kotlinx.coroutines.channels.Channel
  *    is NEVER dropped.
  *  * [video] — drop-oldest. [admitVideo] evicts the oldest queued frame when
  *    the buffer is full, so the live edge keeps flowing.
+ *  * [image] — drop-oldest (LATEST WINS). [admitImage] evicts the oldest queued
+ *    still when the buffer is full, so a supersonic producer can never park the
+ *    peer's `pushImage`; the caller counts the eviction as `imageDropped`.
  */
 internal class RelayQueue(
     audioCapacity: Int,
     videoCapacity: Int,
+    imageCapacity: Int,
 ) {
     val audio: Channel<ByteArray> = Channel(capacity = audioCapacity)
 
     val video: Channel<ByteArray> = Channel(capacity = videoCapacity)
 
+    val image: Channel<QueuedImage> = Channel(capacity = imageCapacity)
+
     /** Park until [pcm] fits. Audio is the irreplaceable half: it is never dropped. */
     suspend fun admitAudio(pcm: ByteArray) {
         audio.send(pcm)
+    }
+
+    /**
+     * Admit [still] with the LATEST-WINS policy: when the buffer is full, the
+     * oldest queued still is evicted so the newest one always fits.
+     *
+     * Returns `true` only when an eviction was performed, matching [admitVideo]'s
+     * shape. It NEVER suspends, so a sustained 10 fps source can never park the
+     * peer's `pushImage`. The re-offer is best-effort under a concurrent consumer
+     * race; the caller still counts the eviction it observed.
+     */
+    fun admitImage(still: QueuedImage): Boolean {
+        if (image.trySend(still).isSuccess) return false
+        if (image.tryReceive().isFailure) return false
+        image.trySend(still)
+        return true
     }
 
     /**
@@ -51,9 +79,10 @@ internal class RelayQueue(
         return true
     }
 
-    /** Close both sides so a pump's `for (x in channel)` finishes after draining. */
+    /** Close every side so a pump's `for (x in channel)` finishes after draining. */
     fun close() {
         audio.close()
         video.close()
+        image.close()
     }
 }

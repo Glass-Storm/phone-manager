@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "lumo": {
+      "source": "OneXeor-Dev/lumo",
+      "sourceType": "github",
+      "skillPath": "skill/SKILL.md",
+      "computedHash": "7552561f2b6ed84cf3d10022637e3735cb86d21fb307c7724480ef74a6e0d527"
+    }
+  }
+}

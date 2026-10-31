@@ -2,10 +2,8 @@ package com.glassstorm.phonemanager
 
 import android.app.Application
 import androidx.test.core.app.ApplicationProvider
-import com.glassstorm.phonemanager.adapter.jvm.speech.SttFactory
 import com.glassstorm.phonemanager.core.domain.adapter.relay.FrameSink
 import com.glassstorm.phonemanager.core.domain.adapter.transport.HubServer
-import com.glassstorm.phonemanager.core.domain.service.PairingService
 import com.glassstorm.phonemanager.core.service.StreamServiceImpl
 import com.glassstorm.phonemanager.testing.testkit.MockPeerDriver
 import com.glassstorm.phonemanager.testing.testkit.MockPeerTranscript
@@ -14,9 +12,7 @@ import com.glassstorm.phonemanager.testing.testkit.repoRoot
 import com.glassstorm.phonemanager.testing.testkit.run
 import com.glassstorm.phonemanager.testing.testkit.syntheticVideoNal
 import com.glassstorm.phonemanager.transport.grpc.HubServerAdapter
-import com.glassstorm.phonemanager.transport.grpc.PairingGrpcService
 import com.glassstorm.phonemanager.transport.grpc.StreamGrpcService
-import com.glassstorm.phonemanager.transport.grpc.security.AuthInterceptor
 import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
 import org.junit.After
@@ -35,7 +31,7 @@ import java.util.Collections
  *
  * This is the suite that proves the ANDROID WIRING, not just the protocol: the
  * graph comes from the real [PhoneManagerApplication] component (SQLite repository,
- * real `SttFactory` -> `MockSttAdapter`, `PairingServiceImpl`), and only two
+ * the deterministic ai fakes: speech, gesture, TTS and enrollment), and only two
  * collaborators are chosen for the test:
  *
  *  * [HubServer] — built with the loopback [HubServerAdapter]. The app's own bind
@@ -54,6 +50,9 @@ import java.util.Collections
  * never by a component override (Dagger forbids per-instance binding overrides).
  * The production component still supplies every real port here; only the listener
  * and the sink are chosen for the test. Keep the two suites consistent.
+ *
+ * The stream is UNAUTHENTICATED: pairing, PIN and bearer tokens were removed from
+ * the hub runtime, so there is no pair/heartbeat/revoke leg.
  *
  * No emulator, no device: Robolectric only, as issues.md R2 mandates.
  */
@@ -76,7 +75,6 @@ class FullE2eTest {
         }
     }
 
-    private lateinit var pairing: PairingService
     private lateinit var hub: HubServer
     private lateinit var sink: RecordingFrameSink
     private var driver: MockPeerDriver? = null
@@ -91,17 +89,20 @@ class FullE2eTest {
 
         // Given the REAL app graph for this Android context
         val component = (app as PhoneManagerApplication).component
-        pairing = component.pairingService()
 
         // When the loopback listener and the recording sink are composed over it
         sink = RecordingFrameSink()
-        val stt = SttFactory(component.appConfig()).createSttPort()
-        val stream = StreamServiceImpl(stt, sink)
+        val stream =
+            StreamServiceImpl(
+                speechPort = component.speechPort(),
+                gesturePort = component.gesturePort(),
+                ttsPort = component.ttsPort(),
+                enrollmentStore = component.enrollmentStore(),
+                frameSink = sink,
+            )
         hub =
             HubServerAdapter(
-                pairingService = PairingGrpcService(pairing),
                 streamService = StreamGrpcService(stream),
-                authInterceptor = AuthInterceptor(component.tokenVerifier()),
                 bindAddress = HubServerAdapter.LOOPBACK_ADDRESS,
             )
         hub.start(0)
@@ -118,28 +119,21 @@ class FullE2eTest {
     @Test
     fun `the full scenario passes against the robolectric app hub with byte exact video`() {
         // Given a driver bound to the app hub's ephemeral port
-        driver =
-            MockPeerDriver(
-                port = hub.boundPort(),
-                openWindow = { pairing.openWindow(ttlMs = 120_000).pin },
-                revokeAll = { pairing.listPaired().forEach { pairing.revoke(it.deviceId) } },
-            )
+        driver = MockPeerDriver(port = hub.boundPort())
 
-        // When the peer walks the full protocol against the Android wiring
-        val run = driver!!.pairHeartbeatStream(frames = 10)
+        // When the peer opens the unauthenticated stream against the Android wiring
+        val run = driver!!.openStream(frames = 10)
         println("[QA] app-hub mockpeer full stdout:\n${run.stdout.trim()}")
         assertWithMessage("mockpeer stderr: ${run.stderr}")
             .that(run.exitCode)
             .isEqualTo(0)
 
-        // Then the ordered pair/heartbeat/session lines are on RAW stdout
-        assertThat(run.stdout).contains("pair-ok")
-        assertThat(run.stdout).contains("heartbeat-ok")
+        // Then the ordered bootstrap/session lines are on RAW stdout
+        assertThat(run.stdout).contains("stream-open-ok")
         assertThat(run.stdout).contains("session-ok frames=")
         assertThat(driver!!.fullLines(run))
             .containsExactly(
-                "pair-ok",
-                "heartbeat-ok",
+                "stream-open-ok",
                 "session-ok frames=20",
             ).inOrder()
 
@@ -157,23 +151,12 @@ class FullE2eTest {
         }
         assertThat(bytesMatch).isTrue()
 
-        // When the paired glass is revoked through the app's own PairingService
-        val revoked = driver!!.revokedLeg()
-
-        // Then the replay of that token is refused, with no token on stdout
-        println("[QA] app-hub mockpeer revoked stdout: ${revoked.stdout.trim()} (exit=${revoked.exitCode})")
-        assertThat(revoked.exitCode).isNotEqualTo(0)
-        assertThat(revoked.stdout).contains("UNAUTHENTICATED")
-        val revokedOk = revoked.exitCode != 0 && revoked.stdout.contains("UNAUTHENTICATED")
-
-        // And the SAME five ordered evidence lines are emitted as the JVM harness
+        // And the SAME ordered evidence lines are emitted as the JVM harness
         val transcript =
             MockPeerTranscript.lines(
-                pairOk = true,
-                heartbeatOk = true,
+                streamOpenOk = true,
                 frames = 20,
                 videoBytesMatch = bytesMatch,
-                revokedUnauthenticated = revokedOk,
             )
         println("[QA] app evidence transcript: $transcript")
         MockPeerTranscript.write(
@@ -183,11 +166,9 @@ class FullE2eTest {
         )
         assertThat(transcript)
             .containsExactly(
-                "pair-ok",
-                "heartbeat-ok",
+                "stream-open-ok",
                 "session-ok frames=20",
                 "video-bytes-match",
-                "revoked->UNAUTHENTICATED",
             ).inOrder()
     }
 

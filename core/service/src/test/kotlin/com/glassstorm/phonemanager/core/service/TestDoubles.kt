@@ -2,11 +2,9 @@ package com.glassstorm.phonemanager.core.service
 
 import com.glassstorm.phonemanager.core.domain.adapter.relay.FrameSink
 import com.glassstorm.phonemanager.core.domain.adapter.repository.DeviceRepository
-import com.glassstorm.phonemanager.core.domain.adapter.speech.SttPort
 import com.glassstorm.phonemanager.core.model.Device
 import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicInteger
 
 /*
  * Test-local fakes for the domain ports. They deliberately implement the domain
@@ -43,37 +41,6 @@ class FakeDeviceRepository : DeviceRepository {
 
     override fun delete(deviceId: String) {
         rows.remove(deviceId)
-    }
-}
-
-/**
- * [SttPort] fake that always recognizes the same utterance, counts audio frames,
- * and records every session it was asked to close (so "exactly once" teardown is
- * assertable).
- */
-class FakeSttPort(
-    private val transcript: String = "hello from fake stt",
-) : SttPort {
-    private val audioCount = AtomicInteger()
-
-    val audioFrameCount: Int get() = audioCount.get()
-
-    private val closing = Collections.synchronizedList(mutableListOf<String>())
-
-    /** Session ids passed to [close], in arrival order. */
-    val closedSessions: List<String> get() = synchronized(closing) { closing.toList() }
-
-    override suspend fun transcribe(
-        sessionId: String,
-        audioPcm16: ByteArray,
-        sampleRateHz: Int,
-    ): String? {
-        audioCount.incrementAndGet()
-        return transcript
-    }
-
-    override suspend fun close(sessionId: String) {
-        closing += sessionId
     }
 }
 
