@@ -1,230 +1,257 @@
 name: CI
 
 on:
-  push:
-    branches: [main]
-  pull_request:
+    push:
+        branches: [main]
+    pull_request:
 
 # Cancel superseded runs on the same ref so a force-push / rapid PR update does not
 # leave stale builds competing for the single CI budget.
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+    group: ci-${{ github.ref }}
+    cancel-in-progress: true
 
 jobs:
-  # ---------------------------------------------------------------------------
-  # Core: the plain-JVM gate. This job deliberately installs NO Android SDK — the
-  # JVM modules (`:contract`, `:core:*`, `:transport:grpc`, `:adapter:jvm`,
-  # `:testing:*`) are Android-free by construction, so they must build and test on
-  # a bare JDK. If a stray `android.*` import ever leaks into one of them, this
-  # job is what fails. It runs every JVM module's tests, the Konsist boundary laws
-  # (`:testing:architecture:test`), and ktlint over the WHOLE tree (ktlint reads
-  # sources only and needs no SDK, so it is the cheapest complete style gate).
-  # ---------------------------------------------------------------------------
-  core:
-    name: Core JVM tests, architecture & ktlint (no Android SDK)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+    # ---------------------------------------------------------------------------
+    # Core: the plain-JVM gate. This job deliberately installs NO Android SDK — the
+    # JVM modules (`:contract`, `:core:*`, `:transport:grpc`, `:adapter:jvm`,
+    # `:testing:*`) are Android-free by construction, so they must build and test on
+    # a bare JDK. If a stray `android.*` import ever leaks into one of them, this
+    # job is what fails. It runs every JVM module's tests, the Konsist boundary laws
+    # (`:testing:architecture:test`), and ktlint over the WHOLE tree (ktlint reads
+    # sources only and needs no SDK, so it is the cheapest complete style gate).
+    # ---------------------------------------------------------------------------
+    core:
+        name: Core JVM tests, architecture & ktlint (no Android SDK)
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
 
-      # This project builds on JDK 21 (Gradle 8.13 toolchain); the reference repo
-      # pins 17 because that is ITS toolchain, not ours. No Android SDK is set up
-      # in this job, by design.
-      - name: Set up JDK 21
-        uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: "21"
+            # The hub consumes ai-android as a pinned composite build at ../../ai-android
+            # (settings.gradle.kts asserts this exact commit and fails configuration
+            # otherwise). ai-android is a public repo, so no token is needed.
+            - name: Check out the pinned ai-android engine
+              run: |
+                  git clone --depth 1 https://github.com/Glass-Storm/ai-android.git "${{ github.workspace }}/../../ai-android"
+                  git -C "${{ github.workspace }}/../../ai-android" fetch --depth 1 origin c0644eada44c242604e07546ff93aef80d9563f8
+                  git -C "${{ github.workspace }}/../../ai-android" checkout --detach c0644eada44c242604e07546ff93aef80d9563f8
 
-      - name: Set up Gradle (with caching)
-        uses: gradle/actions/setup-gradle@v4
+            # This project builds on JDK 21 (Gradle 8.13 toolchain); the reference repo
+            # pins 17 because that is ITS toolchain, not ours. No Android SDK is set up
+            # in this job, by design.
+            - name: Set up JDK 21
+              uses: actions/setup-java@v5
+              with:
+                  distribution: temurin
+                  java-version: "21"
 
-      # Task list mirrors the nine-module JVM graph exactly:
-      #   :contract                    the frozen wire artifact
-      #   :core:model/domain/service   the shared language, ports, use cases
-      #   :transport:grpc              the gRPC boundary (only :contract consumer)
-      #   :adapter:jvm                 Android-free port implementations
-      #   :testing:testkit             shared test support
-      #   :testing:architecture        the Konsist module-boundary laws
-      # `ktlintCheck` is the F2-recorded gap: the bootstrap CI ran `lint` (AGP) but
-      # never the Kotlin style gate.
-      - name: Run JVM tests, architecture laws & ktlint
-        run: ./gradlew :contract:test :core:model:test :core:domain:test :core:service:test :transport:grpc:test :adapter:jvm:test :testing:testkit:test :testing:architecture:test ktlintCheck --stacktrace
+            - name: Set up Gradle (with caching)
+              uses: gradle/actions/setup-gradle@v4
 
-      - name: Upload JUnit test results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: junit-results-core-${{ github.sha }}
-          path: |
-            contract/build/test-results/**
-            core/model/build/test-results/**
-            core/domain/build/test-results/**
-            core/service/build/test-results/**
-            transport/grpc/build/test-results/**
-            adapter/jvm/build/test-results/**
-            testing/testkit/build/test-results/**
-            testing/architecture/build/test-results/**
-          if-no-files-found: error
-          retention-days: 14
+            # Task list mirrors the nine-module JVM graph exactly:
+            #   :contract                    the frozen wire artifact
+            #   :core:model/domain/service   the shared language, ports, use cases
+            #   :transport:grpc              the gRPC boundary (only :contract consumer)
+            #   :adapter:jvm                 Android-free port implementations
+            #   :testing:testkit             shared test support
+            #   :testing:architecture        the Konsist module-boundary laws
+            # `ktlintCheck` is the F2-recorded gap: the bootstrap CI ran `lint` (AGP) but
+            # never the Kotlin style gate.
+            - name: Run JVM tests, architecture laws & ktlint
+              run: ./gradlew :contract:test :core:model:test :core:domain:test :core:service:test :transport:grpc:test :adapter:jvm:test :testing:testkit:test :testing:architecture:test ktlintCheck --stacktrace
 
-  # ---------------------------------------------------------------------------
-  # Android: the platform lane. Needs the Android SDK (AGP cannot configure
-  # without it), and runs the two Android modules' unit tests, both APKs (release
-  # is minified/shrunk and UNSIGNED by design), and AGP lint.
-  # ---------------------------------------------------------------------------
-  android:
-    name: Android build, test & lint
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+            - name: Upload JUnit test results
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: junit-results-core-${{ github.sha }}
+                  path: |
+                      contract/build/test-results/**
+                      core/model/build/test-results/**
+                      core/domain/build/test-results/**
+                      core/service/build/test-results/**
+                      transport/grpc/build/test-results/**
+                      adapter/jvm/build/test-results/**
+                      testing/testkit/build/test-results/**
+                      testing/architecture/build/test-results/**
+                  if-no-files-found: error
+                  retention-days: 14
 
-      - name: Set up JDK 21
-        uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: "21"
+    # ---------------------------------------------------------------------------
+    # Android: the platform lane. Needs the Android SDK (AGP cannot configure
+    # without it), and runs the two Android modules' unit tests, both APKs (release
+    # is minified/shrunk and UNSIGNED by design), and AGP lint.
+    # ---------------------------------------------------------------------------
+    android:
+        name: Android build, test & lint
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
 
-      - name: Set up Gradle (with caching)
-        uses: gradle/actions/setup-gradle@v4
+            # The hub consumes ai-android as a pinned composite build at ../../ai-android
+            # (settings.gradle.kts asserts this exact commit and fails configuration
+            # otherwise). ai-android is a public repo, so no token is needed.
+            - name: Check out the pinned ai-android engine
+              run: |
+                  git clone --depth 1 https://github.com/Glass-Storm/ai-android.git "${{ github.workspace }}/../../ai-android"
+                  git -C "${{ github.workspace }}/../../ai-android" fetch --depth 1 origin c0644eada44c242604e07546ff93aef80d9563f8
+                  git -C "${{ github.workspace }}/../../ai-android" checkout --detach c0644eada44c242604e07546ff93aef80d9563f8
 
-      # SDK provisioning choice: we install our own via android-actions/setup-android
-      # rather than relying on whatever the ubuntu-latest image happens to ship.
-      # The preinstalled SDK is undocumented drift-prone (versions/packages change
-      # between image releases), and the build pins compileSdk 36 / minSdk 29 /
-      # build-tools 36.0.0. Installing these exact packages makes the CI SDK
-      # reproducible and mirrors the local SDK (/platforms/android-36,
-      # /platforms/android-29, /build-tools/36.0.0).
-      # Pinned to v4.0.4: v3's own setup installs the now-REMOVED 'tools' package
-      # and fails with "Failed to find package 'tools'" before Gradle runs; v4 skips it.
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v4.0.4
+            - name: Set up JDK 21
+              uses: actions/setup-java@v5
+              with:
+                  distribution: temurin
+                  java-version: "21"
 
-      - name: Install required Android SDK packages
-        run: |
-          yes | sdkmanager --licenses
-          sdkmanager "platform-tools" "platforms;android-36" "platforms;android-29" "build-tools;36.0.0"
+            - name: Set up Gradle (with caching)
+              uses: gradle/actions/setup-gradle@v4
 
-      # JVM -> `:task`; Android -> `:taskDebugUnitTest`. `:adapter:android` and
-      # `:app` are the only Android modules. `lint` is scoped to `:app` (the only
-      # module with an Android application surface); it consumes the library's lint
-      # model transitively.
-      - name: Run Android tests, assemble APKs & lint
-        run: ./gradlew :adapter:android:testDebugUnitTest :app:testDebugUnitTest :app:assembleDebug :app:assembleRelease :app:lint --stacktrace
+            # SDK provisioning choice: we install our own via android-actions/setup-android
+            # rather than relying on whatever the ubuntu-latest image happens to ship.
+            # The preinstalled SDK is undocumented drift-prone (versions/packages change
+            # between image releases), and the build pins compileSdk 36 / minSdk 29 /
+            # build-tools 36.0.0. Installing these exact packages makes the CI SDK
+            # reproducible and mirrors the local SDK (/platforms/android-36,
+            # /platforms/android-29, /build-tools/36.0.0).
+            # Pinned to v4.0.4: v3's own setup installs the now-REMOVED 'tools' package
+            # and fails with "Failed to find package 'tools'" before Gradle runs; v4 skips it.
+            - name: Set up Android SDK
+              uses: android-actions/setup-android@v4.0.4
 
-      - name: Upload JUnit test results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: junit-results-android-${{ github.sha }}
-          path: |
-            adapter/android/build/test-results/**
-            app/build/test-results/**
-          if-no-files-found: error
-          retention-days: 14
+            - name: Install required Android SDK packages
+              run: |
+                  yes | sdkmanager --licenses
+                  sdkmanager "platform-tools" "platforms;android-36" "platforms;android-29" "build-tools;36.0.0"
 
-      # assembleRelease is configured with isMinifyEnabled + isShrinkResources and
-      # NO signing config, so the release artifact is the unsigned APK. Signing is
-      # deliberately out of scope for this project.
-      - name: Upload APKs
-        uses: actions/upload-artifact@v4
-        with:
-          name: apks-${{ github.sha }}
-          path: |
-            app/build/outputs/apk/debug/app-debug.apk
-            app/build/outputs/apk/release/app-release-unsigned.apk
-          if-no-files-found: error
-          retention-days: 14
+            # JVM -> `:task`; Android -> `:taskDebugUnitTest`. `:adapter:android` and
+            # `:app` are the only Android modules. `lint` is scoped to `:app` (the only
+            # module with an Android application surface); it consumes the library's lint
+            # model transitively.
+            - name: Run Android tests, assemble APKs & lint
+              run: ./gradlew :adapter:android:testDebugUnitTest :app:testDebugUnitTest :app:assembleDebug :app:assembleRelease :app:lint --stacktrace
 
-  # ---------------------------------------------------------------------------
-  # Go: the mockpeer CLI is built/tested directly from source. It is a
-  # module-scoped package only (there is no Go code at the repo root), so the
-  # workspace-aware invocation targets ./tools/mockpeer/... explicitly.
-  # ---------------------------------------------------------------------------
-  go:
-    name: Go build, vet & test
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+            - name: Upload JUnit test results
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: junit-results-android-${{ github.sha }}
+                  path: |
+                      adapter/android/build/test-results/**
+                      app/build/test-results/**
+                  if-no-files-found: error
+                  retention-days: 14
 
-      # Satisfies the go 1.25.0 directive in tools/mockpeer/go.mod and go.work.
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: "1.25"
+            # assembleRelease is configured with isMinifyEnabled + isShrinkResources and
+            # NO signing config, so the release artifact is the unsigned APK. Signing is
+            # deliberately out of scope for this project.
+            - name: Upload APKs
+              uses: actions/upload-artifact@v4
+              with:
+                  name: apks-${{ github.sha }}
+                  path: |
+                      app/build/outputs/apk/debug/app-debug.apk
+                      app/build/outputs/apk/release/app-release-unsigned.apk
+                  if-no-files-found: error
+                  retention-days: 14
 
-      # The repo root is NOT a Go module (only go.work + tools/mockpeer exist), so
-      # `./...` from the root would error with "directory prefix . does not contain
-      # modules listed in go.work". Target the module path explicitly.
-      - name: Build
-        run: go build ./tools/mockpeer/...
+    # ---------------------------------------------------------------------------
+    # Go: the mockpeer CLI is built/tested directly from source. It is a
+    # module-scoped package only (there is no Go code at the repo root), so the
+    # workspace-aware invocation targets ./tools/mockpeer/... explicitly.
+    # ---------------------------------------------------------------------------
+    go:
+        name: Go build, vet & test
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
 
-      - name: Vet
-        run: go vet ./tools/mockpeer/...
+            # Satisfies the go 1.25.0 directive in tools/mockpeer/go.mod and go.work.
+            - name: Set up Go
+              uses: actions/setup-go@v5
+              with:
+                  go-version: "1.25"
 
-      # There are currently no Go test files in tools/mockpeer; this step stays so
-      # that adding one is automatically picked up by CI.
-      - name: Test
-        run: go test ./tools/mockpeer/...
+            # The repo root is NOT a Go module (only go.work + tools/mockpeer exist), so
+            # `./...` from the root would error with "directory prefix . does not contain
+            # modules listed in go.work". Target the module path explicitly.
+            - name: Build
+              run: go build ./tools/mockpeer/...
 
-  # ---------------------------------------------------------------------------
-  # E2E: the mockpeer is spawned as a REAL child process against both the plain
-  # JVM hub (:transport:grpc) and the Robolectric-hosted app hub (:app), so this
-  # job needs the Go toolchain (the `go` job) as well as the Android test setup.
-  # It waits on `core`, `android`, and `go`: a green core lane proves the JVM half
-  # independently, and `e2e` is the thin alias over both real-socket suites.
-  # ---------------------------------------------------------------------------
-  e2e:
-    name: End-to-end mockpeer integration
-    needs: [core, android, go]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+            - name: Vet
+              run: go vet ./tools/mockpeer/...
 
-      - name: Set up JDK 21
-        uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: "21"
+            # There are currently no Go test files in tools/mockpeer; this step stays so
+            # that adding one is automatically picked up by CI.
+            - name: Test
+              run: go test ./tools/mockpeer/...
 
-      - name: Set up Gradle (with caching)
-        uses: gradle/actions/setup-gradle@v4
+    # ---------------------------------------------------------------------------
+    # E2E: the mockpeer is spawned as a REAL child process against both the plain
+    # JVM hub (:transport:grpc) and the Robolectric-hosted app hub (:app), so this
+    # job needs the Go toolchain (the `go` job) as well as the Android test setup.
+    # It waits on `core`, `android`, and `go`: a green core lane proves the JVM half
+    # independently, and `e2e` is the thin alias over both real-socket suites.
+    # ---------------------------------------------------------------------------
+    e2e:
+        name: End-to-end mockpeer integration
+        needs: [core, android, go]
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
 
-      # Same explicit SDK provisioning as the `android` job — the e2e alias runs
-      # :app:testDebugUnitTest, which needs the Android SDK.
-      # Pinned to v4.0.4: v3's own setup installs the now-REMOVED 'tools' package
-      # and fails with "Failed to find package 'tools'" before Gradle runs; v4 skips it.
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v4.0.4
+            # The hub consumes ai-android as a pinned composite build at ../../ai-android
+            # (settings.gradle.kts asserts this exact commit and fails configuration
+            # otherwise). ai-android is a public repo, so no token is needed.
+            - name: Check out the pinned ai-android engine
+              run: |
+                  git clone --depth 1 https://github.com/Glass-Storm/ai-android.git "${{ github.workspace }}/../../ai-android"
+                  git -C "${{ github.workspace }}/../../ai-android" fetch --depth 1 origin c0644eada44c242604e07546ff93aef80d9563f8
+                  git -C "${{ github.workspace }}/../../ai-android" checkout --detach c0644eada44c242604e07546ff93aef80d9563f8
 
-      - name: Install required Android SDK packages
-        run: |
-          yes | sdkmanager --licenses
-          sdkmanager "platform-tools" "platforms;android-36" "platforms;android-29" "build-tools;36.0.0"
+            - name: Set up JDK 21
+              uses: actions/setup-java@v5
+              with:
+                  distribution: temurin
+                  java-version: "21"
 
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: "1.25"
+            - name: Set up Gradle (with caching)
+              uses: gradle/actions/setup-gradle@v4
 
-      - name: Run E2E suites
-        run: ./gradlew e2e --stacktrace
+            # Same explicit SDK provisioning as the `android` job — the e2e alias runs
+            # :app:testDebugUnitTest, which needs the Android SDK.
+            # Pinned to v4.0.4: v3's own setup installs the now-REMOVED 'tools' package
+            # and fails with "Failed to find package 'tools'" before Gradle runs; v4 skips it.
+            - name: Set up Android SDK
+              uses: android-actions/setup-android@v4.0.4
 
-      # The machine-checkable transcript BOTH harnesses append to. This path MUST
-      # stay equal to `FullE2eTest.EVIDENCE_RELATIVE` (the identical constant in
-      # transport/grpc/.../FullE2eTest.kt and app/.../FullE2eTest.kt); the tests own
-      # the filename and are out of scope for this change. Verified present: a fresh
-      # `./gradlew e2e` recreates `.omo/evidence/` and appends the transcript, so
-      # `if-no-files-found: error` is a real gate, not a formality.
-      - name: Upload E2E evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: e2e-evidence-${{ github.sha }}
-          path: .omo/evidence/task-18-phone-manager-bootstrap.txt
-          if-no-files-found: error
-          retention-days: 14
+            - name: Install required Android SDK packages
+              run: |
+                  yes | sdkmanager --licenses
+                  sdkmanager "platform-tools" "platforms;android-36" "platforms;android-29" "build-tools;36.0.0"
+
+            - name: Setup Go
+              uses: actions/setup-go@v5
+              with:
+                  go-version: "1.25"
+
+            - name: Run E2E suites
+              run: ./gradlew e2e --stacktrace
+
+            # The machine-checkable transcript BOTH harnesses append to. This path MUST
+            # stay equal to `FullE2eTest.EVIDENCE_RELATIVE` (the identical constant in
+            # transport/grpc/.../FullE2eTest.kt and app/.../FullE2eTest.kt); the tests own
+            # the filename and are out of scope for this change. Verified present: a fresh
+            # `./gradlew e2e` recreates `.omo/evidence/` and appends the transcript, so
+            # `if-no-files-found: error` is a real gate, not a formality.
+            - name: Upload E2E evidence
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: e2e-evidence-${{ github.sha }}
+                  path: .omo/evidence/task-18-phone-manager-bootstrap.txt
+                  if-no-files-found: error
+                  retention-days: 14
