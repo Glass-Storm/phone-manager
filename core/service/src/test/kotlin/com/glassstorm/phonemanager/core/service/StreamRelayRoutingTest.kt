@@ -69,15 +69,13 @@ class StreamRelayRoutingTest {
             assertThat(gesture.confidence).isEqualTo(0.9f)
             assertThat(gesture.ptsMs).isEqualTo(123L)
 
-            // And the necklace session received the synthesized speech for the same meaning
+            // And the necklace (the image's sender) received the synthesized speech
             val tts = necklaceOutputs.filterIsInstance<RelayOutput.TtsAudio>().single()
             assertThat(tts.pcm16).isEqualTo(ByteArray(4) { 7 })
             assertThat(tts.ptsMs).isEqualTo(123L)
 
-            // And the GLASSES session received the SAME synthesized audio, so its player is live
-            val glassesTts = glassesOutputs.filterIsInstance<RelayOutput.TtsAudio>().single()
-            assertThat(glassesTts.pcm16).isEqualTo(tts.pcm16)
-            assertThat(glassesTts.ptsMs).isEqualTo(123L)
+            // And the glasses did NOT: page-14 S1 shows the word without speaking it
+            assertThat(glassesOutputs.filterIsInstance<RelayOutput.TtsAudio>()).isEmpty()
 
             // And the image/gesture channel is counted separately from H.264 NALs.
             val stats = stream.stats()
@@ -89,6 +87,49 @@ class StreamRelayRoutingTest {
             advanceUntilIdle()
             necklaceCollector.join()
             glassesCollector.join()
+            scope.cancel()
+        }
+
+    @Test
+    fun `an image from the glasses yields both gesture and tts to the glasses only`() =
+        runTest {
+            // Given a glasses session and a necklace session, each bound to its role
+            val wired =
+                wired(
+                    gesture = FixedGesturePort(GestureOutcome(label = "Thumb_Up", text = "Yes", confidence = 0.9f)),
+                    tts = FixedTtsPort(ByteArray(4) { 7 }),
+                )
+            val scope = testScope(testScheduler)
+            val stream = wired.newStream(scope)
+            val glasses = stream.openSession("glasses")
+            stream.bindRole(glasses.sessionId, PeerRole.GLASS)
+            val necklace = stream.openSession("necklace")
+            stream.bindRole(necklace.sessionId, PeerRole.DAEMON)
+            val glassesOutputs = mutableListOf<RelayOutput>()
+            val necklaceOutputs = mutableListOf<RelayOutput>()
+            val glassesCollector = launch { stream.results(glasses.sessionId).collect { glassesOutputs += it } }
+            val necklaceCollector = launch { stream.results(necklace.sessionId).collect { necklaceOutputs += it } }
+
+            // When the glasses pushes its own still (page-14 S3)
+            stream.pushImage(glasses.sessionId, jpeg = byteArrayOf(1, 2, 3), ptsMs = 55L)
+            advanceUntilIdle()
+
+            // Then the glasses received BOTH the word and the synthesized speech
+            val gesture = glassesOutputs.filterIsInstance<RelayOutput.Gesture>().single()
+            assertThat(gesture.text).isEqualTo("Yes")
+            assertThat(gesture.ptsMs).isEqualTo(55L)
+            val tts = glassesOutputs.filterIsInstance<RelayOutput.TtsAudio>().single()
+            assertThat(tts.pcm16).isEqualTo(ByteArray(4) { 7 })
+            assertThat(tts.ptsMs).isEqualTo(55L)
+
+            // And the necklace received neither: the glasses' still is the glasses' own
+            assertThat(necklaceOutputs).isEmpty()
+
+            stream.closeSession(glasses.sessionId)
+            stream.closeSession(necklace.sessionId)
+            advanceUntilIdle()
+            glassesCollector.join()
+            necklaceCollector.join()
             scope.cancel()
         }
 
@@ -390,7 +431,7 @@ class StreamRelayRoutingTest {
         }
 
     @Test
-    fun `a still queued at close still yields its synthesized speech`() =
+    fun `a still queued at close yields its synthesized speech to the closing sender only`() =
         runTest {
             // Given a necklace still already accepted but not yet processed at close
             val tts = CapturingTtsPort(ByteArray(4) { 7 })
@@ -405,27 +446,33 @@ class StreamRelayRoutingTest {
             stream.bindRole(necklace.sessionId, PeerRole.DAEMON)
             val glasses = stream.openSession("glasses")
             stream.bindRole(glasses.sessionId, PeerRole.GLASS)
+            val necklaceOutputs = mutableListOf<RelayOutput>()
             val glassesOutputs = mutableListOf<RelayOutput>()
-            val collector = launch { stream.results(glasses.sessionId).collect { glassesOutputs += it } }
+            val necklaceCollector = launch { stream.results(necklace.sessionId).collect { necklaceOutputs += it } }
+            val glassesCollector = launch { stream.results(glasses.sessionId).collect { glassesOutputs += it } }
 
             // When the still is queued and the sender closes before the pumps run
             stream.pushImage(necklace.sessionId, jpeg = byteArrayOf(1, 2, 3), ptsMs = 9L)
             stream.closeSession(necklace.sessionId)
             advanceUntilIdle()
 
-            // Then the drain recognized the still and synthesized its speech
-            assertThat(glassesOutputs.filterIsInstance<RelayOutput.Gesture>()).hasSize(1)
-            assertThat(glassesOutputs.filterIsInstance<RelayOutput.TtsAudio>()).hasSize(1)
+            // Then the drain recognized the still and spoke it back to the CLOSING necklace
+            assertThat(necklaceOutputs.filterIsInstance<RelayOutput.TtsAudio>()).hasSize(1)
             assertThat(tts.synthesized).containsExactly("Yes")
+
+            // And the glasses showed the word but were NOT handed the necklace's audio
+            assertThat(glassesOutputs.filterIsInstance<RelayOutput.Gesture>()).hasSize(1)
+            assertThat(glassesOutputs.filterIsInstance<RelayOutput.TtsAudio>()).isEmpty()
 
             stream.closeSession(glasses.sessionId)
             advanceUntilIdle()
-            collector.join()
+            necklaceCollector.join()
+            glassesCollector.join()
             scope.cancel()
         }
 
     @Test
-    fun `a still queued at the daemon half-close delivers its tts to the glasses and the closing daemon`() =
+    fun `a still queued at the daemon half-close delivers its tts to the closing daemon only`() =
         runTest {
             // Given a necklace still already accepted but not yet processed at close
             val tts = CapturingTtsPort(ByteArray(4) { 7 })
@@ -451,13 +498,15 @@ class StreamRelayRoutingTest {
             stream.closeSession(necklace.sessionId)
             advanceUntilIdle()
 
-            // Then the drained still's speech reached BOTH the live glasses session
-            // AND the closing DAEMON session, which is still reading during its drain
-            val glassesTts = glassesOutputs.filterIsInstance<RelayOutput.TtsAudio>().single()
+            // Then the drained still's speech reached ONLY the closing DAEMON session,
+            // which is still reading during its drain
             val daemonTts = necklaceOutputs.filterIsInstance<RelayOutput.TtsAudio>().single()
             assertThat(daemonTts.pcm16).isEqualTo(ByteArray(4) { 7 })
             assertThat(daemonTts.ptsMs).isEqualTo(9L)
-            assertThat(glassesTts.pcm16).isEqualTo(daemonTts.pcm16)
+
+            // And the glasses showed the word but got no audio for the necklace's still
+            assertThat(glassesOutputs.filterIsInstance<RelayOutput.Gesture>()).hasSize(1)
+            assertThat(glassesOutputs.filterIsInstance<RelayOutput.TtsAudio>()).isEmpty()
             assertThat(tts.synthesized).containsExactly("Yes")
 
             stream.closeSession(glasses.sessionId)
