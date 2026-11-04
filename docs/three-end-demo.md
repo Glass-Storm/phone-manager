@@ -67,7 +67,9 @@ export ECOSYS_HUB=192.168.43.1:9000
 ```
 
 If the hotspot uses a different gateway, set `ECOSYS_HUB` from
-`adb shell ip route` or the phone's hotspot screen. Do not guess.
+`adb shell ip route` or the phone's hotspot screen. Do not guess. This phone's
+WPA3 hotspot uses `10.240.85.29`, so `192.168.43.1` is not universal; the Pi
+peer discovers the real gateway from its own `wlan0` default route.
 
 ### 2.2 Put the hub APK on the arm64 phone
 
@@ -173,15 +175,32 @@ $PI_SSH 'DEBIAN_FRONTEND=noninteractive apt-get update && \
     alsa-utils ffmpeg v4l-utils rsync curl ca-certificates'
 ```
 
-Join the hotspot with the Pi peer's `scripts/join-hotspot.sh`. It writes the
-`wpa_supplicant` config, starts `wpa_supplicant@wlan0`, ensures a DHCP network
-for `wlan0`, refuses to touch `usb0`/`eth0`, and verifies an IPv4 address before
-exiting 0. The script ships with the Pi peer; on a checkout that predates it,
-use the Pi branch that contains it.
+Join the hotspot with the Pi peer's `scripts/join-hotspot.sh`. Usage is
+`join-hotspot.sh <ssid> <psk> [wpa2|wpa3]`: pass `wpa3` for a WPA3-SAE (H2E)
+hotspot, and omit the mode or pass `wpa2` for a WPA2 AP (still the default).
+Both modes write the `wpa_supplicant` config at mode 600, enable and start
+`wpa_supplicant@wlan0`, ensure a DHCP `.network` for `wlan0`, reload
+systemd-networkd without restarting it, refuse to touch `usb0`/`eth0`, and
+verify an IPv4 address before exiting 0. The `wpa3` path writes the
+`sae_pwe=2` (global), `key_mgmt=SAE`, `sae_password`, `ieee80211w=2` shape and
+deliberately skips the netplan drop-in, because a stale WPA2 drop-in would
+conflict with the SAE config. The script ships with the Pi peer; on a checkout
+that predates it, use the Pi branch that contains it.
 
 ```bash
-$PI_SSH "cd /root/necklace && ./scripts/join-hotspot.sh '$ECOSYS_SSID' '$ECOSYS_PSK'"
+# WPA3-SAE (H2E) phone hotspot, e.g. this demo's Android hotspot:
+$PI_SSH "cd /root/necklace && ./scripts/join-hotspot.sh '$ECOSYS_SSID' '$ECOSYS_PSK' wpa3"
+
+# WPA2 phone hotspot (the default mode):
+$PI_SSH "cd /root/necklace && ./scripts/join-hotspot.sh '$ECOSYS_SSID' '$ECOSYS_PSK' wpa2"
 ```
+
+This hotspot's gateway is `10.240.85.29`, not `192.168.43.1`. The Pi reads the
+gateway from `ip route show default dev wlan0`, so take `ECOSYS_HUB` from that
+route (or the phone's hotspot screen) instead of copying the runbook default.
+Starting `wpa_supplicant@wlan0` is mandatory in both modes: the old netplan
+branch wrote the config but never started the service, so `wlan0` stayed
+unassociated and `wpa_state=COMPLETED` never appeared.
 
 The credentials are expanded on the local side and quoted for the remote shell.
 They are never written to a repo file.
