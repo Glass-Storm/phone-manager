@@ -22,6 +22,10 @@ a first `stream_open` frame. There is no PIN and no bearer token.
 | S2 subtitle | 聽障 (deaf)    | Glasses microphone           | Transcribes and attributes the speaker, returns a `result` frame                              | Glasses show the subtitle and speaker label   |
 | S3 gesture  | 健全 (hearing) | Glasses camera               | Recognises the gesture, sends the word and TTS back to the glasses                            | Glasses show the word and play it             |
 
+The Chinese strings in this runbook (聽障, 健全, 啟動中樞, 即時, and engine
+output such as 謝謝) are verbatim UI labels or engine output, quoted so they
+match the app; they are not prose. All document prose is English.
+
 The routing rule is the page-14 split: a `DAEMON` image gets `gesture` to the
 glasses and `tts_audio` to the daemon; a `GLASS` image gets both frames on the
 glasses session. The hub never sends TTS for an image to the other peer.
@@ -148,9 +152,11 @@ tar -C /home/chaos/workplace/fyp/necklace-data-processing-raspberrypi-side- \
 ```
 
 Create the venv and sync the locked dependencies. The
-`--system-site-packages` flag is required: on a real Pi the Debian
-`python3-picamera2` bindings live in the system site-packages, and
-`tests/test_smoke.py` asserts the flag.
+`--system-site-packages` flag is required by `tests/test_smoke.py`. That flag
+makes the interpreter see the uv-managed CPython 3.12's own site-packages, which
+are empty for this demo; it does not expose Debian's system packages (the Pi's
+default interpreter is 3.14, and its packages are not on this 3.12 path). The
+demo uses the UVC camera, not picamera2, so no system camera binding is needed.
 
 ```bash
 $PI_SSH 'cd /root/necklace && \
