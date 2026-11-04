@@ -59,8 +59,8 @@ import javax.inject.Inject
  *  * the image pump recognizes the still and emits the [RelayOutput.Gesture] to
  *    the GLASSES session, then hands the recognized TEXT to the TTS pump;
  *  * the TTS pump synthesizes the latest text and emits [RelayOutput.TtsAudio] to
- *    BOTH the GLASSES and the NECKLACE session (deduplicated when they are the
- *    same session), so the glasses player is live.
+ *    the image's SENDER only: the necklace's still is spoken by the necklace, the
+ *    glasses' still by the glasses.
  *
  * Every pump guards its per-item body and its loop: an adapter throwing (native
  * engine, bitmap OOM, malformed frame) is logged and ends at most that item or
@@ -69,8 +69,8 @@ import javax.inject.Inject
  * [closeSession] DRAINS rather than discards: it latches the session CLOSING
  * (rejecting new pushes) but keeps it resolvable, closes the queue and the TTS
  * handoff, joins the pumps (so already-queued frames still reach the engines/sink,
- * and the latest utterance is still synthesized and delivered to BOTH roles,
- * including this half-closed sender), flushes the trailing transcript, and only
+ * and the latest utterance is still synthesized and delivered back to this
+ * half-closed sender), flushes the trailing transcript, and only
  * then unregisters the session (rebinding the role to a surviving session) and
  * closes the result channel, releasing the speech session exactly once. It never
  * cancels.
@@ -380,16 +380,12 @@ class StreamServiceImpl
                     guarded("tts") {
                         val pcm = ttsPort.synthesize(text)
                         if (pcm.isNotEmpty()) {
-                            // The deck's scenario 3: the glasses PLAY the audio, and the
-                            // daemon still receives it. Dedupe when both roles resolve to
-                            // the same session (the sender fallback).
+                            // Page-14 split: the image's SENDER speaks the word. The
+                            // necklace's still is spoken by the necklace; the glasses'
+                            // still is spoken by the glasses.
                             deliver(
                                 output = RelayOutput.TtsAudio(pcm16 = pcm, ptsMs = latestImagePts.get()),
-                                targetSessionIds =
-                                    arrayOf(
-                                        registry.sessionFor(PeerRole.GLASS) ?: sessionId,
-                                        registry.sessionFor(PeerRole.DAEMON) ?: sessionId,
-                                    ),
+                                targetSessionIds = arrayOf(sessionId),
                             )
                         }
                     }
