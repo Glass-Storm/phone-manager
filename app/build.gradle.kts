@@ -166,9 +166,10 @@ val ecosysPiE2e =
 // task itself is never run — only its producer dependencies.
 gradle.projectsEvaluated {
     val unitTest = tasks.named<Test>("testDebugUnitTest").get()
+    val unitTestClasspath = unitTest.classpath.files
     ecosysPiE2e.configure {
         testClassesDirs = unitTest.testClassesDirs
-        classpath = unitTest.classpath
+        classpath = files(unitTestClasspath)
         jvmArgs = unitTest.jvmArgs
         systemProperties = unitTest.systemProperties
         dependsOn(unitTest.taskDependencies.getDependencies(unitTest))
