@@ -201,6 +201,10 @@ class StreamServiceImpl
         ) {
             val state = registry.find(sessionId) ?: return
             if (state.isClosing) return
+            logger.info(
+                "inbound image session=$sessionId device=${state.relay.deviceId} " +
+                    "role=${registry.roleFor(sessionId)} bytes=${jpeg.size} ptsMs=$ptsMs"
+            )
             val dropped = state.queue.admitImage(QueuedImage(jpeg = jpeg, ptsMs = ptsMs))
             stats.onImageOffered(dropped = dropped)
         }

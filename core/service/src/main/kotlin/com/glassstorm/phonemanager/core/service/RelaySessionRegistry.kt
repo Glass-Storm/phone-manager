@@ -97,6 +97,13 @@ internal class RelaySessionRegistry {
     /** The session id currently bound to [role], or `null` when none is. */
     fun sessionFor(role: PeerRole): String? = synchronized(roleLock) { roleHistory[role]?.lastOrNull() }
 
+    /** The role [sessionId] is bound to, or [PeerRole.UNSPECIFIED] when unbound. */
+    fun roleFor(sessionId: String): PeerRole =
+        synchronized(roleLock) {
+            roleHistory.entries.firstOrNull { (_, history) -> history.contains(sessionId) }?.key
+                ?: PeerRole.UNSPECIFIED
+        }
+
     /**
      * Snapshot of every live session as a [LivePeer], resolving the role each one
      * currently holds through the top of [roleHistory]. A session with no bound
