@@ -467,6 +467,53 @@ Exit code 0 means a non-empty transcript. An empty `speaker=''` is correct for
 an unenrolled speaker. TTS is not returned for an audio transcript; TTS belongs
 to gesture results.
 
+#### 4.3.1 Enrolled speaker: `Alice`, not `''`
+
+To prove the speaker-attribution path, enroll the same voice on the hub first,
+then stream the WAV back on the same call. The client is `/tmp/enroll_speaker.py`
+(dev host, and the same path on the Pi). It uses the Pi repo's generated stubs:
+
+```bash
+$PI_SSH 'cd /root/necklace && PYTHONPATH=/root/necklace/src \
+  .venv/bin/python /tmp/enroll_speaker.py \
+    --wav /root/fixture-test/demo-yue.wav --addr 127.0.0.1:9000 \
+    --name Alice --enroll-mode pad --audio-mode single'
+```
+
+Steps on the one `OpenStream` call:
+
+1. Send `stream_open` with `device_id="fixture-speech"` and `role=GLASS`.
+2. Send `enroll_request` with `name="Alice"` and the demo WAV's PCM payload
+   zero-padded to at least 8 s. `--enroll-mode pad` pads to 272000 B (8.5 s),
+   which clears `AudioFormat.ENROLLMENT_MIN_BYTES` = 256000 B (8 s). The
+   `enroll_response` must be `ok=true` before any audio is sent.
+3. Send the WAV's exact PCM payload as `audio_pcm16_16k` in 100 ms chunks, then
+   half-close the request side.
+4. Expect a non-empty transcript attributed to the enrolled name:
+
+```text
+ENROLL ok=True reason=''
+RESULT text='呢几个字都表达唔到我想讲嘅意思' speaker='Alice' pts_ms=0
+SUMMARY status=ok enroll_ok=True results=1 elapsed=1.56s enroll_mode=pad audio_mode=single
+TRANSCRIPT text='呢几个字都表达唔到我想讲嘅意思'
+SPEAKER_LABEL label='Alice'
+```
+
+The client exits 0 only when `enroll_response.ok` is true, the transcript is
+non-empty, and the speaker label is non-empty. On the hub the enrollment store
+writes an app-private `files/enrollment.txt` (mode `0600`) holding the
+name/voiceprint rows; assert it with:
+
+```bash
+adb -s emulator-5554 shell 'run-as com.glassstorm.phonemanager ls -la files/enrollment.txt'
+```
+
+Expected `-rw------- ... files/enrollment.txt`. The recorded run is
+`.omo/evidence/three-end/s2-enrollment-asr.txt`: CAM++ produced a 192-dim
+voiceprint and the same stream then resolved to `Alice` at the 0.5 cosine
+threshold. An unmatched speaker keeps the empty label, so `speaker='Alice'` is
+not injected by the client.
+
 ### 4.4 S3: glasses camera, 健全 glasses
 
 1. Put the glasses in 健全 under **Settings → 切換身份**.
@@ -533,6 +580,7 @@ local-only. No file contains a PSK, token, or password.
 | `pi-tests.txt`                                                               | Pi repo deployed to `/root/necklace`; suite passes with the venv flag     |
 | `pi-config.txt`                                                              | The Pi CLI loads `config.json` on the real path                           |
 | `pi-uvc-source.txt`                                                          | UVC/MJPEG source opens, 3 valid frames, consecutive frames differ         |
+| `pi-uvc-hub-count.txt`                                                       | Hub inbound image count for the 3-frame UVC run                           |
 | `pi-stream-open.txt`                                                         | `stream_open` is the first frame; live hub session is `role=DAEMON`       |
 | `pi-gateway.txt`                                                             | `wlan0` gateway is preferred over the `usb0` management route             |
 | `pi-bridge.txt`                                                              | Pi -> container -> emulator TCP bridge, one real Pi frame through the hub |
@@ -541,6 +589,9 @@ local-only. No file contains a PSK, token, or password.
 | `hub-apk-sha256.txt`                                                         | Installed hub APK hash                                                    |
 | `hub-relay-tts.txt`                                                          | Sender-only TTS routing; relay and app suites green; cross-repo E2E       |
 | `hub-fixture-test.txt`                                                       | Real hand JPEG -> real MediaPipe gesture -> real TTS on the hub           |
+| `deploy-26.txt`                                                              | Deployed binary freshness check and the IS1 topology capture              |
+| `is1-topology.png`                                                           | IS1 topology capture: hub, glasses, and Pi connected at once              |
+| `cross-repo-e2e.txt`                                                         | `:app:ecosysPiE2e` drives the real Pi CLI against a fake-engined hub      |
 | `glasses-apk-build.log`                                                      | Glasses debug APK builds                                                  |
 | `glasses-apk-install.log`                                                    | Glasses APK installs on `YM00FCF87W0021`                                  |
 | `glasses-apk-sha256.txt`                                                     | Installed glasses APK hash                                                |
@@ -549,6 +600,7 @@ local-only. No file contains a PSK, token, or password.
 | `glasses-jpeg-unit.txt`                                                      | Glasses JPEG downscale/encode unit coverage                               |
 | `glasses-docs.txt`                                                           | Glasses docs corrected to port 9000 and the scenario table                |
 | `s2-mock-asr.txt`                                                            | Real hub ASR returns the Cantonese transcript over gRPC                   |
+| `s2-enrollment-asr.txt`                                                      | Real hub enrolls `Alice` (CAM++ 192-dim) and attributes the same WAV      |
 | `s3-camera-uplink.txt`                                                       | 31 real glasses frames reach a GLASS session; engine runs; blank scene    |
 | `s3-camera-frame.jpg`                                                        | One real frame extracted from the glasses uplink                          |
 | `s3-glasses-recording.png`                                                   | Glasses recording UI during S3                                            |
@@ -563,6 +615,16 @@ local-only. No file contains a PSK, token, or password.
 | `fetch-stdout.txt`, `fetch-stderr.txt`, `fetch-time.txt`, `fetch-timing.txt` | Model fetch run                                                           |
 | `failures-camera.txt`                                                        | Missing UVC device exits non-zero with a named error                      |
 | `failures-config.txt`                                                        | Reverted CLI config loader fails the discovery test                       |
+| `failures-gateway.txt`                                                       | `usb0`-only route fails with a named error when no `wlan0` AP exists      |
+| `hub-regression.txt`                                                         | Hub unit suite green across all eight modules                             |
+| `glasses-regression.txt`                                                     | Glasses unit tests (101) and lint green                                   |
+| `pi-regression.txt`                                                          | Pi suite green on the dev host (211) and on the Pi                        |
+| `glasses-suppression.txt`                                                    | Deprecated CameraX call replaced, suppression removed                     |
+| `F1-compliance.txt`                                                          | Plan compliance re-audit after remediation                                |
+| `F2-code-quality.txt`                                                        | Code quality re-review across the three repos                             |
+| `F4-fidelity.txt`                                                            | Ideal-state fidelity re-walk IS1-IS6                                      |
+| `runbook.txt`                                                                | This runbook and its evidence index were written                          |
+| `runbook-index.txt`                                                          | Index-coverage audit: every file in this directory is named here          |
 
 ## 7. Cleanup
 
