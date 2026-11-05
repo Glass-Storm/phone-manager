@@ -156,9 +156,9 @@ class StreamRelayRoutingTest {
             val necklaceCollector = launch { stream.results(necklace.sessionId).collect { necklaceOutputs += it } }
             val glassesCollector = launch { stream.results(glasses.sessionId).collect { glassesOutputs += it } }
 
-            // When TWO stills are sampled while synthesis throws both times. Each
-            // still is yielded through its 2 fps window: at capacity 1 a second
-            // offer before the pump runs would evict the first (latest wins).
+            // When TWO stills are processed while synthesis throws both times. Each
+            // still is yielded before the next offer: at capacity 1 a second offer
+            // before the pump runs would evict the first (latest wins).
             stream.pushImage(necklace.sessionId, jpeg = byteArrayOf(1, 2, 3), ptsMs = 1L)
             advanceUntilIdle()
             stream.pushImage(necklace.sessionId, jpeg = byteArrayOf(4, 5, 6), ptsMs = 2L)
@@ -181,9 +181,9 @@ class StreamRelayRoutingTest {
         }
 
     @Test
-    fun `repeated identical gestures keep refreshing the display but speak once`() =
+    fun `repeated identical gestures refresh the overlay and speak on every processed still`() =
         runTest {
-            // Given a necklace, a glasses session and a synthesizer that records texts
+            // Given a necklace, a glasses session and a fast synthesizer recording texts
             val tts = CapturingTtsPort(ByteArray(4) { 7 })
             val wired =
                 wired(
@@ -201,7 +201,8 @@ class StreamRelayRoutingTest {
             val necklaceCollector = launch { stream.results(necklace.sessionId).collect { necklaceOutputs += it } }
             val glassesCollector = launch { stream.results(glasses.sessionId).collect { glassesOutputs += it } }
 
-            // When the SAME label is recognized on N stills, each with time to speak
+            // When the SAME label is recognized on 5 stills, each processed before
+            // the next is offered so the fast voice drains every handoff
             repeat(5) { index ->
                 stream.pushImage(necklace.sessionId, jpeg = byteArrayOf(1, 2, 3), ptsMs = index.toLong())
                 advanceUntilIdle()
@@ -209,9 +210,9 @@ class StreamRelayRoutingTest {
 
             // Then every still refreshed the glasses overlay...
             assertThat(glassesOutputs.filterIsInstance<RelayOutput.Gesture>()).hasSize(5)
-            // ...but the word was handed to TTS exactly ONCE
-            assertThat(tts.synthesized).containsExactly("好")
-            assertThat(necklaceOutputs.filterIsInstance<RelayOutput.TtsAudio>()).hasSize(1)
+            // ...and every processed still reached the voice: the word is not deduped
+            assertThat(tts.synthesized).containsExactly("好", "好", "好", "好", "好")
+            assertThat(necklaceOutputs.filterIsInstance<RelayOutput.TtsAudio>()).hasSize(5)
 
             stream.closeSession(necklace.sessionId)
             stream.closeSession(glasses.sessionId)
@@ -270,7 +271,7 @@ class StreamRelayRoutingTest {
         }
 
     @Test
-    fun `a no-hand frame resets the dedupe so a re-presented gesture speaks again`() =
+    fun `a no-hand frame produces nothing and the next gesture still speaks`() =
         runTest {
             // Given the label A, then a no-hand frame, then the SAME label A again
             val tts = CapturingTtsPort(ByteArray(4) { 7 })
@@ -307,7 +308,7 @@ class StreamRelayRoutingTest {
 
             // Then only the two REAL gestures refreshed the overlay...
             assertThat(glassesOutputs.filterIsInstance<RelayOutput.Gesture>()).hasSize(2)
-            // ...and the re-presented word was spoken again after the no-hand gap
+            // ...and both of them spoke, with no latch to clear between them
             assertThat(tts.synthesized).containsExactly("好", "好")
             assertThat(necklaceOutputs.filterIsInstance<RelayOutput.TtsAudio>()).hasSize(2)
 
@@ -323,7 +324,7 @@ class StreamRelayRoutingTest {
     fun `rapid label changes conflate the tts handoff to the newest label`() =
         runTest {
             // Given a SLOW synthesizer and THREE labels recognized before it
-            // catches up (one per 2 fps sample window)
+            // catches up
             val tts = SlowCapturingTtsPort(pcm16 = ByteArray(4) { 7 }, delayMs = 1_500L)
             val wired =
                 wired(
@@ -349,7 +350,7 @@ class StreamRelayRoutingTest {
             val glassesCollector = launch { stream.results(glasses.sessionId).collect { glassesOutputs += it } }
 
             // When A is recognized, then B and C arrive while the voice is still
-            // speaking A (one label per 500 ms sample window)
+            // speaking A
             stream.pushImage(necklace.sessionId, jpeg = byteArrayOf(1), ptsMs = 1L)
             advanceTimeBy(400)
             stream.pushImage(necklace.sessionId, jpeg = byteArrayOf(2), ptsMs = 2L)

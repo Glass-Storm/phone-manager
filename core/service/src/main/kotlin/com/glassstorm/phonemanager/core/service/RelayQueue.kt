@@ -1,7 +1,6 @@
 package com.glassstorm.phonemanager.core.service
 
 import kotlinx.coroutines.channels.Channel
-import java.util.concurrent.atomic.AtomicBoolean
 
 /** One queued JPEG still plus the capture timestamp its gesture output inherits. */
 internal data class QueuedImage(
@@ -27,8 +26,8 @@ internal data class QueuedImage(
  *    production sets the capacity to ONE, so [admitImage] replaces the single
  *    queued still on every newer offer and a supersonic producer can never park
  *    the peer's `pushImage`; the caller counts the eviction as `imageDropped`.
- *    The consumer then samples the still stream at 2 fps, always recognizing the
- *    newest still, so the recognizer's lag stays bounded by one sample period.
+ *    The consumer then recognizes the still stream as fast as the model allows,
+ *    always on the newest still, so the recognizer never replays a stale frame.
  */
 internal class RelayQueue(
     audioCapacity: Int,
@@ -40,11 +39,6 @@ internal class RelayQueue(
     val video: Channel<ByteArray> = Channel(capacity = videoCapacity)
 
     val image: Channel<QueuedImage> = Channel(capacity = imageCapacity)
-
-    private val closed = AtomicBoolean(false)
-
-    /** Whether [close] has been called, so a pump can stop waiting for a full sample window. */
-    val isClosed: Boolean get() = closed.get()
 
     /** Park until [pcm] fits. Audio is the irreplaceable half: it is never dropped. */
     suspend fun admitAudio(pcm: ByteArray) {
@@ -90,7 +84,6 @@ internal class RelayQueue(
 
     /** Close every side so a pump's `for (x in channel)` finishes after draining. */
     fun close() {
-        closed.set(true)
         audio.close()
         video.close()
         image.close()

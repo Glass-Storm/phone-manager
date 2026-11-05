@@ -20,18 +20,17 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestCoroutineScheduler
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.Timeout
 
 /**
- * The gesture SAMPLING policy: the hub turns a fast JPEG still stream (the live Pi
- * pushes ~10 fps) into at most 2 model inferences per second, always on the newest
- * still. A one-slot latest-wins queue plus a measured sample window means the
- * recognizer can never build a backlog, so a label switch is heard promptly
- * instead of after seconds of replayed stale gestures.
+ * The gesture PROCESSING policy: the hub turns a fast JPEG still stream (the live
+ * Pi pushes ~10 fps) into one model inference per still the model can keep up
+ * with, always on the newest still. A one-slot latest-wins queue is the only
+ * backlog control: no artificial fps cap, so a held gesture keeps being spoken
+ * and a switch is heard as soon as the model recognizes it.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class StreamGestureSamplingTest {
@@ -41,7 +40,7 @@ class StreamGestureSamplingTest {
     private lateinit var scope: CoroutineScope
 
     @Test
-    fun `a ten hz still stream drives at most three recognitions per second on the newest still`() =
+    fun `a ten hz still stream recognizes every still on the newest frame`() =
         runTest {
             // Given a 10 fps producer, each still carrying a distinct marker byte
             val gesture = MarkerGesturePort(testScheduler) { GestureOutcome("Thumb_Up", "好", 0.9f) }
@@ -60,13 +59,12 @@ class StreamGestureSamplingTest {
                 }
             }
 
-            // When one second of that stream has been offered
-            advanceTimeBy(1_100)
+            // When the whole two-second stream has been offered
             advanceUntilIdle()
 
-            // Then the recognizer ran one sample window apart, so at most 3 times...
-            assertThat(gesture.markers).hasSize(3)
-            assertThat(gesture.recognizedAtMs).containsExactly(0L, 500L, 1_000L).inOrder()
+            // Then a fast model processed every still, in order, with no fps cap...
+            assertThat(gesture.markers).hasSize(20)
+            assertThat(gesture.markers).containsExactlyElementsIn((1..20).toList()).inOrder()
             // ...and the last still it saw was the NEWEST offered one, not a stale frame
             assertThat(gesture.markers.last()).isEqualTo(20)
 
@@ -76,7 +74,7 @@ class StreamGestureSamplingTest {
         }
 
     @Test
-    fun `a label switch is recognized and spoken within one sample period`() =
+    fun `a label switch is recognized and spoken within 600 ms`() =
         runTest {
             // Given a marker-driven engine and a timestamping voice
             val gesture =
@@ -92,17 +90,18 @@ class StreamGestureSamplingTest {
             val session = stream.openSession("necklace")
             stream.bindRole(session.sessionId, PeerRole.DAEMON)
 
-            // When the first gesture is sampled and then the hand switches mid-window
+            // When the first gesture is processed and the hand switches shortly after
             stream.pushImage(session.sessionId, jpeg = byteArrayOf(1), ptsMs = 1L)
             advanceTimeBy(100)
             val switchedAt = testScheduler.currentTime
             stream.pushImage(session.sessionId, jpeg = byteArrayOf(2), ptsMs = 2L)
             advanceTimeBy(600)
 
-            // Then the newest still was recognized, with no stale Thumb_Up replay
+            // Then the newest still was recognized without any sample-period wait,
+            // with no stale Thumb_Up replay
             assertThat(gesture.markers).containsExactly(1, 2).inOrder()
             assertThat(gesture.recognizedAtMs[1] - switchedAt).isAtMost(600L)
-            // And the switch reached TTS inside that same sample period
+            // And the switch reached TTS immediately
             assertThat(tts.texts).containsExactly("好", "停").inOrder()
             assertThat(tts.spokenAtMs[1] - switchedAt).isAtMost(600L)
 
@@ -139,26 +138,65 @@ class StreamGestureSamplingTest {
         }
 
     @Test
-    fun `closing during a sample window drains promptly instead of waiting the full period`() =
+    fun `a slow model recognizes the newest still and never builds a backlog`() =
         runTest {
-            // Given a still already recognized, with the pump inside its sample window
-            val gesture = MarkerGesturePort(testScheduler) { GestureOutcome("Thumb_Up", "好", 0.9f) }
+            // Given a model slower than the producer (300 ms vs 50 ms per still)
+            val gesture =
+                MarkerGesturePort(testScheduler, modelDelayMs = 300L) {
+                    GestureOutcome("Thumb_Up", "好", 0.9f)
+                }
+            val stream = stream(gesture = gesture, tts = SamplingSilentTtsPort(), scheduler = testScheduler)
+            val session = stream.openSession("necklace")
+            stream.bindRole(session.sessionId, PeerRole.DAEMON)
+
+            launch {
+                repeat(10) { index ->
+                    stream.pushImage(
+                        session.sessionId,
+                        jpeg = byteArrayOf((index + 1).toByte()),
+                        ptsMs = index.toLong(),
+                    )
+                    delay(50L)
+                }
+            }
+
+            advanceUntilIdle()
+
+            // Then the burst collapsed instead of queueing: fewer than ten inferences...
+            assertThat(gesture.markers.size).isLessThan(10)
+            // ...no stale frame was ever replayed...
+            assertThat(gesture.markers).isInOrder()
+            // ...and the last still the model saw was the NEWEST one offered
+            assertThat(gesture.markers.last()).isEqualTo(10)
+
+            stream.closeSession(session.sessionId)
+            advanceUntilIdle()
+            scope.cancel()
+        }
+
+    @Test
+    fun `closing while the model is mid inference drains without a sampling wait`() =
+        runTest {
+            // Given a still already being recognized by a slow model
+            val gesture =
+                MarkerGesturePort(testScheduler, modelDelayMs = 100L) {
+                    GestureOutcome("Thumb_Up", "好", 0.9f)
+                }
             val stream = stream(gesture = gesture, tts = SamplingSilentTtsPort(), scheduler = testScheduler)
             val session = stream.openSession("necklace")
             stream.bindRole(session.sessionId, PeerRole.DAEMON)
             stream.pushImage(session.sessionId, jpeg = byteArrayOf(1), ptsMs = 1L)
-            advanceTimeBy(90)
-            assertThat(gesture.markers).containsExactly(1)
+            advanceTimeBy(10)
+            assertThat(gesture.markers).isEmpty()
 
-            // When the session closes before the 500 ms window elapses
+            // When the session closes before the model returns
             val closer = launch { stream.closeSession(session.sessionId) }
-            runCurrent()
-            advanceTimeBy(60)
-            runCurrent()
+            advanceUntilIdle()
 
-            // Then the drain completed well before a full period could pass
+            // Then the drain waited only for the in-flight inference, and the still
+            // still reached the model
             assertThat(closer.isCompleted).isTrue()
-            assertThat(testScheduler.currentTime).isLessThan(StreamServiceImpl.GESTURE_SAMPLE_PERIOD_MS)
+            assertThat(gesture.markers).containsExactly(1)
             scope.cancel()
         }
 
@@ -181,8 +219,8 @@ class StreamGestureSamplingTest {
 
 /**
  * [GesturePort] fake keyed by the still's marker byte: it records every marker it
- * actually recognized (and when), so the sampling cadence and latest-wins order
- * are observable. [modelDelayMs] stands in for a slow native recognizer.
+ * actually recognized (and when), so the latest-wins order is observable.
+ * [modelDelayMs] stands in for a slow native recognizer.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 private class MarkerGesturePort(

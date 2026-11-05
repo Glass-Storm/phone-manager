@@ -9,7 +9,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicReference
 
 /**
  * The live relay sessions, keyed by session id AND by the peer role each session
@@ -129,10 +128,6 @@ internal class RelaySessionRegistry {
  * the latest-wins TTS handoff, the signal that the still queue is drained, and
  * the parent [Job] whose join drains ALL pumps.
  *
- * [lastGestureLabel] is the de-duplication latch for the TTS half only: the
- * gesture frame still reaches the glasses on every still, but a label is spoken
- * only when it differs from the last one emitted (or after a no-hand frame).
- *
  * [isClosing] is the half-close latch: `closeSession` flips it ONCE, which makes
  * every new push a no-op while the session stays resolvable for delivery during
  * the drain window.
@@ -144,7 +139,6 @@ internal class SessionState(
     val tts: Channel<String>,
     val imageDrained: CompletableDeferred<Unit>,
     val pump: Job,
-    val lastGestureLabel: AtomicReference<String?> = AtomicReference(null),
 ) {
     private val closing = AtomicBoolean(false)
 
