@@ -17,8 +17,10 @@ import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Rule
@@ -69,15 +71,13 @@ class StreamRelayRoutingTest {
             assertThat(gesture.confidence).isEqualTo(0.9f)
             assertThat(gesture.ptsMs).isEqualTo(123L)
 
-            // And the necklace session received the synthesized speech for the same meaning
+            // And the necklace (the image's sender) received the synthesized speech
             val tts = necklaceOutputs.filterIsInstance<RelayOutput.TtsAudio>().single()
             assertThat(tts.pcm16).isEqualTo(ByteArray(4) { 7 })
             assertThat(tts.ptsMs).isEqualTo(123L)
 
-            // And the GLASSES session received the SAME synthesized audio, so its player is live
-            val glassesTts = glassesOutputs.filterIsInstance<RelayOutput.TtsAudio>().single()
-            assertThat(glassesTts.pcm16).isEqualTo(tts.pcm16)
-            assertThat(glassesTts.ptsMs).isEqualTo(123L)
+            // And the glasses did NOT: page-14 S1 shows the word without speaking it
+            assertThat(glassesOutputs.filterIsInstance<RelayOutput.TtsAudio>()).isEmpty()
 
             // And the image/gesture channel is counted separately from H.264 NALs.
             val stats = stream.stats()
@@ -89,6 +89,49 @@ class StreamRelayRoutingTest {
             advanceUntilIdle()
             necklaceCollector.join()
             glassesCollector.join()
+            scope.cancel()
+        }
+
+    @Test
+    fun `an image from the glasses yields both gesture and tts to the glasses only`() =
+        runTest {
+            // Given a glasses session and a necklace session, each bound to its role
+            val wired =
+                wired(
+                    gesture = FixedGesturePort(GestureOutcome(label = "Thumb_Up", text = "Yes", confidence = 0.9f)),
+                    tts = FixedTtsPort(ByteArray(4) { 7 }),
+                )
+            val scope = testScope(testScheduler)
+            val stream = wired.newStream(scope)
+            val glasses = stream.openSession("glasses")
+            stream.bindRole(glasses.sessionId, PeerRole.GLASS)
+            val necklace = stream.openSession("necklace")
+            stream.bindRole(necklace.sessionId, PeerRole.DAEMON)
+            val glassesOutputs = mutableListOf<RelayOutput>()
+            val necklaceOutputs = mutableListOf<RelayOutput>()
+            val glassesCollector = launch { stream.results(glasses.sessionId).collect { glassesOutputs += it } }
+            val necklaceCollector = launch { stream.results(necklace.sessionId).collect { necklaceOutputs += it } }
+
+            // When the glasses pushes its own still (page-14 S3)
+            stream.pushImage(glasses.sessionId, jpeg = byteArrayOf(1, 2, 3), ptsMs = 55L)
+            advanceUntilIdle()
+
+            // Then the glasses received BOTH the word and the synthesized speech
+            val gesture = glassesOutputs.filterIsInstance<RelayOutput.Gesture>().single()
+            assertThat(gesture.text).isEqualTo("Yes")
+            assertThat(gesture.ptsMs).isEqualTo(55L)
+            val tts = glassesOutputs.filterIsInstance<RelayOutput.TtsAudio>().single()
+            assertThat(tts.pcm16).isEqualTo(ByteArray(4) { 7 })
+            assertThat(tts.ptsMs).isEqualTo(55L)
+
+            // And the necklace received neither: the glasses' still is the glasses' own
+            assertThat(necklaceOutputs).isEmpty()
+
+            stream.closeSession(glasses.sessionId)
+            stream.closeSession(necklace.sessionId)
+            advanceUntilIdle()
+            glassesCollector.join()
+            necklaceCollector.join()
             scope.cancel()
         }
 
@@ -113,8 +156,11 @@ class StreamRelayRoutingTest {
             val necklaceCollector = launch { stream.results(necklace.sessionId).collect { necklaceOutputs += it } }
             val glassesCollector = launch { stream.results(glasses.sessionId).collect { glassesOutputs += it } }
 
-            // When TWO stills are pushed while synthesis throws both times
+            // When TWO stills are processed while synthesis throws both times. Each
+            // still is yielded before the next offer: at capacity 1 a second offer
+            // before the pump runs would evict the first (latest wins).
             stream.pushImage(necklace.sessionId, jpeg = byteArrayOf(1, 2, 3), ptsMs = 1L)
+            advanceUntilIdle()
             stream.pushImage(necklace.sessionId, jpeg = byteArrayOf(4, 5, 6), ptsMs = 2L)
             advanceUntilIdle()
 
@@ -125,6 +171,200 @@ class StreamRelayRoutingTest {
 
             // And the TTS half was skipped rather than crashing the relay
             assertThat(necklaceOutputs.filterIsInstance<RelayOutput.TtsAudio>()).isEmpty()
+
+            stream.closeSession(necklace.sessionId)
+            stream.closeSession(glasses.sessionId)
+            advanceUntilIdle()
+            necklaceCollector.join()
+            glassesCollector.join()
+            scope.cancel()
+        }
+
+    @Test
+    fun `repeated identical gestures refresh the overlay and speak on every processed still`() =
+        runTest {
+            // Given a necklace, a glasses session and a fast synthesizer recording texts
+            val tts = CapturingTtsPort(ByteArray(4) { 7 })
+            val wired =
+                wired(
+                    gesture = FixedGesturePort(GestureOutcome(label = "Thumb_Up", text = "好", confidence = 0.9f)),
+                    tts = tts,
+                )
+            val scope = testScope(testScheduler)
+            val stream = wired.newStream(scope)
+            val necklace = stream.openSession("necklace")
+            stream.bindRole(necklace.sessionId, PeerRole.DAEMON)
+            val glasses = stream.openSession("glasses")
+            stream.bindRole(glasses.sessionId, PeerRole.GLASS)
+            val necklaceOutputs = mutableListOf<RelayOutput>()
+            val glassesOutputs = mutableListOf<RelayOutput>()
+            val necklaceCollector = launch { stream.results(necklace.sessionId).collect { necklaceOutputs += it } }
+            val glassesCollector = launch { stream.results(glasses.sessionId).collect { glassesOutputs += it } }
+
+            // When the SAME label is recognized on 5 stills, each processed before
+            // the next is offered so the fast voice drains every handoff
+            repeat(5) { index ->
+                stream.pushImage(necklace.sessionId, jpeg = byteArrayOf(1, 2, 3), ptsMs = index.toLong())
+                advanceUntilIdle()
+            }
+
+            // Then every still refreshed the glasses overlay...
+            assertThat(glassesOutputs.filterIsInstance<RelayOutput.Gesture>()).hasSize(5)
+            // ...and every processed still reached the voice: the word is not deduped
+            assertThat(tts.synthesized).containsExactly("好", "好", "好", "好", "好")
+            assertThat(necklaceOutputs.filterIsInstance<RelayOutput.TtsAudio>()).hasSize(5)
+
+            stream.closeSession(necklace.sessionId)
+            stream.closeSession(glasses.sessionId)
+            advanceUntilIdle()
+            necklaceCollector.join()
+            glassesCollector.join()
+            scope.cancel()
+        }
+
+    @Test
+    fun `a changed gesture label is spoken again`() =
+        runTest {
+            // Given a sequence of two different labels
+            val tts = CapturingTtsPort(ByteArray(4) { 7 })
+            val wired =
+                wired(
+                    gesture =
+                        SequenceGesturePort(
+                            listOf(
+                                GestureOutcome(label = "Thumb_Up", text = "好", confidence = 0.9f),
+                                GestureOutcome(label = "Fist", text = "停", confidence = 0.9f),
+                            ),
+                        ),
+                    tts = tts,
+                )
+            val scope = testScope(testScheduler)
+            val stream = wired.newStream(scope)
+            val necklace = stream.openSession("necklace")
+            stream.bindRole(necklace.sessionId, PeerRole.DAEMON)
+            val glasses = stream.openSession("glasses")
+            stream.bindRole(glasses.sessionId, PeerRole.GLASS)
+            val necklaceOutputs = mutableListOf<RelayOutput>()
+            val glassesOutputs = mutableListOf<RelayOutput>()
+            val necklaceCollector = launch { stream.results(necklace.sessionId).collect { necklaceOutputs += it } }
+            val glassesCollector = launch { stream.results(glasses.sessionId).collect { glassesOutputs += it } }
+
+            // When the label changes between stills, with the synthesizer keeping up
+            stream.pushImage(necklace.sessionId, jpeg = byteArrayOf(1), ptsMs = 1L)
+            advanceUntilIdle()
+            stream.pushImage(necklace.sessionId, jpeg = byteArrayOf(2), ptsMs = 2L)
+            advanceUntilIdle()
+
+            // Then BOTH gestures refreshed the overlay and BOTH words were spoken
+            assertThat(glassesOutputs.filterIsInstance<RelayOutput.Gesture>().map { it.label })
+                .containsExactly("Thumb_Up", "Fist")
+                .inOrder()
+            assertThat(tts.synthesized).containsExactly("好", "停").inOrder()
+            assertThat(necklaceOutputs.filterIsInstance<RelayOutput.TtsAudio>()).hasSize(2)
+
+            stream.closeSession(necklace.sessionId)
+            stream.closeSession(glasses.sessionId)
+            advanceUntilIdle()
+            necklaceCollector.join()
+            glassesCollector.join()
+            scope.cancel()
+        }
+
+    @Test
+    fun `a no-hand frame produces nothing and the next gesture still speaks`() =
+        runTest {
+            // Given the label A, then a no-hand frame, then the SAME label A again
+            val tts = CapturingTtsPort(ByteArray(4) { 7 })
+            val wired =
+                wired(
+                    gesture =
+                        SequenceGesturePort(
+                            listOf(
+                                GestureOutcome(label = "Thumb_Up", text = "好", confidence = 0.9f),
+                                null,
+                                GestureOutcome(label = "Thumb_Up", text = "好", confidence = 0.9f),
+                            ),
+                        ),
+                    tts = tts,
+                )
+            val scope = testScope(testScheduler)
+            val stream = wired.newStream(scope)
+            val necklace = stream.openSession("necklace")
+            stream.bindRole(necklace.sessionId, PeerRole.DAEMON)
+            val glasses = stream.openSession("glasses")
+            stream.bindRole(glasses.sessionId, PeerRole.GLASS)
+            val necklaceOutputs = mutableListOf<RelayOutput>()
+            val glassesOutputs = mutableListOf<RelayOutput>()
+            val necklaceCollector = launch { stream.results(necklace.sessionId).collect { necklaceOutputs += it } }
+            val glassesCollector = launch { stream.results(glasses.sessionId).collect { glassesOutputs += it } }
+
+            // When the hand disappears and the same gesture is re-presented
+            stream.pushImage(necklace.sessionId, jpeg = byteArrayOf(1), ptsMs = 1L)
+            advanceUntilIdle()
+            stream.pushImage(necklace.sessionId, jpeg = byteArrayOf(2), ptsMs = 2L)
+            advanceUntilIdle()
+            stream.pushImage(necklace.sessionId, jpeg = byteArrayOf(3), ptsMs = 3L)
+            advanceUntilIdle()
+
+            // Then only the two REAL gestures refreshed the overlay...
+            assertThat(glassesOutputs.filterIsInstance<RelayOutput.Gesture>()).hasSize(2)
+            // ...and both of them spoke, with no latch to clear between them
+            assertThat(tts.synthesized).containsExactly("好", "好")
+            assertThat(necklaceOutputs.filterIsInstance<RelayOutput.TtsAudio>()).hasSize(2)
+
+            stream.closeSession(necklace.sessionId)
+            stream.closeSession(glasses.sessionId)
+            advanceUntilIdle()
+            necklaceCollector.join()
+            glassesCollector.join()
+            scope.cancel()
+        }
+
+    @Test
+    fun `rapid label changes conflate the tts handoff to the newest label`() =
+        runTest {
+            // Given a SLOW synthesizer and THREE labels recognized before it
+            // catches up
+            val tts = SlowCapturingTtsPort(pcm16 = ByteArray(4) { 7 }, delayMs = 1_500L)
+            val wired =
+                wired(
+                    gesture =
+                        SequenceGesturePort(
+                            listOf(
+                                GestureOutcome(label = "Thumb_Up", text = "好", confidence = 0.9f),
+                                GestureOutcome(label = "Fist", text = "停", confidence = 0.9f),
+                                GestureOutcome(label = "Victory", text = "赢", confidence = 0.9f),
+                            ),
+                        ),
+                    tts = tts,
+                )
+            val scope = testScope(testScheduler)
+            val stream = wired.newStream(scope)
+            val necklace = stream.openSession("necklace")
+            stream.bindRole(necklace.sessionId, PeerRole.DAEMON)
+            val glasses = stream.openSession("glasses")
+            stream.bindRole(glasses.sessionId, PeerRole.GLASS)
+            val necklaceOutputs = mutableListOf<RelayOutput>()
+            val glassesOutputs = mutableListOf<RelayOutput>()
+            val necklaceCollector = launch { stream.results(necklace.sessionId).collect { necklaceOutputs += it } }
+            val glassesCollector = launch { stream.results(glasses.sessionId).collect { glassesOutputs += it } }
+
+            // When A is recognized, then B and C arrive while the voice is still
+            // speaking A
+            stream.pushImage(necklace.sessionId, jpeg = byteArrayOf(1), ptsMs = 1L)
+            advanceTimeBy(400)
+            stream.pushImage(necklace.sessionId, jpeg = byteArrayOf(2), ptsMs = 2L)
+            advanceTimeBy(500)
+            stream.pushImage(necklace.sessionId, jpeg = byteArrayOf(3), ptsMs = 3L)
+            advanceTimeBy(2_200)
+
+            // Then the overlay still saw ALL THREE gestures...
+            assertThat(glassesOutputs.filterIsInstance<RelayOutput.Gesture>().map { it.label })
+                .containsExactly("Thumb_Up", "Fist", "Victory")
+                .inOrder()
+            // ...but pending B was replaced by C: A and the NEWEST text were spoken
+            assertThat(tts.synthesized).containsExactly("好", "赢").inOrder()
+            assertThat(necklaceOutputs.filterIsInstance<RelayOutput.TtsAudio>()).hasSize(2)
 
             stream.closeSession(necklace.sessionId)
             stream.closeSession(glasses.sessionId)
@@ -390,7 +630,7 @@ class StreamRelayRoutingTest {
         }
 
     @Test
-    fun `a still queued at close still yields its synthesized speech`() =
+    fun `a still queued at close yields its synthesized speech to the closing sender only`() =
         runTest {
             // Given a necklace still already accepted but not yet processed at close
             val tts = CapturingTtsPort(ByteArray(4) { 7 })
@@ -405,27 +645,33 @@ class StreamRelayRoutingTest {
             stream.bindRole(necklace.sessionId, PeerRole.DAEMON)
             val glasses = stream.openSession("glasses")
             stream.bindRole(glasses.sessionId, PeerRole.GLASS)
+            val necklaceOutputs = mutableListOf<RelayOutput>()
             val glassesOutputs = mutableListOf<RelayOutput>()
-            val collector = launch { stream.results(glasses.sessionId).collect { glassesOutputs += it } }
+            val necklaceCollector = launch { stream.results(necklace.sessionId).collect { necklaceOutputs += it } }
+            val glassesCollector = launch { stream.results(glasses.sessionId).collect { glassesOutputs += it } }
 
             // When the still is queued and the sender closes before the pumps run
             stream.pushImage(necklace.sessionId, jpeg = byteArrayOf(1, 2, 3), ptsMs = 9L)
             stream.closeSession(necklace.sessionId)
             advanceUntilIdle()
 
-            // Then the drain recognized the still and synthesized its speech
-            assertThat(glassesOutputs.filterIsInstance<RelayOutput.Gesture>()).hasSize(1)
-            assertThat(glassesOutputs.filterIsInstance<RelayOutput.TtsAudio>()).hasSize(1)
+            // Then the drain recognized the still and spoke it back to the CLOSING necklace
+            assertThat(necklaceOutputs.filterIsInstance<RelayOutput.TtsAudio>()).hasSize(1)
             assertThat(tts.synthesized).containsExactly("Yes")
+
+            // And the glasses showed the word but were NOT handed the necklace's audio
+            assertThat(glassesOutputs.filterIsInstance<RelayOutput.Gesture>()).hasSize(1)
+            assertThat(glassesOutputs.filterIsInstance<RelayOutput.TtsAudio>()).isEmpty()
 
             stream.closeSession(glasses.sessionId)
             advanceUntilIdle()
-            collector.join()
+            necklaceCollector.join()
+            glassesCollector.join()
             scope.cancel()
         }
 
     @Test
-    fun `a still queued at the daemon half-close delivers its tts to the glasses and the closing daemon`() =
+    fun `a still queued at the daemon half-close delivers its tts to the closing daemon only`() =
         runTest {
             // Given a necklace still already accepted but not yet processed at close
             val tts = CapturingTtsPort(ByteArray(4) { 7 })
@@ -451,13 +697,15 @@ class StreamRelayRoutingTest {
             stream.closeSession(necklace.sessionId)
             advanceUntilIdle()
 
-            // Then the drained still's speech reached BOTH the live glasses session
-            // AND the closing DAEMON session, which is still reading during its drain
-            val glassesTts = glassesOutputs.filterIsInstance<RelayOutput.TtsAudio>().single()
+            // Then the drained still's speech reached ONLY the closing DAEMON session,
+            // which is still reading during its drain
             val daemonTts = necklaceOutputs.filterIsInstance<RelayOutput.TtsAudio>().single()
             assertThat(daemonTts.pcm16).isEqualTo(ByteArray(4) { 7 })
             assertThat(daemonTts.ptsMs).isEqualTo(9L)
-            assertThat(glassesTts.pcm16).isEqualTo(daemonTts.pcm16)
+
+            // And the glasses showed the word but got no audio for the necklace's still
+            assertThat(glassesOutputs.filterIsInstance<RelayOutput.Gesture>()).hasSize(1)
+            assertThat(glassesOutputs.filterIsInstance<RelayOutput.TtsAudio>()).isEmpty()
             assertThat(tts.synthesized).containsExactly("Yes")
 
             stream.closeSession(glasses.sessionId)
@@ -497,6 +745,19 @@ class StreamRelayRoutingTest {
         CoroutineScope(StandardTestDispatcher(scheduler))
 
     private fun pcm(size: Int): ByteArray = ByteArray(size) { (it + 1).toByte() }
+}
+
+/** [GesturePort] fake returning each outcome in order, then the last one forever. */
+private class SequenceGesturePort(
+    private val outcomes: List<GestureOutcome?>,
+) : GesturePort {
+    private var index = 0
+
+    override suspend fun recognize(jpeg: ByteArray): GestureOutcome? {
+        val outcome = if (index < outcomes.size) outcomes[index] else outcomes.lastOrNull()
+        index += 1
+        return outcome
+    }
 }
 
 /** [GesturePort] fake returning a fixed outcome (also for the "no hand" null case). */
@@ -563,6 +824,21 @@ private class CapturingTtsPort(
 
     override suspend fun synthesize(text: String): ByteArray {
         if (text.isEmpty()) return ByteArray(0)
+        synthesized += text
+        return pcm16
+    }
+}
+
+/** [TtsPort] fake that only records a text AFTER a virtual delay, like a slow voice. */
+private class SlowCapturingTtsPort(
+    private val pcm16: ByteArray,
+    private val delayMs: Long,
+) : TtsPort {
+    val synthesized: MutableList<String> = mutableListOf()
+
+    override suspend fun synthesize(text: String): ByteArray {
+        if (text.isEmpty()) return ByteArray(0)
+        delay(delayMs)
         synthesized += text
         return pcm16
     }

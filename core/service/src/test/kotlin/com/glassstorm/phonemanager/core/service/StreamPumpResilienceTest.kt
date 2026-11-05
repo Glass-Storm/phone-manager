@@ -120,7 +120,10 @@ class StreamPumpResilienceTest {
             val collector = launch { stream.results(session.sessionId).collect { outputs += it } }
 
             stream.pushAudio(session.sessionId, pcm(), AudioFormat.SAMPLE_RATE_HZ)
+            // Two stills: yield the first before offering the second, otherwise
+            // latest-wins at capacity 1 keeps only one.
             stream.pushImage(session.sessionId, jpeg(), ptsMs = 0L)
+            advanceUntilIdle()
             stream.pushImage(session.sessionId, jpeg(), ptsMs = 0L)
             advanceUntilIdle()
 

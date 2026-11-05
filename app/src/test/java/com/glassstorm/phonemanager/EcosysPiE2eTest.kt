@@ -198,12 +198,11 @@ class EcosysPiE2eTest {
             .that(speech.speakerLabel)
             .isEmpty()
 
-        // Scenario 3: the glasses PLAY the synthesized audio, so the SAME image also
-        // reaches the glasses session as a `tts_audio` frame (in addition to the
-        // necklace, which played it through the shimmed `aplay`).
-        assertWithMessage("the glasses session never received the hub-synthesized TTS audio")
+        // The necklace's still is spoken by the necklace only (page-14 S1): the
+        // glasses show the word and must NOT receive its `tts_audio`.
+        assertWithMessage("the glasses received TTS audio for the necklace's image")
             .that(glassesClient.drain().filterIsInstance<PeerEvent.TtsAudio>())
-            .isNotEmpty()
+            .isEmpty()
     }
 
     private fun piEnvironment(hubAddress: String): Map<String, String> {

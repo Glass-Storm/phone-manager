@@ -20,7 +20,6 @@ import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ClosedSendChannelException
 import kotlinx.coroutines.flow.Flow
@@ -56,11 +55,24 @@ import javax.inject.Inject
  *  * the audio pump transcribes frames and emits [RelayOutput.Speech] on an
  *    UNLIMITED result channel;
  *  * the video pump hands NALs to the [FrameSink] byte-for-byte unchanged;
- *  * the image pump recognizes the still and emits the [RelayOutput.Gesture] to
- *    the GLASSES session, then hands the recognized TEXT to the TTS pump;
- *  * the TTS pump synthesizes the latest text and emits [RelayOutput.TtsAudio] to
- *    BOTH the GLASSES and the NECKLACE session (deduplicated when they are the
- *    same session), so the glasses player is live.
+ *  * the image pump recognizes EVERY still it can take from the queue and always
+ *    works on the NEWEST one: the queue keeps a single slot (latest wins), so a
+ *    still that arrives while the model is busy evicts the previous one instead
+ *    of queueing behind it. There is NO artificial cadence cap: the model's own
+ *    inference time is the only throttle. It emits the [RelayOutput.Gesture] to
+ *    the GLASSES session on every processed still and hands the recognized TEXT
+ *    to the TTS pump on EVERY recognized still;
+ *  * the TTS pump synthesizes the latest CONFLATED text and emits
+ *    [RelayOutput.TtsAudio] to the image's SENDER only: the necklace's still is
+ *    spoken by the necklace, the glasses' still by the glasses. A fast synthesizer
+ *    speaks every recognized still; a slow one plays the newest word instead of
+ *    building a spoken backlog.
+ *
+ * A held gesture therefore keeps refreshing the overlay AND keeps speaking its
+ * word, and a switch says the new word as soon as the model recognizes it:
+ * there is no sample period to wait out and no label-change latch to clear. The
+ * one-slot latest-wins queue is the ONLY backlog control the recognizer needs,
+ * so a fast producer can never make it replay stale frames.
  *
  * Every pump guards its per-item body and its loop: an adapter throwing (native
  * engine, bitmap OOM, malformed frame) is logged and ends at most that item or
@@ -69,8 +81,8 @@ import javax.inject.Inject
  * [closeSession] DRAINS rather than discards: it latches the session CLOSING
  * (rejecting new pushes) but keeps it resolvable, closes the queue and the TTS
  * handoff, joins the pumps (so already-queued frames still reach the engines/sink,
- * and the latest utterance is still synthesized and delivered to BOTH roles,
- * including this half-closed sender), flushes the trailing transcript, and only
+ * and the latest utterance is still synthesized and delivered back to this
+ * half-closed sender), flushes the trailing transcript, and only
  * then unregisters the session (rebinding the role to a surviving session) and
  * closes the result channel, releasing the speech session exactly once. It never
  * cancels.
@@ -136,9 +148,10 @@ class StreamServiceImpl
             val relay = RelaySession(sessionId = newSessionId(), deviceId = deviceId)
             val queue = RelayQueue(audioCapacity, videoCapacity, imageCapacity)
             val results = Channel<RelayOutput>(Channel.UNLIMITED)
-            // Latest-wins text handoff: a burst of stills can never park the image
-            // pump on synthesis, and only the newest utterance is ever spoken.
-            val tts = Channel<String>(capacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+            // Latest-wins text handoff: EVERY recognized still offers its word,
+            // but a new one REPLACES any pending text instead of appending to a
+            // backlog, so a slow synthesizer speaks the newest word only.
+            val tts = Channel<String>(Channel.CONFLATED)
             // The still whose text is currently being synthesized, for its pts only.
             val latestImagePts = AtomicLong(0L)
             val sessionId = relay.sessionId
@@ -153,7 +166,10 @@ class StreamServiceImpl
                     launch { imagePump(sessionId, queue, tts, latestImagePts, imageDrained) }
                     launch { ttsPump(sessionId, tts, latestImagePts) }
                 }
-            registry.register(sessionId, SessionState(relay, queue, results, tts, imageDrained, pump))
+            registry.register(
+                sessionId,
+                SessionState(relay, queue, results, tts, imageDrained, pump),
+            )
             return relay
         }
 
@@ -201,6 +217,10 @@ class StreamServiceImpl
         ) {
             val state = registry.find(sessionId) ?: return
             if (state.isClosing) return
+            logger.info(
+                "inbound image session=$sessionId device=${state.relay.deviceId} " +
+                    "role=${registry.roleFor(sessionId)} bytes=${jpeg.size} ptsMs=$ptsMs",
+            )
             val dropped = state.queue.admitImage(QueuedImage(jpeg = jpeg, ptsMs = ptsMs))
             stats.onImageOffered(dropped = dropped)
         }
@@ -345,7 +365,9 @@ class StreamServiceImpl
                         if (outcome != null) {
                             stats.onGesture()
                             // Gesture text to the glasses; the role falls back to the
-                            // sender when no counterpart has bound yet.
+                            // sender when no counterpart has bound yet. This is emitted
+                            // on EVERY recognized frame so the overlay keeps refreshing
+                            // and never auto-hides while the hand is held.
                             deliver(
                                 output =
                                     RelayOutput.Gesture(
@@ -357,6 +379,10 @@ class StreamServiceImpl
                                 targetSessionIds = arrayOf(registry.sessionFor(PeerRole.GLASS) ?: sessionId),
                             )
                             latestImagePts.set(image.ptsMs)
+                            // EVERY recognized still speaks. The CONFLATED handoff
+                            // bounds the voice: a slow synthesizer collapses pending
+                            // duplicates to the newest word instead of building a
+                            // spoken backlog. A no-hand still is simply a no-op.
                             tts.trySend(outcome.text)
                         }
                     }
@@ -380,16 +406,12 @@ class StreamServiceImpl
                     guarded("tts") {
                         val pcm = ttsPort.synthesize(text)
                         if (pcm.isNotEmpty()) {
-                            // The deck's scenario 3: the glasses PLAY the audio, and the
-                            // daemon still receives it. Dedupe when both roles resolve to
-                            // the same session (the sender fallback).
+                            // Page-14 split: the image's SENDER speaks the word. The
+                            // necklace's still is spoken by the necklace; the glasses'
+                            // still is spoken by the glasses.
                             deliver(
                                 output = RelayOutput.TtsAudio(pcm16 = pcm, ptsMs = latestImagePts.get()),
-                                targetSessionIds =
-                                    arrayOf(
-                                        registry.sessionFor(PeerRole.GLASS) ?: sessionId,
-                                        registry.sessionFor(PeerRole.DAEMON) ?: sessionId,
-                                    ),
+                                targetSessionIds = arrayOf(sessionId),
                             )
                         }
                     }
@@ -455,8 +477,14 @@ class StreamServiceImpl
             /** Video buffer depth in NALs. Beyond this the oldest frame is evicted. */
             const val DEFAULT_VIDEO_CAPACITY: Int = 256
 
-            /** Image buffer depth in stills. Beyond this the oldest still is evicted. */
-            const val DEFAULT_IMAGE_CAPACITY: Int = 32
+            /**
+             * Image buffer depth in stills: ONE. The still queue is LATEST-WINS,
+             * so this single slot holds only the newest still and every older one
+             * is evicted as it arrives. That is the only backlog control the
+             * recognizer needs: it always works on the newest still, so its input
+             * lag stays bounded by one inference instead of a queued history.
+             */
+            const val DEFAULT_IMAGE_CAPACITY: Int = 1
 
             /**
              * Test seam: builds the relay with explicit capacities and scope so the

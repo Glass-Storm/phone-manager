@@ -22,9 +22,12 @@ internal data class QueuedImage(
  *    is NEVER dropped.
  *  * [video] — drop-oldest. [admitVideo] evicts the oldest queued frame when
  *    the buffer is full, so the live edge keeps flowing.
- *  * [image] — drop-oldest (LATEST WINS). [admitImage] evicts the oldest queued
- *    still when the buffer is full, so a supersonic producer can never park the
- *    peer's `pushImage`; the caller counts the eviction as `imageDropped`.
+ *  * [image] — drop-oldest (LATEST WINS), and practically a one-slot mailbox:
+ *    production sets the capacity to ONE, so [admitImage] replaces the single
+ *    queued still on every newer offer and a supersonic producer can never park
+ *    the peer's `pushImage`; the caller counts the eviction as `imageDropped`.
+ *    The consumer then recognizes the still stream as fast as the model allows,
+ *    always on the newest still, so the recognizer never replays a stale frame.
  */
 internal class RelayQueue(
     audioCapacity: Int,
