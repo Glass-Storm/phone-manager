@@ -22,6 +22,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ClosedSendChannelException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -56,13 +57,23 @@ import javax.inject.Inject
  *  * the audio pump transcribes frames and emits [RelayOutput.Speech] on an
  *    UNLIMITED result channel;
  *  * the video pump hands NALs to the [FrameSink] byte-for-byte unchanged;
- *  * the image pump recognizes the still and emits the [RelayOutput.Gesture] to
- *    the GLASSES session on EVERY frame, then hands the recognized TEXT to the
- *    TTS pump only when the label CHANGED (a no-hand frame clears the latch);
+ *  * the image pump SAMPLES the still stream: it recognizes at most one still
+ *    every [GESTURE_SAMPLE_PERIOD_MS] (2 fps) and always works on the NEWEST
+ *    still, because the queue keeps a single slot (latest wins) and older stills
+ *    are evicted instead of queued. It emits the [RelayOutput.Gesture] to the
+ *    GLASSES session on every PROCESSED still, then hands the recognized TEXT to
+ *    the TTS pump only when the label CHANGED (a no-hand frame clears the latch);
  *  * the TTS pump synthesizes the latest CONFLATED text and emits
  *    [RelayOutput.TtsAudio] to the image's SENDER only: the necklace's still is
  *    spoken by the necklace, the glasses' still by the glasses. A new label
  *    replaces a pending one instead of building a spoken backlog.
+ *
+ * Sampling exists because the peer pushes JPEG stills faster than the model can
+ * consume them (a live 10 fps source versus a >100 ms recognizer). Without the
+ * cap the pump would be permanently seconds behind and would replay stale
+ * gestures, so a held gesture followed by a switch would never reach TTS. The
+ * sample period is measured from the START of the last recognition; if the model
+ * itself took at least [GESTURE_SAMPLE_PERIOD_MS], no extra wait is added.
  *
  * Every pump guards its per-item body and its loop: an adapter throwing (native
  * engine, bitmap OOM, malformed frame) is logged and ends at most that item or
@@ -353,6 +364,9 @@ class StreamServiceImpl
         ) {
             try {
                 for (image in queue.image) {
+                    // Wall-clock start of this sample: the recognizer is a native
+                    // engine call, so its duration is measured, not assumed.
+                    val recognizedAtNanos = System.nanoTime()
                     guarded("image") {
                         // JPEG decoding happens ONLY inside the gesture adapter, never here.
                         val outcome = gesturePort.recognize(image.jpeg)
@@ -384,6 +398,10 @@ class StreamServiceImpl
                             lastGestureLabel.set(null)
                         }
                     }
+                    // Sample at 2 fps from the START of the last recognition: a
+                    // model that already took >= the period waits no longer.
+                    val elapsedMs = (System.nanoTime() - recognizedAtNanos) / NANOS_PER_MILLI
+                    awaitSampleWindow(queue, GESTURE_SAMPLE_PERIOD_MS - elapsedMs)
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
@@ -391,6 +409,24 @@ class StreamServiceImpl
                 logger.log(Level.SEVERE, "image pump died for session $sessionId", fatal)
             } finally {
                 imageDrained.complete(Unit)
+            }
+        }
+
+        /**
+         * Wait out the remainder of the sampling window in short slices so a
+         * closing session does not pin `imageDrained` for a whole period. Once the
+         * still channel is closed with nothing left to receive, the wait ends
+         * immediately: teardown must never pay for idle sampling.
+         */
+        private suspend fun awaitSampleWindow(
+            queue: RelayQueue,
+            remainingMs: Long,
+        ) {
+            var remaining = remainingMs
+            while (remaining > 0L && !queue.isClosed) {
+                val slice = minOf(remaining, SAMPLE_WINDOW_SLICE_MS)
+                delay(slice)
+                remaining -= slice
             }
         }
 
@@ -475,8 +511,23 @@ class StreamServiceImpl
             /** Video buffer depth in NALs. Beyond this the oldest frame is evicted. */
             const val DEFAULT_VIDEO_CAPACITY: Int = 256
 
-            /** Image buffer depth in stills. Beyond this the oldest still is evicted. */
-            const val DEFAULT_IMAGE_CAPACITY: Int = 32
+            /**
+             * Image buffer depth in stills: ONE. The still queue is LATEST-WINS,
+             * so this single slot holds only the newest still and every older one
+             * is evicted as it arrives. Combined with [GESTURE_SAMPLE_PERIOD_MS]
+             * this bounds the recognizer's input lag to at most one sample period
+             * instead of letting a fast producer build a multi-second backlog.
+             */
+            const val DEFAULT_IMAGE_CAPACITY: Int = 1
+
+            /** Gesture inference cadence: at most one still recognized per 500 ms (2 fps). */
+            const val GESTURE_SAMPLE_PERIOD_MS: Long = 500L
+
+            /** Shortest slice of the sampling wait, so a close can end it promptly. */
+            private const val SAMPLE_WINDOW_SLICE_MS: Long = 50L
+
+            /** Nanoseconds in a millisecond, for the wall-clock sample measurement. */
+            private const val NANOS_PER_MILLI: Long = 1_000_000L
 
             /**
              * Test seam: builds the relay with explicit capacities and scope so the

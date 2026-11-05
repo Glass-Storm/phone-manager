@@ -20,6 +20,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Rule
@@ -155,8 +156,11 @@ class StreamRelayRoutingTest {
             val necklaceCollector = launch { stream.results(necklace.sessionId).collect { necklaceOutputs += it } }
             val glassesCollector = launch { stream.results(glasses.sessionId).collect { glassesOutputs += it } }
 
-            // When TWO stills are pushed while synthesis throws both times
+            // When TWO stills are sampled while synthesis throws both times. Each
+            // still is yielded through its 2 fps window: at capacity 1 a second
+            // offer before the pump runs would evict the first (latest wins).
             stream.pushImage(necklace.sessionId, jpeg = byteArrayOf(1, 2, 3), ptsMs = 1L)
+            advanceUntilIdle()
             stream.pushImage(necklace.sessionId, jpeg = byteArrayOf(4, 5, 6), ptsMs = 2L)
             advanceUntilIdle()
 
@@ -318,8 +322,9 @@ class StreamRelayRoutingTest {
     @Test
     fun `rapid label changes conflate the tts handoff to the newest label`() =
         runTest {
-            // Given a SLOW synthesizer and two labels recognized before it catches up
-            val tts = SlowCapturingTtsPort(pcm16 = ByteArray(4) { 7 }, delayMs = 1_000L)
+            // Given a SLOW synthesizer and THREE labels recognized before it
+            // catches up (one per 2 fps sample window)
+            val tts = SlowCapturingTtsPort(pcm16 = ByteArray(4) { 7 }, delayMs = 1_500L)
             val wired =
                 wired(
                     gesture =
@@ -327,6 +332,7 @@ class StreamRelayRoutingTest {
                             listOf(
                                 GestureOutcome(label = "Thumb_Up", text = "好", confidence = 0.9f),
                                 GestureOutcome(label = "Fist", text = "停", confidence = 0.9f),
+                                GestureOutcome(label = "Victory", text = "赢", confidence = 0.9f),
                             ),
                         ),
                     tts = tts,
@@ -342,16 +348,22 @@ class StreamRelayRoutingTest {
             val necklaceCollector = launch { stream.results(necklace.sessionId).collect { necklaceOutputs += it } }
             val glassesCollector = launch { stream.results(glasses.sessionId).collect { glassesOutputs += it } }
 
-            // When a rapid A/B burst arrives before the slow synthesizer starts
+            // When A is recognized, then B and C arrive while the voice is still
+            // speaking A (one label per 500 ms sample window)
             stream.pushImage(necklace.sessionId, jpeg = byteArrayOf(1), ptsMs = 1L)
+            advanceTimeBy(400)
             stream.pushImage(necklace.sessionId, jpeg = byteArrayOf(2), ptsMs = 2L)
-            advanceUntilIdle()
+            advanceTimeBy(500)
+            stream.pushImage(necklace.sessionId, jpeg = byteArrayOf(3), ptsMs = 3L)
+            advanceTimeBy(2_200)
 
-            // Then the overlay still saw BOTH gestures...
-            assertThat(glassesOutputs.filterIsInstance<RelayOutput.Gesture>()).hasSize(2)
-            // ...but the queued A was replaced by B: only the NEWEST text was synthesized
-            assertThat(tts.synthesized).containsExactly("停")
-            assertThat(necklaceOutputs.filterIsInstance<RelayOutput.TtsAudio>()).hasSize(1)
+            // Then the overlay still saw ALL THREE gestures...
+            assertThat(glassesOutputs.filterIsInstance<RelayOutput.Gesture>().map { it.label })
+                .containsExactly("Thumb_Up", "Fist", "Victory")
+                .inOrder()
+            // ...but pending B was replaced by C: A and the NEWEST text were spoken
+            assertThat(tts.synthesized).containsExactly("好", "赢").inOrder()
+            assertThat(necklaceOutputs.filterIsInstance<RelayOutput.TtsAudio>()).hasSize(2)
 
             stream.closeSession(necklace.sessionId)
             stream.closeSession(glasses.sessionId)

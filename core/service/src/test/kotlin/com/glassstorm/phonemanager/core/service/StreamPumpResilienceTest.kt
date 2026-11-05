@@ -120,7 +120,10 @@ class StreamPumpResilienceTest {
             val collector = launch { stream.results(session.sessionId).collect { outputs += it } }
 
             stream.pushAudio(session.sessionId, pcm(), AudioFormat.SAMPLE_RATE_HZ)
+            // Two sampled stills: yield the first through the 2 fps window before
+            // offering the second, otherwise latest-wins at capacity 1 keeps only one.
             stream.pushImage(session.sessionId, jpeg(), ptsMs = 0L)
+            advanceUntilIdle()
             stream.pushImage(session.sessionId, jpeg(), ptsMs = 0L)
             advanceUntilIdle()
 
