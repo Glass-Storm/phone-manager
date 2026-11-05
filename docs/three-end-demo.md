@@ -178,14 +178,29 @@ $PI_SSH 'DEBIAN_FRONTEND=noninteractive apt-get update && \
 Join the hotspot with the Pi peer's `scripts/join-hotspot.sh`. Usage is
 `join-hotspot.sh <ssid> <psk> [wpa2|wpa3]`: pass `wpa3` for a WPA3-SAE (H2E)
 hotspot, and omit the mode or pass `wpa2` for a WPA2 AP (still the default).
-Both modes write the `wpa_supplicant` config at mode 600, enable and start
+
+The join is additive and **multi-network**: the script never overwrites
+`wpa_supplicant-wlan0.conf`. It finds the target SSID with
+`wpa_cli list_networks` and updates it in place, or adds a new network block
+when it is absent, then calls `enable_network`, `save_config`, and `reconfigure`.
+The Pi therefore remembers every network it has joined and auto-connects to
+whichever remembered network is available at boot and after a reconnect.
+
+On every run the script removes its own stale netplan drop-in,
+`/etc/netplan/90-ecosys-wlan0.yaml`, and stops `netplan-wpa-wlan0.service`; it
+never writes a netplan drop-in in either mode. This is required for
+auto-connect: left in place, `netplan-wpa-wlan0` starts its own
+`wpa_supplicant -c /run/netplan/wpa-wlan0.conf -iwlan0` at boot, holds the
+`wlan0` control interface, and `wpa_supplicant@wlan0` fails with
+`ctrl_iface exists` / status 255, so the Pi never associates automatically.
+
+Both modes keep the `wpa_supplicant` config at mode 600, enable and start
 `wpa_supplicant@wlan0`, ensure a DHCP `.network` for `wlan0`, reload
 systemd-networkd without restarting it, refuse to touch `usb0`/`eth0`, and
-verify an IPv4 address before exiting 0. The `wpa3` path writes the
-`sae_pwe=2` (global), `key_mgmt=SAE`, `sae_password`, `ieee80211w=2` shape and
-deliberately skips the netplan drop-in, because a stale WPA2 drop-in would
-conflict with the SAE config. The script ships with the Pi peer; on a checkout
-that predates it, use the Pi branch that contains it.
+verify an IPv4 address before exiting 0. The `wpa3` path writes the global
+`sae_pwe=2` plus `key_mgmt=SAE`, `sae_password`, `ieee80211w=2`; the `wpa2`
+path writes `psk` + `key_mgmt=WPA-PSK`. The script ships with the Pi peer; on a
+checkout that predates it, use the Pi branch that contains it.
 
 ```bash
 # WPA3-SAE (H2E) phone hotspot, e.g. this demo's Android hotspot:
@@ -200,7 +215,9 @@ gateway from `ip route show default dev wlan0`, so take `ECOSYS_HUB` from that
 route (or the phone's hotspot screen) instead of copying the runbook default.
 Starting `wpa_supplicant@wlan0` is mandatory in both modes: the old netplan
 branch wrote the config but never started the service, so `wlan0` stayed
-unassociated and `wpa_state=COMPLETED` never appeared.
+unassociated and `wpa_state=COMPLETED` never appeared. Removing the netplan
+drop-in is equally mandatory: leaving it behind re-creates the boot-time
+supplicant conflict that prevents auto-connect.
 
 The credentials are expanded on the local side and quoted for the remote shell.
 They are never written to a repo file.
