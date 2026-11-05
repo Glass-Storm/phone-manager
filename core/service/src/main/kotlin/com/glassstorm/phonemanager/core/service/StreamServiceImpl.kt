@@ -20,7 +20,6 @@ import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ClosedSendChannelException
 import kotlinx.coroutines.flow.Flow
@@ -31,6 +30,7 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import java.security.SecureRandom
 import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicReference
 import java.util.logging.Level
 import java.util.logging.Logger
 import javax.inject.Inject
@@ -57,10 +57,12 @@ import javax.inject.Inject
  *    UNLIMITED result channel;
  *  * the video pump hands NALs to the [FrameSink] byte-for-byte unchanged;
  *  * the image pump recognizes the still and emits the [RelayOutput.Gesture] to
- *    the GLASSES session, then hands the recognized TEXT to the TTS pump;
- *  * the TTS pump synthesizes the latest text and emits [RelayOutput.TtsAudio] to
- *    the image's SENDER only: the necklace's still is spoken by the necklace, the
- *    glasses' still by the glasses.
+ *    the GLASSES session on EVERY frame, then hands the recognized TEXT to the
+ *    TTS pump only when the label CHANGED (a no-hand frame clears the latch);
+ *  * the TTS pump synthesizes the latest CONFLATED text and emits
+ *    [RelayOutput.TtsAudio] to the image's SENDER only: the necklace's still is
+ *    spoken by the necklace, the glasses' still by the glasses. A new label
+ *    replaces a pending one instead of building a spoken backlog.
  *
  * Every pump guards its per-item body and its loop: an adapter throwing (native
  * engine, bitmap OOM, malformed frame) is logged and ends at most that item or
@@ -137,10 +139,14 @@ class StreamServiceImpl
             val queue = RelayQueue(audioCapacity, videoCapacity, imageCapacity)
             val results = Channel<RelayOutput>(Channel.UNLIMITED)
             // Latest-wins text handoff: a burst of stills can never park the image
-            // pump on synthesis, and only the newest utterance is ever spoken.
-            val tts = Channel<String>(capacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+            // pump on synthesis, and a new label REPLACES any pending one instead
+            // of appending to a backlog.
+            val tts = Channel<String>(Channel.CONFLATED)
             // The still whose text is currently being synthesized, for its pts only.
             val latestImagePts = AtomicLong(0L)
+            // The last gesture label already handed to TTS. The overlay keeps
+            // refreshing every frame; only this latch gates the spoken word.
+            val lastGestureLabel = AtomicReference<String?>(null)
             val sessionId = relay.sessionId
             // One parent job per session: joining it drains ALL pumps. The image
             // pump also signals when the still queue is drained, so closeSession can
@@ -150,10 +156,13 @@ class StreamServiceImpl
                 scope.launch {
                     launch { audioPump(sessionId, queue, results) }
                     launch { videoPump(sessionId, queue) }
-                    launch { imagePump(sessionId, queue, tts, latestImagePts, imageDrained) }
+                    launch { imagePump(sessionId, queue, tts, latestImagePts, lastGestureLabel, imageDrained) }
                     launch { ttsPump(sessionId, tts, latestImagePts) }
                 }
-            registry.register(sessionId, SessionState(relay, queue, results, tts, imageDrained, pump))
+            registry.register(
+                sessionId,
+                SessionState(relay, queue, results, tts, imageDrained, pump, lastGestureLabel),
+            )
             return relay
         }
 
@@ -339,6 +348,7 @@ class StreamServiceImpl
             queue: RelayQueue,
             tts: Channel<String>,
             latestImagePts: AtomicLong,
+            lastGestureLabel: AtomicReference<String?>,
             imageDrained: CompletableDeferred<Unit>,
         ) {
             try {
@@ -349,7 +359,9 @@ class StreamServiceImpl
                         if (outcome != null) {
                             stats.onGesture()
                             // Gesture text to the glasses; the role falls back to the
-                            // sender when no counterpart has bound yet.
+                            // sender when no counterpart has bound yet. This is emitted
+                            // on EVERY recognized frame so the overlay keeps refreshing
+                            // and never auto-hides while the hand is held.
                             deliver(
                                 output =
                                     RelayOutput.Gesture(
@@ -361,7 +373,15 @@ class StreamServiceImpl
                                 targetSessionIds = arrayOf(registry.sessionFor(PeerRole.GLASS) ?: sessionId),
                             )
                             latestImagePts.set(image.ptsMs)
-                            tts.trySend(outcome.text)
+                            // Only a label CHANGE reaches the voice. The same held
+                            // gesture refreshes the overlay but is spoken once.
+                            if (lastGestureLabel.getAndSet(outcome.label) != outcome.label) {
+                                tts.trySend(outcome.text)
+                            }
+                        } else {
+                            // A no-hand frame clears the latch so re-presenting the
+                            // same gesture afterwards speaks it again.
+                            lastGestureLabel.set(null)
                         }
                     }
                 }
