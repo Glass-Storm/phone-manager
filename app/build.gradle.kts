@@ -164,12 +164,18 @@ val ecosysPiE2e =
 // copied in `projectsEvaluated`: the dedicated task then tests the SAME compiled
 // classes and classpath as the hub suite (one source set, no drift). The all-tests
 // task itself is never run — only its producer dependencies.
+//
+// The classpath and testClassesDirs are assigned as the live FileCollections, NOT
+// resolved to `.files` here: resolving them at configuration time would force
+// `debugUnitTestRuntimeClasspath` to be built before any task runs, and the JVM
+// module JARs it needs do not exist yet at that point. Assigning the collections
+// keeps resolution (and their build dependencies) deferred to execution, while
+// `dependsOn` below still pulls in the compiled test classes' producers.
 gradle.projectsEvaluated {
     val unitTest = tasks.named<Test>("testDebugUnitTest").get()
-    val unitTestClasspath = unitTest.classpath.files
     ecosysPiE2e.configure {
         testClassesDirs = unitTest.testClassesDirs
-        classpath = files(unitTestClasspath)
+        classpath = unitTest.classpath
         jvmArgs = unitTest.jvmArgs
         systemProperties = unitTest.systemProperties
         dependsOn(unitTest.taskDependencies.getDependencies(unitTest))
