@@ -6,7 +6,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -23,12 +25,12 @@ class TranslationFlowTest {
     @Test
     fun `connection is required and ending conversation closes the gate`() {
         setFlow("手機端")
-        composeRule.onNodeWithText("開始對話").performScrollTo().assertIsNotEnabled()
+        composeRule.onNodeWithText("開始對話").assertIsNotEnabled()
         click("模擬連接裝置")
         click("開始對話")
-        composeRule.onNodeWithText("即時對話").assertIsDisplayed()
+        composeRule.onNodeWithText("即時對話 · 紀錄 (0)").assertIsDisplayed()
         click("結束對話")
-        composeRule.onNodeWithText("開始對話").performScrollTo().assertIsNotEnabled()
+        composeRule.onNodeWithText("開始對話").assertIsNotEnabled()
     }
 
     @Test
@@ -39,8 +41,8 @@ class TranslationFlowTest {
         click("設定")
         click("更改裝置角色")
         click("使用眼鏡端")
-        composeRule.onNodeWithText("連接手機中樞").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("開始對話").performScrollTo().assertIsNotEnabled()
+        composeRule.onNodeWithText("等待連接 · 眼鏡端").assertIsDisplayed()
+        composeRule.onNodeWithText("開始對話").assertIsNotEnabled()
     }
 
     @Test
@@ -48,13 +50,49 @@ class TranslationFlowTest {
         setFlow("眼鏡端")
         click("模擬連接裝置")
         click("開始對話")
-        click("顯示示範對話")
+        click("示範")
         composeRule.onNodeWithText("你好，請問去車站應該點行？").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("UI 預覽 · 模擬資料").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("UI 預覽 · 模擬資料").assertIsDisplayed()
+    }
+
+    @Test
+    fun `previous sentences remain after another translation and reconnect`() {
+        setFlow("手機端")
+        click("模擬連接裝置")
+        click("開始對話")
+        click("示範")
+        click("示範")
+        composeRule.onNodeWithText("即時對話 · 紀錄 (4)").assertIsDisplayed()
+        click("結束對話")
+        composeRule.onNodeWithText("對話紀錄 (4)").assertIsDisplayed()
+        click("清空")
+        composeRule.onNodeWithText("對話紀錄 (4)").assertIsDisplayed()
+        click("取消")
+        click("模擬連接裝置")
+        click("開始對話")
+        composeRule.onNodeWithText("即時對話 · 紀錄 (4)").assertIsDisplayed()
+    }
+
+    @Test
+    fun `activity recreation retains history but requires reconnection`() {
+        val restoration = StateRestorationTester(composeRule)
+        restoration.setContent { TranslationFlow("手機端", onRoleChanged = {}) }
+        click("模擬連接裝置")
+        click("開始對話")
+        click("示範")
+        restoration.emulateSavedInstanceStateRestore()
+        composeRule.onNodeWithText("對話紀錄 (2)").assertIsDisplayed()
+        composeRule.onNodeWithText("開始對話").assertIsNotEnabled()
     }
 
     private fun click(text: String) {
-        composeRule.onNodeWithText(text).performScrollTo().performClick()
+        if (text == "設定") {
+            composeRule.onNodeWithContentDescription(text).performClick()
+        } else if (text.startsWith("使用")) {
+            composeRule.onNodeWithText(text).performScrollTo().performClick()
+        } else {
+            composeRule.onNodeWithText(text).performClick()
+        }
     }
 
     private fun setFlow(initialRole: String) {

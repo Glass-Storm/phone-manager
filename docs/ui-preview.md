@@ -1,28 +1,37 @@
 # Translation UI preview
 
-On branch `feat/ui`, MainActivity opens a UI-only prototype. Existing hub screens,
-services and AI adapters remain in the project. Neither role selection nor the
-simulated connection starts network or recognition services.
+On `feat/ui`, MainActivity opens a UI-only prototype based on the original INMO
+Link layout: a fixed dark palette, compact connection and action rows, a large
+scrollable transcript, and a fixed reply composer. No action starts network,
+camera, microphone, speech recognition or TTS services. All connections and
+sample output are explicitly labelled as simulated.
 
 ## Android Studio
 
-Open this repository and select branch `feat/ui`. Use Gradle JDK 21, install
-Android SDK 36, and sync Gradle. Run the `app` debug configuration on an emulator
-or Android device. The existing pinned ai-android composite checkout is still
-required at `../../ai-android`; follow the repository README to provision it.
-Use your own SDK path; cloud-specific toolchain paths are not committed.
+Open the repository on `feat/ui`, use Gradle JDK 21 and Android SDK 36, sync, then
+run the `app` debug configuration. The pinned ai-android checkout is required at
+`../../ai-android`; see the README for its pinned commit and AAR download script.
+Initialize its submodules with `git submodule update --init --recursive`. Install
+NDK 27.0.12077973 and use local.properties for your local SDK path.
 
-1. Choose phone or glasses on first launch. The choice survives app restarts.
-2. On the connection page, Start conversation is disabled until Simulate
-   connection is selected. All simulated states are labelled in the UI.
-3. Start a conversation and reveal sample speech and sign replies. Pause/resume
-   affects revealing samples; no microphone, camera, TTS or AI processing runs.
-4. Settings contains role switching and subtitle size. Switching roles ends the
-   simulated connection. Ending a conversation requires reconnecting.
-5. Relaunching the app retains the role but requires a fresh connection.
+## UI flow
 
-Role buttons appear only during initial selection or when changing role in
-settings. This APK is a UI preview, not a glasses transport implementation.
+1. Select phone or glasses once. This choice is saved locally; settings contains
+   the role switch instead of keeping two role tabs visible during conversations.
+2. Simulate a connection, then start the conversation. Start remains disabled
+   until connected. Each fresh process requires a new simulated connection.
+3. The sample action appends speech and sign replies. The composer appends a
+   local text reply; it does not transmit it to a peer. Labels identify speaker,
+   source and sequence. Text can be selected and copied.
+4. Earlier sentences remain in the scrollable transcript. Reading older messages
+   does not force-scroll to the latest entry. Closing the conversation or
+   disconnecting retains the history, including through activity recreation;
+   clearing history requires confirmation. Changing role clears the session.
+5. Camera preview is a collapsible, labelled placeholder, hidden by default to
+   leave more room for the transcript. It never claims to display a camera feed.
+6. Settings controls subtitle size. Landscape uses the same fixed composer and
+   scrollable history layout, without a permanent role-switching bar.
 
-Validation: assembleDebug, app ktlintCheck, and TranslationFlowTest (Compose on
-Robolectric) cover the connection gate, role switch and labelled sample output.
+Validation includes assembleDebug, app ktlintCheck, conversation gate and role
+switch tests, history retention, and portrait/landscape layout checks. Local
+Robolectric render outputs are generated under app/build/ui-review.
