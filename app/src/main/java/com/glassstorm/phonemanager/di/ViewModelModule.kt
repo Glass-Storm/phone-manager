@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import com.glassstorm.phonemanager.ui.DashboardViewModel
 import com.glassstorm.phonemanager.ui.SettingsViewModel
 import com.glassstorm.phonemanager.ui.StreamViewModel
+import com.glassstorm.phonemanager.ui.original.OriginalLinkViewModel
 import dagger.Binds
 import dagger.Module
 import dagger.multibindings.IntoMap
@@ -40,4 +41,9 @@ abstract class ViewModelModule {
     @Binds
     @Singleton
     abstract fun bindViewModelFactory(impl: DaggerViewModelFactory): ViewModelProvider.Factory
+
+    @Binds
+    @IntoMap
+    @ViewModelKey(OriginalLinkViewModel::class)
+    abstract fun bindOriginalLinkViewModel(impl: OriginalLinkViewModel): ViewModel
 }

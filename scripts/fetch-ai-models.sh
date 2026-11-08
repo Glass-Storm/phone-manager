@@ -6,6 +6,7 @@
 #
 # Usage: scripts/fetch-ai-models.sh [DEST_DIR]
 #   DEST_DIR defaults to ./build/ai-models
+#   PHONE_MANAGER_SPEECH_ONLY=1 skips gesture and TTS downloads.
 #
 # Layout produced (the directories DeviceAiModule resolves under
 # <externalFilesDir>/models):
@@ -94,7 +95,9 @@ fetch_verified() { # <sha256> <url> <file>
 echo "Fetching ai-android models into ${DEST}"
 
 # --- Gesture recognizer (MediaPipe, Apache-2.0) --------------------------------------------
-fetch_verified "${GESTURE_SHA256}" "${GESTURE_URL}" "${GESTURE_DIR}/${GESTURE_FILE}"
+if [[ "${PHONE_MANAGER_SPEECH_ONLY:-0}" != 1 ]]; then
+    fetch_verified "${GESTURE_SHA256}" "${GESTURE_URL}" "${GESTURE_DIR}/${GESTURE_FILE}"
+fi
 
 # --- ASR (SenseVoice int8, Apache-2.0) -----------------------------------------------------
 if ! {
@@ -110,10 +113,12 @@ verify "${ASR_MODEL_SHA256}" "${ASR_DIR}/${ASR_MODEL_FILE}"
 verify "${ASR_TOKENS_SHA256}" "${ASR_DIR}/${ASR_TOKENS_FILE}"
 
 # --- TTS voice (Cantonese VITS; upstream license not declared) -----------------------------
-fetch_verified "${TTS_MODEL_SHA256}" "${TTS_BASE_URL}/${TTS_MODEL_FILE}" "${TTS_DIR}/${TTS_MODEL_FILE}"
-fetch_verified "${TTS_TOKENS_SHA256}" "${TTS_BASE_URL}/${TTS_TOKENS_FILE}" "${TTS_DIR}/${TTS_TOKENS_FILE}"
-fetch_verified "${TTS_LEXICON_SHA256}" "${TTS_BASE_URL}/${TTS_LEXICON_FILE}" "${TTS_DIR}/${TTS_LEXICON_FILE}"
-fetch_verified "${TTS_RULE_SHA256}" "${TTS_BASE_URL}/${TTS_RULE_FILE}" "${TTS_DIR}/${TTS_RULE_FILE}"
+if [[ "${PHONE_MANAGER_SPEECH_ONLY:-0}" != 1 ]]; then
+    fetch_verified "${TTS_MODEL_SHA256}" "${TTS_BASE_URL}/${TTS_MODEL_FILE}" "${TTS_DIR}/${TTS_MODEL_FILE}"
+    fetch_verified "${TTS_TOKENS_SHA256}" "${TTS_BASE_URL}/${TTS_TOKENS_FILE}" "${TTS_DIR}/${TTS_TOKENS_FILE}"
+    fetch_verified "${TTS_LEXICON_SHA256}" "${TTS_BASE_URL}/${TTS_LEXICON_FILE}" "${TTS_DIR}/${TTS_LEXICON_FILE}"
+    fetch_verified "${TTS_RULE_SHA256}" "${TTS_BASE_URL}/${TTS_RULE_FILE}" "${TTS_DIR}/${TTS_RULE_FILE}"
+fi
 
 # --- Speaker segmentation (pyannote/segmentation-3.0, MIT) ---------------------------------
 bundle="${DIAR_DIR}/tmp/${SEG_BUNDLE}"
