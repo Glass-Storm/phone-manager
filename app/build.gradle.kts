@@ -166,13 +166,14 @@ val ecosysPiE2e =
 // task itself is never run — only its producer dependencies.
 gradle.projectsEvaluated {
     val unitTest = tasks.named<Test>("testDebugUnitTest").get()
-    val unitTestClasspath = unitTest.classpath.files
     ecosysPiE2e.configure {
         testClassesDirs = unitTest.testClassesDirs
-        classpath = files(unitTestClasspath)
+        // Retain the lazy collection and its producer dependencies. Resolving
+        // .files here runs AGP transforms before a fresh checkout has any JARs.
+        classpath = unitTest.classpath
         jvmArgs = unitTest.jvmArgs
         systemProperties = unitTest.systemProperties
-        dependsOn(unitTest.taskDependencies.getDependencies(unitTest))
+        dependsOn(provider { unitTest.taskDependencies.getDependencies(unitTest) })
     }
 }
 
