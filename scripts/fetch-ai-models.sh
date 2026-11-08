@@ -77,6 +77,7 @@ EMB_URL="${GH}/speaker-recongition-models/${EMB_FILE}"
 mkdir -p "${GESTURE_DIR}" "${ASR_DIR}/tmp" "${TTS_DIR}" "${DIAR_DIR}/tmp"
 
 verify() { # <sha256> <file>
+    [[ -f "${2}" ]] || return 1
     echo "${1}  ${2}" | sha256sum -c - >/dev/null
 }
 
@@ -88,7 +89,24 @@ fetch_verified() { # <sha256> <url> <file>
     fi
     rm -f "${3}"
     echo "Downloading ${2}"
-    curl -fL --retry 3 -o "${3}" "${2}"
+    if ! curl -fL --retry 1 -o "${3}" "${2}"; then
+        # GitHub's GET redirect can time out while HEAD still resolves. Resolve
+        # the official asset host explicitly; keep TLS and checksum verification.
+        if [[ "${2}" = https://github.com/*/releases/download/* ]]; then
+            echo "Resolving the official GitHub release asset with HEAD"
+            local headers asset_url
+            headers="$(curl -fsSI --connect-timeout 20 --max-time 30 "${2}")" ||
+                headers="$(curl -fsSI --connect-timeout 20 --max-time 30 "${2}?download=1")" || return 1
+            asset_url="$(printf '%s\n' "${headers}" | tr -d '\r' | sed -n 's/^[Ll]ocation: *//p' | head -n 1)"
+            if [[ "${asset_url}" != https://release-assets.githubusercontent.com/* ]]; then
+                echo "GitHub did not return the expected official asset host" >&2
+                return 1
+            fi
+            curl -fL --retry 3 -o "${3}" "${asset_url}"
+        else
+            return 1
+        fi
+    fi
     verify "${1}" "${3}"
 }
 
