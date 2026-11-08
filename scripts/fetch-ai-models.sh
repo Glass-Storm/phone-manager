@@ -139,9 +139,11 @@ if [[ "${PHONE_MANAGER_SPEECH_ONLY:-0}" != 1 ]]; then
 fi
 
 # --- Speaker segmentation (pyannote/segmentation-3.0, MIT) ---------------------------------
-bundle="${DIAR_DIR}/tmp/${SEG_BUNDLE}"
-fetch_verified "${SEG_BUNDLE_SHA256}" "${SEG_URL}" "${bundle}"
-tar xjf "${bundle}" -C "${DIAR_DIR}" "${SEG_DIR}/${SEG_FILE}"
+if ! verify "${SEG_FILE_SHA256}" "${DIAR_DIR}/${SEG_DIR}/${SEG_FILE}"; then
+    bundle="${DIAR_DIR}/tmp/${SEG_BUNDLE}"
+    fetch_verified "${SEG_BUNDLE_SHA256}" "${SEG_URL}" "${bundle}"
+    tar xjf "${bundle}" -C "${DIAR_DIR}" "${SEG_DIR}/${SEG_FILE}"
+fi
 verify "${SEG_FILE_SHA256}" "${DIAR_DIR}/${SEG_DIR}/${SEG_FILE}"
 
 # --- Speaker embedding (3D-Speaker CAM++, Apache-2.0) --------------------------------------
