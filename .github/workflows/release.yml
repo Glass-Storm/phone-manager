@@ -1,0 +1,91 @@
+name: Release
+
+# Tag-triggered only: pushing v* publishes a GitHub Release with the built APKs.
+# Ordinary pushes are handled by ci.yml and never publish anything.
+on:
+    push:
+        tags: ["v*"]
+
+permissions:
+    contents: write
+
+jobs:
+    release:
+        name: Build & publish release APKs
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            # Mirrors the green `android` lane of ci.yml: the hub consumes ai-android
+            # as a pinned composite build at ../../ai-android (settings.gradle.kts
+            # asserts this exact commit and fails configuration otherwise). ai-android
+            # is public, so no token is needed; its vendored sherpa-onnx AAR is
+            # gitignored upstream and must be fetched.
+            - name: Check out the pinned ai-android engine
+              run: |
+                  git clone --depth 1 https://github.com/Glass-Storm/ai-android.git "${{ github.workspace }}/../../ai-android"
+                  git -C "${{ github.workspace }}/../../ai-android" fetch --depth 1 origin c0644eada44c242604e07546ff93aef80d9563f8
+                  git -C "${{ github.workspace }}/../../ai-android" checkout --detach c0644eada44c242604e07546ff93aef80d9563f8
+                  bash "${{ github.workspace }}/../../ai-android/scripts/fetch-sherpa-aar.sh"
+
+            - name: Set up JDK 21
+              uses: actions/setup-java@v5
+              with:
+                  distribution: temurin
+                  java-version: "21"
+
+            - name: Set up Gradle (with caching)
+              uses: gradle/actions/setup-gradle@v4
+
+            # Pinned to v4.0.4 for the same reason as ci.yml: v3's own setup installs
+            # the now-REMOVED 'tools' package and fails before Gradle runs.
+            - name: Set up Android SDK
+              uses: android-actions/setup-android@v4.0.4
+
+            - name: Install required Android SDK packages
+              run: |
+                  yes | sdkmanager --licenses
+                  sdkmanager "platform-tools" "platforms;android-36" "platforms;android-29" "build-tools;36.0.0"
+
+            # GIT_TAG makes the APK's versionName match the release tag (v1.0.0 -> 1.0.0).
+            - name: Build debug & release APKs
+              env:
+                  GIT_TAG: ${{ github.ref_name }}
+              run: ./gradlew :app:assembleDebug :app:assembleRelease --stacktrace
+
+            - name: Publish GitHub Release
+              uses: softprops/action-gh-release@v2
+              with:
+                  tag_name: ${{ github.ref_name }}
+                  name: phone-manager ${{ github.ref_name }}
+                  body: |
+                      phone-manager ${{ github.ref_name }} — hub build from tag `${{ github.ref_name }}`.
+
+                      ## APKs
+
+                      - `app-debug.apk` — debug-signed and installable on a device.
+                      - `app-release-unsigned.apk` — R8 minified/shrunk and UNSIGNED by design;
+                        NOT installable until you sign it yourself.
+
+                      Install the debug build:
+
+                      ```bash
+                      adb install -r app-debug.apk
+                      ```
+
+                      ## Hub defaults
+
+                      - Hotspot / hub IP: `10.240.85.29`
+                      - gRPC port: `9000`
+                      - App label: `啟動中樞`
+
+                      ## Companion releases
+
+                      - Glasses app: [v1.0.2](https://github.com/Glass-Storm/SpeakerDiarazation-Gesture/releases/tag/v1.0.2)
+                      - Raspberry Pi daemon: [v0.1.0](https://github.com/Glass-Storm/necklace-data-processing-raspberrypi-side-/releases/tag/v0.1.0)
+                  files: |
+                      app/build/outputs/apk/debug/app-debug.apk
+                      app/build/outputs/apk/release/app-release-unsigned.apk
+                  fail_on_unmatched_files: true
+                  generate_release_notes: true

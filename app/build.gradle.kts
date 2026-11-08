@@ -13,7 +13,9 @@ android {
     defaultConfig {
         applicationId = "com.glassstorm.phonemanager"
         versionCode = 1
-        versionName = "1.0-dev"
+        // Tagged builds report the tag version (e.g. v1.0.0 -> 1.0.0) so the APK
+        // versionName matches the published release; untagged builds keep the dev stamp.
+        versionName = System.getenv("GIT_TAG")?.removePrefix("v") ?: "1.0-dev"
     }
 
     compileOptions {
