@@ -7,6 +7,7 @@ import com.glassstorm.phonemanager.core.model.RelayOutput
 import com.glassstorm.phonemanager.core.model.RelaySession
 import com.glassstorm.phonemanager.core.model.RelayStats
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 
 /**
  * Audio/video relay use-cases.
@@ -108,6 +109,16 @@ interface StreamService {
      * the Pi camera; a glasses still is retained but is not displayed.
      */
     fun latestImage(role: PeerRole): RelayImage? = null
+
+    /**
+     * A hot flow of every JPEG still as the hub receives it, independent of the
+     * gesture recognizer's pace; stale frames are dropped rather than queued.
+     *
+     * No replay: a fresh collector starts empty and the screenshot poll can seed
+     * the current still. Both roles are emitted so the relay keeps processing a
+     * glasses still; the 即時 page filters to [PeerRole.DAEMON] for its camera card.
+     */
+    fun images(): Flow<RelayImage> = emptyFlow()
 
     /**
      * A point-in-time snapshot of the peers attached to live relay sessions, with

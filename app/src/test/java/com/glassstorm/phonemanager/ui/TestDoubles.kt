@@ -138,6 +138,7 @@ class FakeStreamService(
 ) : StreamService {
     private val resultsFlow = MutableSharedFlow<RelayOutput>(replay = 1)
     private val outputsFlow = MutableSharedFlow<RelayOutput>(replay = outputReplay, extraBufferCapacity = 64)
+    private val imagesFlow = MutableSharedFlow<RelayImage>(extraBufferCapacity = 64)
 
     private var statsValue =
         RelayStats(
@@ -172,6 +173,7 @@ class FakeStreamService(
 
     fun reportLatestImage(image: RelayImage) {
         latestImageValue = image
+        imagesFlow.tryEmit(image)
     }
 
     /** Publish one relay output on the shared diagnostics flow. */
@@ -253,6 +255,8 @@ class FakeStreamService(
     override fun livePeers(): List<LivePeer> = livePeersValue
 
     override fun latestImage(role: PeerRole): RelayImage? = latestImageValue?.takeIf { it.role == role }
+
+    override fun images(): Flow<RelayImage> = imagesFlow
 
     override suspend fun closeSession(sessionId: String) {
         closed.add(sessionId)

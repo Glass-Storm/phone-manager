@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.glassstorm.phonemanager.core.domain.adapter.transport.HubServer
 import com.glassstorm.phonemanager.core.domain.service.StreamService
 import com.glassstorm.phonemanager.core.model.PeerRole
+import com.glassstorm.phonemanager.core.model.RelayImage
 import com.glassstorm.phonemanager.core.model.RelayOutput
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,10 +25,10 @@ import javax.inject.Inject
  *    short poll keeps the counters and the attached-peer list fresh;
  *  * `outputs()` is a hot flow of every relay output from every live session, so
  *    the latest transcript and gesture render as they are produced. The latest
- *    Pi JPEG still is read from `latestImage(DAEMON)` by the same poll, while a
- *    glasses still stays internal and is never displayed. The flow has NO
- *    replay, so a fresh ViewModel starts empty rather than showing a previous
- *    session's last result.
+ *    Pi JPEG still is pushed immediately from `images()` (and seeded by
+ *    `latestImage(DAEMON)` on the poll), while a glasses still stays internal and
+ *    is never displayed. The flow has NO replay, so a fresh ViewModel starts
+ *    empty rather than showing a previous session's last result.
  *
  * ## Dead sessions never keep the cards alive
  *
@@ -90,6 +91,11 @@ class StreamViewModel
                     stream.outputs().collect(::applyOutput)
                 }
             }
+            viewModelScope.launch {
+                runCatching {
+                    stream.images().collect(::applyImage)
+                }
+            }
         }
 
         private fun refresh() {
@@ -146,6 +152,17 @@ class StreamViewModel
                 }
                 else -> Unit
             }
+        }
+
+        private fun applyImage(image: RelayImage) {
+            if (image.role != PeerRole.DAEMON) return
+            if (!state.value.hubRunning) return
+            state.value =
+                state.value.copy(
+                    latestImageJpeg = image.jpeg,
+                    latestImageDeviceId = image.deviceId,
+                    latestImageAt = image.receivedAtMs,
+                )
         }
 
         companion object {

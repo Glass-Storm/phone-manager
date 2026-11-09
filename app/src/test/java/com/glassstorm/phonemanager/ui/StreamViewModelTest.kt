@@ -125,6 +125,40 @@ class StreamViewModelTest {
         assertThat(viewModel.uiState.value.latestGesture).isNull()
     }
 
+    @Test
+    fun `a later image replaces the earlier one immediately`() {
+        val stream = FakeStreamService()
+        stream.reportLivePeers(listOf(LivePeer(deviceId = "pi-1", role = PeerRole.DAEMON)))
+        val viewModel = StreamViewModel.forTesting(stream, FakeHubServer(initiallyRunning = true))
+        advancePoll()
+
+        stream.reportLatestImage(
+            RelayImage(
+                jpeg = byteArrayOf(1, 1, 1),
+                ptsMs = 1L,
+                receivedAtMs = 1_000L,
+                role = PeerRole.DAEMON,
+                deviceId = "pi-1",
+            ),
+        )
+        idleMainLooper()
+        assertThat(checkNotNull(viewModel.uiState.value.latestImageJpeg)).isEqualTo(byteArrayOf(1, 1, 1))
+
+        stream.reportLatestImage(
+            RelayImage(
+                jpeg = byteArrayOf(2, 2, 2),
+                ptsMs = 2L,
+                receivedAtMs = 2_000L,
+                role = PeerRole.DAEMON,
+                deviceId = "pi-1",
+            ),
+        )
+        idleMainLooper()
+
+        assertThat(checkNotNull(viewModel.uiState.value.latestImageJpeg)).isEqualTo(byteArrayOf(2, 2, 2))
+        assertThat(viewModel.uiState.value.latestImageAt).isEqualTo(2_000L)
+    }
+
     private fun advancePoll() {
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(1_000L))
     }

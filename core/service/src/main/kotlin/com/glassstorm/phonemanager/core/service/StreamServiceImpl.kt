@@ -21,6 +21,7 @@ import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ClosedSendChannelException
 import kotlinx.coroutines.flow.Flow
@@ -148,6 +149,12 @@ class StreamServiceImpl
 
         private val latestImages = ConcurrentHashMap<PeerRole, RelayImage>()
 
+        private val imageOutputs =
+            MutableSharedFlow<RelayImage>(
+                extraBufferCapacity = 1,
+                onBufferOverflow = BufferOverflow.DROP_OLDEST,
+            )
+
         override fun openSession(deviceId: String): RelaySession {
             val relay = RelaySession(sessionId = newSessionId(), deviceId = deviceId)
             val queue = RelayQueue(audioCapacity, videoCapacity, imageCapacity)
@@ -225,6 +232,17 @@ class StreamServiceImpl
                 "inbound image session=$sessionId device=${state.relay.deviceId} " +
                     "role=${registry.roleFor(sessionId)} bytes=${jpeg.size} ptsMs=$ptsMs",
             )
+            val role = registry.roleFor(sessionId)
+            val relayImage =
+                RelayImage(
+                    jpeg = jpeg,
+                    ptsMs = ptsMs,
+                    receivedAtMs = System.currentTimeMillis(),
+                    role = role,
+                    deviceId = state.relay.deviceId,
+                )
+            latestImages[role] = relayImage
+            imageOutputs.tryEmit(relayImage)
             val dropped = state.queue.admitImage(QueuedImage(jpeg = jpeg, ptsMs = ptsMs))
             stats.onImageOffered(dropped = dropped)
         }
@@ -256,6 +274,8 @@ class StreamServiceImpl
         override fun livePeers(): List<LivePeer> = registry.livePeers()
 
         override fun latestImage(role: PeerRole): RelayImage? = latestImages[role]
+
+        override fun images(): Flow<RelayImage> = imageOutputs.asSharedFlow()
 
         override suspend fun closeSession(sessionId: String) {
             // Mark CLOSING but leave the session registered: a half-closed peer keeps
@@ -368,19 +388,6 @@ class StreamServiceImpl
                     guarded("image") {
                         // JPEG decoding happens ONLY inside the gesture adapter, never here.
                         val role = registry.roleFor(sessionId)
-                        latestImages[role] =
-                            RelayImage(
-                                jpeg = image.jpeg,
-                                ptsMs = image.ptsMs,
-                                receivedAtMs = System.currentTimeMillis(),
-                                role = role,
-                                deviceId =
-                                    registry
-                                        .find(sessionId)
-                                        ?.relay
-                                        ?.deviceId
-                                        .orEmpty(),
-                            )
                         val outcome = gesturePort.recognize(image.jpeg)
                         if (outcome != null) {
                             stats.onGesture()
