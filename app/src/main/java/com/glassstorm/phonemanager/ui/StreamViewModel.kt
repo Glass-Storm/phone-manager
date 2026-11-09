@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.glassstorm.phonemanager.core.domain.adapter.transport.HubServer
 import com.glassstorm.phonemanager.core.domain.service.StreamService
+import com.glassstorm.phonemanager.core.model.PeerRole
 import com.glassstorm.phonemanager.core.model.RelayOutput
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,8 +23,10 @@ import javax.inject.Inject
  *  * `stats()` and `livePeers()` are in-memory snapshots that cannot block, so a
  *    short poll keeps the counters and the attached-peer list fresh;
  *  * `outputs()` is a hot flow of every relay output from every live session, so
- *    the latest transcript and gesture render as they are produced. The flow has
- *    NO replay, so a fresh ViewModel starts empty rather than showing a previous
+ *    the latest transcript and gesture render as they are produced. The latest
+ *    Pi JPEG still is read from `latestImage(DAEMON)` by the same poll, while a
+ *    glasses still stays internal and is never displayed. The flow has NO
+ *    replay, so a fresh ViewModel starts empty rather than showing a previous
  *    session's last result.
  *
  * ## Dead sessions never keep the cards alive
@@ -92,6 +95,7 @@ class StreamViewModel
         private fun refresh() {
             val stats = runCatching { stream.stats() }
             val peers = runCatching { stream.livePeers() }
+            val image = runCatching { stream.latestImage(PeerRole.DAEMON) }.getOrNull()
             val hubRunning = runCatching { hub.isRunning() }.getOrDefault(false)
             val current = state.value
             // A stopped hub has no live peers regardless of what the relay's
@@ -114,6 +118,9 @@ class StreamViewModel
                     latestTranscriptAt = if (clearLatest) null else current.latestTranscriptAt,
                     latestGesture = if (clearLatest) null else current.latestGesture,
                     latestGestureAt = if (clearLatest) null else current.latestGestureAt,
+                    latestImageJpeg = if (clearLatest) null else image?.jpeg ?: current.latestImageJpeg,
+                    latestImageDeviceId = if (clearLatest) null else image?.deviceId ?: current.latestImageDeviceId,
+                    latestImageAt = if (clearLatest) null else image?.receivedAtMs ?: current.latestImageAt,
                 )
         }
 
@@ -133,6 +140,7 @@ class StreamViewModel
                         )
                 }
                 is RelayOutput.Gesture -> {
+                    if (output.sourceRole == PeerRole.GLASS) return
                     val text = output.text.takeIf { it.isNotBlank() } ?: return
                     state.value = state.value.copy(latestGesture = text, latestGestureAt = clock())
                 }

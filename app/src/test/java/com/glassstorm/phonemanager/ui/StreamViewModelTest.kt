@@ -1,11 +1,16 @@
 package com.glassstorm.phonemanager.ui
 
 import android.os.Looper
+import com.glassstorm.phonemanager.core.model.LivePeer
+import com.glassstorm.phonemanager.core.model.PeerRole
+import com.glassstorm.phonemanager.core.model.RelayImage
+import com.glassstorm.phonemanager.core.model.RelayOutput
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
+import java.time.Duration
 
 /**
  * The 即時 page's output binding, asserted on the ViewModel alone.
@@ -55,6 +60,73 @@ class StreamViewModelTest {
 
         assertThat(viewModel.uiState.value.latestTranscript).isNull()
         assertThat(viewModel.uiState.value.latestSpeakerLabel).isNull()
+    }
+
+    @Test
+    fun `a daemon image is exposed to the live state`() {
+        val stream = FakeStreamService()
+        stream.reportLivePeers(listOf(LivePeer(deviceId = "pi-1", role = PeerRole.DAEMON)))
+        val jpeg = byteArrayOf(1, 2, 3)
+        stream.reportLatestImage(
+            RelayImage(
+                jpeg = jpeg,
+                ptsMs = 42L,
+                receivedAtMs = 7_000L,
+                role = PeerRole.DAEMON,
+                deviceId = "pi-1",
+            ),
+        )
+
+        val viewModel = StreamViewModel.forTesting(stream, FakeHubServer(initiallyRunning = true))
+        advancePoll()
+
+        assertThat(checkNotNull(viewModel.uiState.value.latestImageJpeg)).isEqualTo(jpeg)
+        assertThat(viewModel.uiState.value.latestImageDeviceId).isEqualTo("pi-1")
+        assertThat(viewModel.uiState.value.latestImageAt).isEqualTo(7_000L)
+    }
+
+    @Test
+    fun `a glasses image is not displayed`() {
+        val stream = FakeStreamService()
+        stream.reportLivePeers(listOf(LivePeer(deviceId = "glasses-1", role = PeerRole.GLASS)))
+        stream.reportLatestImage(
+            RelayImage(
+                jpeg = byteArrayOf(9, 9, 9),
+                ptsMs = 1L,
+                receivedAtMs = 1_000L,
+                role = PeerRole.GLASS,
+                deviceId = "glasses-1",
+            ),
+        )
+
+        val viewModel = StreamViewModel.forTesting(stream, FakeHubServer(initiallyRunning = true))
+        advancePoll()
+
+        assertThat(viewModel.uiState.value.latestImageJpeg).isNull()
+    }
+
+    @Test
+    fun `a glasses gesture is not displayed`() {
+        val stream = FakeStreamService()
+        stream.reportLivePeers(listOf(LivePeer(deviceId = "glasses-1", role = PeerRole.GLASS)))
+        val viewModel = StreamViewModel.forTesting(stream, FakeHubServer(initiallyRunning = true))
+
+        stream.emitOutput(
+            RelayOutput.Gesture(
+                text = "glasses gesture",
+                label = "Thumb_Up",
+                confidence = 0.9f,
+                ptsMs = 0L,
+                sourceRole = PeerRole.GLASS,
+            ),
+        )
+        idleMainLooper()
+
+        assertThat(viewModel.uiState.value.latestGesture).isNull()
+    }
+
+    private fun advancePoll() {
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(1_000L))
     }
 
     private fun idleMainLooper() {

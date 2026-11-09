@@ -84,6 +84,16 @@ class StreamRelayRoutingTest {
             assertThat(stats.imageFrames).isEqualTo(1L)
             assertThat(stats.gestures).isEqualTo(1L)
 
+            // And the Pi still is available to the debug view under its role.
+            val daemonImage = checkNotNull(stream.latestImage(PeerRole.DAEMON))
+            assertThat(daemonImage.jpeg).isEqualTo(byteArrayOf(1, 2, 3))
+            assertThat(daemonImage.ptsMs).isEqualTo(123L)
+            assertThat(daemonImage.role).isEqualTo(PeerRole.DAEMON)
+            assertThat(daemonImage.deviceId).isEqualTo("necklace")
+            assertThat(daemonImage.receivedAtMs).isGreaterThan(0L)
+            assertThat(stream.latestImage(PeerRole.GLASS)).isNull()
+            assertThat(gesture.sourceRole).isEqualTo(PeerRole.DAEMON)
+
             stream.closeSession(necklace.sessionId)
             stream.closeSession(glasses.sessionId)
             advanceUntilIdle()
@@ -120,9 +130,16 @@ class StreamRelayRoutingTest {
             val gesture = glassesOutputs.filterIsInstance<RelayOutput.Gesture>().single()
             assertThat(gesture.text).isEqualTo("Yes")
             assertThat(gesture.ptsMs).isEqualTo(55L)
+            assertThat(gesture.sourceRole).isEqualTo(PeerRole.GLASS)
             val tts = glassesOutputs.filterIsInstance<RelayOutput.TtsAudio>().single()
             assertThat(tts.pcm16).isEqualTo(ByteArray(4) { 7 })
             assertThat(tts.ptsMs).isEqualTo(55L)
+
+            // And the glasses' own still is captured under GLASS, not shown as the Pi feed.
+            val glassesImage = checkNotNull(stream.latestImage(PeerRole.GLASS))
+            assertThat(glassesImage.jpeg).isEqualTo(byteArrayOf(1, 2, 3))
+            assertThat(glassesImage.deviceId).isEqualTo("glasses")
+            assertThat(stream.latestImage(PeerRole.DAEMON)).isNull()
 
             // And the necklace received neither: the glasses' still is the glasses' own
             assertThat(necklaceOutputs).isEmpty()

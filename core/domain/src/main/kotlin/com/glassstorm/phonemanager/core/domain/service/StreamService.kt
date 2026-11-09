@@ -2,6 +2,7 @@ package com.glassstorm.phonemanager.core.domain.service
 
 import com.glassstorm.phonemanager.core.model.LivePeer
 import com.glassstorm.phonemanager.core.model.PeerRole
+import com.glassstorm.phonemanager.core.model.RelayImage
 import com.glassstorm.phonemanager.core.model.RelayOutput
 import com.glassstorm.phonemanager.core.model.RelaySession
 import com.glassstorm.phonemanager.core.model.RelayStats
@@ -98,6 +99,15 @@ interface StreamService {
      * never completes while the hub is alive.
      */
     fun outputs(): Flow<RelayOutput>
+
+    /**
+     * The latest JPEG still received for [role], or `null` when none has arrived.
+     *
+     * Diagnostics only: the still is still decoded by the gesture adapter and
+     * processed normally. The 即時 page asks for [PeerRole.DAEMON] so it can show
+     * the Pi camera; a glasses still is retained but is not displayed.
+     */
+    fun latestImage(role: PeerRole): RelayImage? = null
 
     /**
      * A point-in-time snapshot of the peers attached to live relay sessions, with

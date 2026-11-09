@@ -11,6 +11,7 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.lifecycle.ViewModelStore
 import com.glassstorm.phonemanager.core.model.LivePeer
 import com.glassstorm.phonemanager.core.model.PeerRole
+import com.glassstorm.phonemanager.core.model.RelayImage
 import com.glassstorm.phonemanager.core.model.RelayOutput
 import com.google.common.truth.Truth.assertThat
 import org.junit.Rule
@@ -79,6 +80,7 @@ class StreamScreenTest {
         composeRule.assertText("H.264")
         composeRule.assertText("尚無字幕")
         composeRule.assertText("尚無手勢")
+        composeRule.assertText("尚無相機畫面")
         // Five counter tiles all read zero.
         composeRule.onAllNodesWithText("0").assertCountEquals(5)
     }
@@ -99,6 +101,28 @@ class StreamScreenTest {
         composeRule.assertText("GLASS · glasses-1")
         composeRule.assertText("DAEMON · pi-1")
         composeRule.onNodeWithText("尚無裝置").assertDoesNotExist()
+    }
+
+    @Test
+    fun `the pi camera still renders with its device id`() {
+        val peer = FakeStreamService()
+        peer.reportLivePeers(listOf(LivePeer(deviceId = "pi-1", role = PeerRole.DAEMON)))
+        peer.reportLatestImage(
+            RelayImage(
+                jpeg = byteArrayOf(1, 2, 3),
+                ptsMs = 42L,
+                receivedAtMs = 7_000L,
+                role = PeerRole.DAEMON,
+                deviceId = "pi-1",
+            ),
+        )
+
+        composeRule.setStreamContent(peer)
+
+        composeRule.assertText("Pi 相機")
+        composeRule.assertText("Pi · pi-1")
+        composeRule.assertTextContaining("最後更新 ")
+        composeRule.onNodeWithText("尚無相機畫面").assertDoesNotExist()
     }
 
     @Test

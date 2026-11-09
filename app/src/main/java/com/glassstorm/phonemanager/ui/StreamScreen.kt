@@ -1,9 +1,13 @@
 package com.glassstorm.phonemanager.ui
 
+import android.graphics.BitmapFactory
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Notifications
@@ -11,7 +15,11 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -34,9 +42,11 @@ import java.time.format.DateTimeFormatter
  *
  * The page observes the always-on relay rather than opening a session of its own,
  * so there is no start/stop control: a peer appears here as soon as it binds its
- * identity with a `stream_open` frame. Video is NEVER rendered. The phone is the
- * hub, not a viewer — it decodes no H.264, so only counters are shown, and the
- * image/gesture channel (JPEG stills) is counted separately from H.264 NALs.
+ * identity with a `stream_open` frame. H.264 video is NEVER rendered. The Pi's
+ * JPEG still is shown for debugging; a glasses still is still processed by the
+ * relay but is never displayed. The hub decodes no H.264, so only counters are
+ * shown for it, and the image/gesture channel (JPEG stills) is counted separately
+ * from H.264 NALs.
  *
  * The latest results are only shown for the LIVE hub: the ViewModel clears them
  * when the hub stops or the peer list empties, and each card carries a
@@ -63,6 +73,7 @@ fun StreamScreen(
             true -> {
                 peersCard(state)
                 countersCard(state)
+                imageCard(state)
                 transcriptCard(state)
                 gestureCard(state)
             }
@@ -160,6 +171,47 @@ private fun countersCard(state: StreamUiState) {
                     modifier = Modifier.weight(1f),
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun imageCard(state: StreamUiState) {
+    SectionCard(title = "Pi 相機") {
+        val jpeg = state.latestImageJpeg
+        if (jpeg == null) {
+            EmptyState(
+                icon = Icons.Default.Info,
+                title = "尚無相機畫面",
+                hint = "Pi 上傳 JPEG 後會顯示在這裡；眼鏡畫面不顯示。",
+            )
+        } else {
+            val bitmap =
+                remember(jpeg) {
+                    BitmapFactory.decodeByteArray(jpeg, 0, jpeg.size)?.asImageBitmap()
+                }
+            if (bitmap == null) {
+                Text(
+                    text = "相機影像解碼失敗。",
+                    style = AppTheme.typography.body2,
+                    color = AppTheme.colors.error,
+                )
+            } else {
+                Image(
+                    bitmap = bitmap,
+                    contentDescription = "Pi 相機畫面",
+                    contentScale = ContentScale.Crop,
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(4f / 3f)
+                            .clip(RoundedCornerShape(12.dp)),
+                )
+            }
+            state.latestImageDeviceId?.takeIf { it.isNotBlank() }?.let {
+                TagChip(label = "Pi · $it")
+            }
+            state.latestImageAt?.let { updatedLine(it) }
         }
     }
 }

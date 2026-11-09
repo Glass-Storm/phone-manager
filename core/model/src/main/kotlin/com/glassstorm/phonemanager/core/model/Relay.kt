@@ -39,6 +39,22 @@ data class LivePeer(
 )
 
 /**
+ * The latest JPEG still the relay received for [role], as seen by the debug view.
+ *
+ * The bytes are the ORIGINAL opaque still; the hub decodes them only inside the
+ * gesture adapter. The 即時 page uses [receivedAtMs] as the honest wall-clock
+ * stamp and renders only [PeerRole.DAEMON] stills, while a glasses still is still
+ * captured under [PeerRole.GLASS] and processed normally.
+ */
+data class RelayImage(
+    val jpeg: ByteArray,
+    val ptsMs: Long,
+    val receivedAtMs: Long,
+    val role: PeerRole,
+    val deviceId: String,
+)
+
+/**
  * One recognized utterance produced from an audio frame. Pure data; mirrors the
  * `ecosys.v1.StreamResult` message without depending on the generated types.
  */
@@ -69,6 +85,8 @@ sealed interface RelayOutput {
         val label: String,
         val confidence: Float,
         val ptsMs: Long,
+        /** The image sender's bound role; diagnostics hides a glasses-sourced gesture. */
+        val sourceRole: PeerRole = PeerRole.UNSPECIFIED,
     ) : RelayOutput
 
     /** Hub-synthesized speech (PCM16 mono 16 kHz), mapped to `TtsAudio`. */

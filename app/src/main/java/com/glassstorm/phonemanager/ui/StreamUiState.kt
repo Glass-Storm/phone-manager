@@ -15,8 +15,10 @@ import com.glassstorm.phonemanager.core.model.LivePeer
  *
  * ## Live results belong to the LIVE hub
  *
- * [latestTranscript], [latestSpeakerLabel] and [latestGesture] describe the
- * CURRENT live session, not the last one ever seen. The ViewModel clears them
+ * [latestTranscript], [latestSpeakerLabel], [latestGesture] and
+ * [latestImageJpeg] describe the CURRENT live session, not the last one ever
+ * seen. The image is the Pi camera still; a glasses still is still processed by
+ * the relay but is never displayed here. The ViewModel clears them
  * whenever the hub is not running or [livePeers] becomes empty, and the
  * `latest*At` fields carry the wall-clock instant the result was RECEIVED so the
  * card can show how stale it is. (The wire `ptsMs` is producer-relative and is
@@ -42,4 +44,7 @@ data class StreamUiState(
     val latestTranscriptAt: Long? = null,
     val latestGesture: String? = null,
     val latestGestureAt: Long? = null,
+    val latestImageJpeg: ByteArray? = null,
+    val latestImageDeviceId: String? = null,
+    val latestImageAt: Long? = null,
 )

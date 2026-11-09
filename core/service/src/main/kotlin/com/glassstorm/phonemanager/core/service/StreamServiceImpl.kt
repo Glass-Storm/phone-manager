@@ -9,6 +9,7 @@ import com.glassstorm.phonemanager.core.domain.service.StreamService
 import com.glassstorm.phonemanager.core.model.EnrollOutcome
 import com.glassstorm.phonemanager.core.model.LivePeer
 import com.glassstorm.phonemanager.core.model.PeerRole
+import com.glassstorm.phonemanager.core.model.RelayImage
 import com.glassstorm.phonemanager.core.model.RelayOutput
 import com.glassstorm.phonemanager.core.model.RelayResult
 import com.glassstorm.phonemanager.core.model.RelaySession
@@ -29,6 +30,7 @@ import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import java.security.SecureRandom
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 import java.util.logging.Level
 import java.util.logging.Logger
@@ -144,6 +146,8 @@ class StreamServiceImpl
          */
         private val outputs = MutableSharedFlow<RelayOutput>(extraBufferCapacity = 64)
 
+        private val latestImages = ConcurrentHashMap<PeerRole, RelayImage>()
+
         override fun openSession(deviceId: String): RelaySession {
             val relay = RelaySession(sessionId = newSessionId(), deviceId = deviceId)
             val queue = RelayQueue(audioCapacity, videoCapacity, imageCapacity)
@@ -250,6 +254,8 @@ class StreamServiceImpl
         override fun outputs(): Flow<RelayOutput> = outputs.asSharedFlow()
 
         override fun livePeers(): List<LivePeer> = registry.livePeers()
+
+        override fun latestImage(role: PeerRole): RelayImage? = latestImages[role]
 
         override suspend fun closeSession(sessionId: String) {
             // Mark CLOSING but leave the session registered: a half-closed peer keeps
@@ -361,6 +367,20 @@ class StreamServiceImpl
                 for (image in queue.image) {
                     guarded("image") {
                         // JPEG decoding happens ONLY inside the gesture adapter, never here.
+                        val role = registry.roleFor(sessionId)
+                        latestImages[role] =
+                            RelayImage(
+                                jpeg = image.jpeg,
+                                ptsMs = image.ptsMs,
+                                receivedAtMs = System.currentTimeMillis(),
+                                role = role,
+                                deviceId =
+                                    registry
+                                        .find(sessionId)
+                                        ?.relay
+                                        ?.deviceId
+                                        .orEmpty(),
+                            )
                         val outcome = gesturePort.recognize(image.jpeg)
                         if (outcome != null) {
                             stats.onGesture()
@@ -375,6 +395,7 @@ class StreamServiceImpl
                                         label = outcome.label,
                                         confidence = outcome.confidence,
                                         ptsMs = image.ptsMs,
+                                        sourceRole = role,
                                     ),
                                 targetSessionIds = arrayOf(registry.sessionFor(PeerRole.GLASS) ?: sessionId),
                             )

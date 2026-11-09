@@ -11,6 +11,7 @@ import com.glassstorm.phonemanager.core.domain.service.StreamService
 import com.glassstorm.phonemanager.core.model.HotspotInfo
 import com.glassstorm.phonemanager.core.model.LivePeer
 import com.glassstorm.phonemanager.core.model.PeerRole
+import com.glassstorm.phonemanager.core.model.RelayImage
 import com.glassstorm.phonemanager.core.model.RelayOutput
 import com.glassstorm.phonemanager.core.model.RelayResult
 import com.glassstorm.phonemanager.core.model.RelaySession
@@ -158,6 +159,8 @@ class FakeStreamService(
     var liveSessions: Int = 0
         private set
 
+    private var latestImageValue: RelayImage? = null
+
     fun openCount(): Int = openCalls
 
     fun closedIds(): List<String> = closed.toList()
@@ -165,6 +168,10 @@ class FakeStreamService(
     /** Replaces the peers [livePeers] returns, as if a peer had just connected. */
     fun reportLivePeers(peers: List<LivePeer>) {
         livePeersValue = peers
+    }
+
+    fun reportLatestImage(image: RelayImage) {
+        latestImageValue = image
     }
 
     /** Publish one relay output on the shared diagnostics flow. */
@@ -244,6 +251,8 @@ class FakeStreamService(
     override fun outputs(): Flow<RelayOutput> = outputsFlow
 
     override fun livePeers(): List<LivePeer> = livePeersValue
+
+    override fun latestImage(role: PeerRole): RelayImage? = latestImageValue?.takeIf { it.role == role }
 
     override suspend fun closeSession(sessionId: String) {
         closed.add(sessionId)
