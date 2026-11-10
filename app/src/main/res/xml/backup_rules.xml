@@ -11,6 +11,9 @@
     snapshot.
   * `phone_manager.db` is the SQLite device store; it holds device-bound security
     state and is excluded from backup AND from device transfer.
+  * `enrollment.txt` is the voiceprint directory (a display name plus the speaker
+    embedding). A voiceprint is biometric data bound to one person, so it is kept
+    out of a cloud snapshot and out of a device-to-device copy.
 
   The hub stores no cloud credentials: it runs a single on-device speech engine
   with no third-party STT/TTS cloud path.
@@ -26,4 +29,5 @@
 <full-backup-content>
     <exclude domain="sharedpref" path="runtime_config.xml" />
     <exclude domain="database" path="phone_manager.db" />
+    <exclude domain="file" path="enrollment.txt" />
 </full-backup-content>
