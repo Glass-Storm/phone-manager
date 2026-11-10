@@ -41,6 +41,9 @@ class AiEnrollmentStore internal constructor(
     private val embedder: VoiceprintEmbedder,
 ) : EnrollmentStore,
     AutoCloseable {
+    /** The device implementation always persists to [storageFile] with real voiceprints. */
+    override val deviceBacked: Boolean = true
+
     /**
      * Production constructor: builds the on-device sherpa speaker-embedding extractor.
      * The extractor loads its native backend LAZILY, so construction never touches the
@@ -95,6 +98,14 @@ class AiEnrollmentStore internal constructor(
     override suspend fun names(): List<String> = synchronized(lock) { speakers.keys.toList() }
 
     override suspend fun enrollments(): List<EnrolledSpeaker> = synchronized(lock) { speakers.values.toList() }
+
+    override suspend fun remove(name: String): Boolean =
+        synchronized(lock) {
+            val removed = speakers.remove(name) != null
+            // Rewrite only on a real change: a miss must not touch the file.
+            if (removed) persist()
+            removed
+        }
 
     /** Releases the embedding extractor. Idempotent. */
     override fun close() = embedder.close()

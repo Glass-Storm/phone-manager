@@ -21,6 +21,9 @@ private const val FAKE_EMBEDDING_DIM = 16
  * model. Re-enrolling an existing name REPLACES it, keeping insertion order stable.
  */
 class FakeEnrollmentStore : EnrollmentStore {
+    /** In-memory only: nothing survives the process, and no real voiceprint exists. */
+    override val deviceBacked: Boolean = false
+
     private val speakers = mutableListOf<EnrolledSpeaker>()
     private val lock = Any()
 
@@ -41,6 +44,11 @@ class FakeEnrollmentStore : EnrollmentStore {
     }
 
     override suspend fun names(): List<String> = synchronized(lock) { speakers.map { it.name } }
+
+    override suspend fun remove(name: String): Boolean =
+        synchronized(lock) {
+            speakers.removeAll { it.name == name }
+        }
 
     override suspend fun enrollments(): List<EnrolledSpeaker> = synchronized(lock) { speakers.toList() }
 

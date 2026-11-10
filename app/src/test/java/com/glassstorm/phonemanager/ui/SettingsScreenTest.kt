@@ -14,6 +14,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.glassstorm.phonemanager.battery.BatteryExemption
 import com.glassstorm.phonemanager.core.domain.adapter.transport.HubServer
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.Dispatchers
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -89,6 +90,61 @@ class SettingsScreenTest {
         composeRule.assertText("已排除")
     }
 
+    @Test
+    fun `an empty enrollment directory invites the first voice`() {
+        composeRule.setSettingsContent()
+
+        composeRule.assertText("聲紋登記")
+        composeRule.assertText("尚未登記任何聲紋。")
+    }
+
+    @Test
+    fun `a recorded speaker is listed in the directory`() {
+        val enrollment = FakeEnrollmentStore()
+
+        composeRule.setSettingsContent(enrollment = enrollment) { viewModel ->
+            viewModel.onEnrollNameChange("Alice")
+            viewModel.onRecordAndEnroll()
+        }
+
+        composeRule.assertText("已登記聲紋")
+        composeRule.assertText("Alice")
+    }
+
+    @Test
+    fun `a rejected enrollment explains the reason in plain language`() {
+        composeRule.setSettingsContent(capture = FakeVoiceCapture(pcm16 = null)) { viewModel ->
+            viewModel.onEnrollNameChange("Alice")
+            viewModel.onRecordAndEnroll()
+        }
+
+        composeRule.assertText("無法登記")
+        composeRule.assertText("無法使用麥克風，請確認已授予錄音權限。")
+    }
+
+    @Test
+    fun `an unprovisioned device reports the engine instead of a misleading form`() {
+        composeRule.setSettingsContent(enrollment = FakeEnrollmentStore(deviceBackedValue = false))
+
+        composeRule.assertText("無法使用")
+        composeRule.assertText("聲紋引擎未啟用：請先安裝語音模型，否則登記的聲紋不會保存。")
+        composeRule.onNodeWithText("錄音並登記").assertDoesNotExist()
+    }
+
+    @Test
+    fun `a speaker can be removed from the directory`() {
+        composeRule.setSettingsContent { viewModel ->
+            viewModel.onEnrollNameChange("Alice")
+            viewModel.onRecordAndEnroll()
+        }
+
+        composeRule.assertText("Alice")
+        composeRule.click("移除")
+
+        composeRule.onNodeWithText("Alice").assertDoesNotExist()
+        composeRule.assertText("尚未登記任何聲紋。")
+    }
+
     private class ResumedLifecycleOwner : LifecycleOwner {
         val registry = LifecycleRegistry(this)
 
@@ -104,9 +160,20 @@ class SettingsScreenTest {
     private fun ComposeContentTestRule.setSettingsContent(
         hub: HubServer = FakeHubServer(),
         battery: BatteryExemption = FakeBatteryExemption(),
+        enrollment: FakeEnrollmentStore = FakeEnrollmentStore(),
+        capture: FakeVoiceCapture = FakeVoiceCapture(),
         lifecycleOwner: LifecycleOwner? = null,
+        before: (SettingsViewModel) -> Unit = {},
     ) {
-        val viewModel = SettingsViewModel(hub, battery)
+        val viewModel =
+            SettingsViewModel.forTesting(
+                hub = hub,
+                battery = battery,
+                enrollment = enrollment,
+                voiceCapture = capture,
+                io = Dispatchers.Unconfined,
+            )
+        before(viewModel)
         setContent {
             val owner = lifecycleOwner ?: LocalLifecycleOwner.current
             CompositionLocalProvider(LocalLifecycleOwner provides owner) {

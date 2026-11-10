@@ -1,11 +1,13 @@
 package com.glassstorm.phonemanager.adapter.android.di
 
 import android.content.Context
+import com.glassstorm.phonemanager.adapter.android.audio.AudioRecordVoiceCapture
 import com.glassstorm.phonemanager.adapter.android.config.RuntimeConfigStore
 import com.glassstorm.phonemanager.adapter.android.network.nsd.NsdDiscoveryAdapter
 import com.glassstorm.phonemanager.adapter.android.network.wifi.ManualTetherHotspotAdapter
 import com.glassstorm.phonemanager.adapter.android.repository.sqlite.SqliteDeviceRepository
 import com.glassstorm.phonemanager.core.domain.adapter.config.AppConfig
+import com.glassstorm.phonemanager.core.domain.adapter.enrollment.VoiceCapturePort
 import com.glassstorm.phonemanager.core.domain.adapter.network.Discovery
 import com.glassstorm.phonemanager.core.domain.adapter.network.HotspotController
 import com.glassstorm.phonemanager.core.domain.adapter.network.PeerResolver
@@ -73,4 +75,16 @@ object AndroidAdapterModule {
     fun providePeerResolver(
         @ApplicationContext context: Context,
     ): PeerResolver = NsdDiscoveryAdapter(context, gatewayFallback = null)
+
+    /**
+     * One-shot microphone capture for on-device voiceprint enrollment.
+     *
+     * The hub records nothing else: peer audio always arrives over the stream, so
+     * this adapter exists solely for the operator's 8 s enrollment sample.
+     */
+    @Provides
+    @Singleton
+    fun provideVoiceCapture(
+        @ApplicationContext context: Context,
+    ): VoiceCapturePort = AudioRecordVoiceCapture(context)
 }

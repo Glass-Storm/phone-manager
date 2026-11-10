@@ -82,7 +82,13 @@ class AppShellTest {
                     FakeHubStarter { dashboardHub.start(0) },
                     io = Dispatchers.Unconfined,
                 ),
-                SettingsViewModel(FakeHubServer(), FakeBatteryExemption()),
+                SettingsViewModel.forTesting(
+                    hub = FakeHubServer(),
+                    battery = FakeBatteryExemption(),
+                    enrollment = FakeEnrollmentStore(),
+                    voiceCapture = FakeVoiceCapture(),
+                    io = Dispatchers.Unconfined,
+                ),
                 StreamViewModel.forTesting(FakeStreamService(), FakeHubServer(initiallyRunning = true)),
             )
         setContent {
