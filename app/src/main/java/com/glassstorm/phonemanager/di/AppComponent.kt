@@ -17,6 +17,7 @@ import com.glassstorm.phonemanager.core.domain.adapter.speech.TtsPort
 import com.glassstorm.phonemanager.core.domain.adapter.transport.HubServer
 import com.glassstorm.phonemanager.core.domain.service.DeviceService
 import com.glassstorm.phonemanager.core.domain.service.StreamService
+import com.glassstorm.phonemanager.core.model.RelayTuning
 import com.glassstorm.phonemanager.core.service.ServiceModule
 import com.glassstorm.phonemanager.transport.grpc.TransportModule
 import dagger.BindsInstance
@@ -102,6 +103,14 @@ interface AppComponent {
 
     /** The ViewModel factory the Compose shell threads down to every screen. */
     fun viewModelFactory(): ViewModelProvider.Factory
+
+    /**
+     * The relay buffer sizing the graph derived from the bound gesture engine.
+     *
+     * Exposed so an integration test that composes a real relay over this graph (only choosing its
+     * listener and sink) uses the same queue depths production does.
+     */
+    fun relayTuning(): RelayTuning
 
     /** Creates the graph with the application Context bound. */
     @Component.Factory

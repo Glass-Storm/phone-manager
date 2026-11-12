@@ -44,7 +44,7 @@ rootProject.name = "phone-manager"
 // `:app` graph does NOT depend on by default (the JVM fakes are the default
 // bindings). See `:adapter:ai`'s build file for the resolution.
 // ---------------------------------------------------------------------------
-val pinnedAiAndroidCommit = "c0644eada44c242604e07546ff93aef80d9563f8"
+val pinnedAiAndroidCommit = "b0b2d7d874b40c1154c64b6bb552556c19785db3"
 check(aiAndroidDir.isDirectory) {
     "ai-android composite build not found at ${aiAndroidDir.absolutePath}. " +
         "Clone the engine there (see README 'Provisioning the ai-android engine')."

@@ -105,6 +105,7 @@ class EcosysPiE2eTest {
                 ttsPort = component.ttsPort(),
                 enrollmentStore = component.enrollmentStore(),
                 frameSink = DiscardingSink(),
+                tuning = component.relayTuning(),
             )
         hub =
             HubServerAdapter(

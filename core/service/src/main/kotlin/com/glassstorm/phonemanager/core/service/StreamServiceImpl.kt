@@ -14,6 +14,7 @@ import com.glassstorm.phonemanager.core.model.RelayOutput
 import com.glassstorm.phonemanager.core.model.RelayResult
 import com.glassstorm.phonemanager.core.model.RelaySession
 import com.glassstorm.phonemanager.core.model.RelayStats
+import com.glassstorm.phonemanager.core.model.RelayTuning
 import com.glassstorm.phonemanager.core.model.SpeechUtterance
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -92,13 +93,13 @@ import javax.inject.Inject
  *
  * ## Constructor shape
  *
- * The tuning parameters (`audioCapacity`, `videoCapacity`, `imageCapacity`,
- * `scope`) exist ONLY so tests can drive the queue policies deterministically;
- * production always wants the defaults. Kotlin default arguments are invisible to
- * Dagger, so they are dropped from the [Inject] constructor and owned as the
- * private constants [DEFAULT_AUDIO_CAPACITY] / [DEFAULT_VIDEO_CAPACITY] /
- * [DEFAULT_IMAGE_CAPACITY]. The [forTesting] factory is the seam the suite uses
- * to pass an explicit scope or capacity.
+ * The queue depths and the pump scope exist so tests can drive the queue policies
+ * deterministically. Kotlin default arguments are invisible to Dagger, so the
+ * `@Inject` constructor takes the depths as one [RelayTuning] produced by the
+ * composition root: the single-image gesture recogniser keeps the one-slot
+ * latest-wins default, while a sequence recogniser asks for a window-sized queue.
+ * The [forTesting] factory is the seam the suite uses to pass an explicit scope or
+ * capacity.
  */
 class StreamServiceImpl
     private constructor(
@@ -119,15 +120,16 @@ class StreamServiceImpl
             ttsPort: TtsPort,
             enrollmentStore: EnrollmentStore,
             frameSink: FrameSink,
+            tuning: RelayTuning,
         ) : this(
             speechPort,
             gesturePort,
             ttsPort,
             enrollmentStore,
             frameSink,
-            DEFAULT_AUDIO_CAPACITY,
-            DEFAULT_VIDEO_CAPACITY,
-            DEFAULT_IMAGE_CAPACITY,
+            tuning.audioCapacity,
+            tuning.videoCapacity,
+            tuning.imageCapacity,
             newPumpScope(),
         )
 
@@ -500,24 +502,28 @@ class StreamServiceImpl
 
         companion object {
             /** Audio buffer depth in frames. Generous: audio must never be dropped. */
-            const val DEFAULT_AUDIO_CAPACITY: Int = 64
+            const val DEFAULT_AUDIO_CAPACITY: Int = RelayTuning.DEFAULT_AUDIO_CAPACITY
 
             /** Video buffer depth in NALs. Beyond this the oldest frame is evicted. */
-            const val DEFAULT_VIDEO_CAPACITY: Int = 256
+            const val DEFAULT_VIDEO_CAPACITY: Int = RelayTuning.DEFAULT_VIDEO_CAPACITY
 
             /**
              * Image buffer depth in stills: ONE. The still queue is LATEST-WINS,
              * so this single slot holds only the newest still and every older one
              * is evicted as it arrives. That is the only backlog control the
-             * recognizer needs: it always works on the newest still, so its input
-             * lag stays bounded by one inference instead of a queued history.
+             * single-image recognizer needs: it always works on the newest still,
+             * so its input lag stays bounded by one inference instead of a queued
+             * history. A sequence recognizer is bound with
+             * [com.glassstorm.phonemanager.core.model.RelayTuning.sequence] instead,
+             * which deepens the queue to the model's window.
              */
-            const val DEFAULT_IMAGE_CAPACITY: Int = 1
+            const val DEFAULT_IMAGE_CAPACITY: Int = RelayTuning.DEFAULT_IMAGE_CAPACITY
 
             /**
              * Test seam: builds the relay with explicit capacities and scope so the
              * queue policies are deterministic. Production uses the `@Inject`
-             * constructor, which always applies the defaults above.
+             * constructor, which applies the [RelayTuning] the composition root
+             * injects.
              */
             fun forTesting(
                 speechPort: SpeechPort,

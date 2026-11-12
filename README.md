@@ -85,6 +85,15 @@ engine trees into `DEST_DIR` (`DEST_DIR` defaults to `./build/ai-models`):
 | `tts/vits-cantonese-hf-xiaomaiiwn/{onnx,tokens.txt,lexicon.txt,rule.fst}`               | Not declared upstream | Cantonese VITS (xiaomaiiwn)                  |
 | `gesture/gesture_recognizer.task`                                                       | Apache-2.0            | MediaPipe Tasks (Google)                     |
 | `diarization/sherpa-onnx-pyannote-segmentation-3-0/model.int8.onnx` plus the CAM++ ONNX | MIT + Apache-2.0      | pyannote/segmentation-3.0 + 3D-Speaker CAM++ |
+| `shuwa/{holistic_landmarker.task,shuwa-translator.tflite,shuwa-knn-hksl.bin}`            | See the caveat below  | MediaPipe Tasks + a local Shuwa export       |
+
+The `shuwa/` tree turns on the HKSL **sequence** recogniser. When all three files are
+present it replaces the single-image `gesture/` engine and the relay is tuned with a
+window-sized image queue (`RelayTuning.sequence`); with either tree absent the hub
+keeps the single-image behaviour, and with both absent it keeps the JVM fake. The
+translator and the KNN table are built locally by the `Code/shuwa` toolkit checkout
+and have no upstream license, so they are host-provided (`LicenseKind.UserProvided`)
+and must not be redistributed with the app.
 
 [`docs/ai-model-provisioning.md`](docs/ai-model-provisioning.md) has the exact
 on-device tree, every pinned SHA-256, the ASR/TTS release sources, the licence
