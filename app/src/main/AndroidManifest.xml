@@ -39,6 +39,12 @@
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!--
+      RECORD_AUDIO (all APIs) - the ONLY capture the hub ever performs: the ~8 s
+        voiceprint enrollment sample behind 設定 > 聲紋登記. Peer audio always
+        arrives over the stream, so nothing else opens the microphone.
+    -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <!--
       API 33+ only: the Wi-Fi permission that replaces ACCESS_FINE_LOCATION for

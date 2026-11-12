@@ -3,11 +3,16 @@ package com.glassstorm.phonemanager.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.glassstorm.phonemanager.battery.BatteryExemption
+import com.glassstorm.phonemanager.core.domain.adapter.enrollment.EnrollmentStore
+import com.glassstorm.phonemanager.core.domain.adapter.enrollment.VoiceCapturePort
 import com.glassstorm.phonemanager.core.domain.adapter.network.HotspotController
 import com.glassstorm.phonemanager.core.domain.adapter.transport.HubServer
 import com.glassstorm.phonemanager.core.domain.network.HotspotFailure
 import com.glassstorm.phonemanager.core.domain.network.HotspotUnavailableException
 import com.glassstorm.phonemanager.core.domain.service.StreamService
+import com.glassstorm.phonemanager.core.model.AudioFormat
+import com.glassstorm.phonemanager.core.model.EnrollOutcome
+import com.glassstorm.phonemanager.core.model.EnrolledSpeaker
 import com.glassstorm.phonemanager.core.model.HotspotInfo
 import com.glassstorm.phonemanager.core.model.LivePeer
 import com.glassstorm.phonemanager.core.model.PeerRole
@@ -331,3 +336,55 @@ fun viewModelFactory(vararg models: ViewModel): ViewModelProvider.Factory =
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T = models.first { modelClass.isInstance(it) } as T
     }
+
+/**
+ * [EnrollmentStore] fake: keeps names in insertion order and can reject every call
+ * with a fixed reason, so a test can drive both the accepted and the rejected path.
+ *
+ * It never builds a voiceprint: the UI only needs names and the outcome, and a real
+ * embedding requires the native engine.
+ */
+class FakeEnrollmentStore(
+    private val rejectWith: String? = null,
+    private val deviceBackedValue: Boolean = true,
+) : EnrollmentStore {
+    override val deviceBacked: Boolean get() = deviceBackedValue
+
+    private val stored = mutableListOf<String>()
+
+    var lastPcm16: ByteArray? = null
+        private set
+
+    override suspend fun enroll(
+        name: String,
+        pcm16: ByteArray,
+    ): EnrollOutcome {
+        lastPcm16 = pcm16
+        if (rejectWith != null) return EnrollOutcome.rejected(rejectWith)
+        if (name !in stored) stored += name
+        return EnrollOutcome.accepted
+    }
+
+    override suspend fun names(): List<String> = stored.toList()
+
+    override suspend fun remove(name: String): Boolean = stored.remove(name)
+
+    override suspend fun enrollments(): List<EnrolledSpeaker> = emptyList()
+}
+
+/**
+ * [VoiceCapturePort] fake: returns a fixed buffer that clears the store's 8 s
+ * minimum (or `null` to simulate an unusable microphone) and counts the calls, so a
+ * test can prove the screen does NOT record when the name is invalid.
+ */
+class FakeVoiceCapture(
+    private val pcm16: ByteArray? = ByteArray(AudioFormat.ENROLLMENT_MIN_BYTES),
+) : VoiceCapturePort {
+    var recordCalls: Int = 0
+        private set
+
+    override suspend fun record(durationMillis: Long): ByteArray? {
+        recordCalls += 1
+        return pcm16
+    }
+}

@@ -47,6 +47,7 @@ class ManifestPermissionMatrixTest {
             Manifest.permission.FOREGROUND_SERVICE,
             Manifest.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE,
             Manifest.permission.POST_NOTIFICATIONS,
+            Manifest.permission.RECORD_AUDIO,
         )
     }
 

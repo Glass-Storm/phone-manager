@@ -12,7 +12,8 @@ import java.io.BufferedReader
 
 /**
  * Proves the backup exclusions are real: the manifest wires both rule files, and
- * each file excludes the two security-relevant artifacts.
+ * each file excludes the three security-relevant artifacts (runtime config, SQLite
+ * device store, voiceprint directory).
  *
  * Source-file assertions are used because the merged rules are not exposed through
  * the packaged application; the manifest wiring is asserted through the packaged
@@ -51,26 +52,28 @@ class BackupRulesTest {
     }
 
     @Test
-    fun `the full-backup rules exclude the api key prefs and the sqlite database`() {
+    fun `the full-backup rules exclude the api key prefs, the sqlite database and the voiceprints`() {
         // Given the raw rules a reviewer would read
         val source = readSource("src/main/res/xml/backup_rules.xml")
 
-        // Then both secrets-bearing artifacts are excluded
+        // Then every secrets- or biometric-bearing artifact is excluded
         assertThat(source).contains("<exclude domain=\"sharedpref\" path=\"runtime_config.xml\"")
         assertThat(source).contains("<exclude domain=\"database\" path=\"phone_manager.db\"")
+        assertThat(source).contains("<exclude domain=\"file\" path=\"enrollment.txt\"")
         assertThat(source).contains("full-backup-content")
     }
 
     @Test
-    fun `the data-extraction rules exclude both artifacts from cloud backup and transfer`() {
+    fun `the data-extraction rules exclude every artifact from cloud backup and transfer`() {
         // Given the raw rules
         val source = readSource("src/main/res/xml/data_extraction_rules.xml")
 
-        // Then cloud backup and device transfer each exclude both artifacts
+        // Then cloud backup and device transfer each exclude all three artifacts
         assertThat(source).contains("cloud-backup")
         assertThat(source).contains("device-transfer")
         assertThat(source).contains("<exclude domain=\"sharedpref\" path=\"runtime_config.xml\"")
         assertThat(source).contains("<exclude domain=\"database\" path=\"phone_manager.db\"")
+        assertThat(source).contains("<exclude domain=\"file\" path=\"enrollment.txt\"")
     }
 
     @Test
@@ -91,10 +94,11 @@ class BackupRulesTest {
             event = parser.next()
         }
 
-        // Then both exclusions are present in the parsed tree
+        // Then all three exclusions are present in the parsed tree
         assertThat(excludes).containsAtLeast(
             "sharedpref:runtime_config.xml",
             "database:phone_manager.db",
+            "file:enrollment.txt",
         )
     }
 

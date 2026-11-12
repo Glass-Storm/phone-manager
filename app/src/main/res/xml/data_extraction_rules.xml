@@ -5,7 +5,9 @@
   The same two artifacts as backup_rules.xml, for the same reasons:
   * `runtime_config.xml` is the device-local runtime config store (the hotspot mode);
   * `phone_manager.db` holds device-bound security state that must not travel to
-    another device.
+    another device;
+  * `enrollment.txt` holds the speaker voiceprints (biometric data), which must not
+    leave the device that captured them.
 
   The hub stores no cloud credentials: it runs a single on-device speech engine
   with no third-party STT/TTS cloud path.
@@ -18,9 +20,11 @@
     <cloud-backup>
         <exclude domain="sharedpref" path="runtime_config.xml" />
         <exclude domain="database" path="phone_manager.db" />
+        <exclude domain="file" path="enrollment.txt" />
     </cloud-backup>
     <device-transfer>
         <exclude domain="sharedpref" path="runtime_config.xml" />
         <exclude domain="database" path="phone_manager.db" />
+        <exclude domain="file" path="enrollment.txt" />
     </device-transfer>
 </data-extraction-rules>
