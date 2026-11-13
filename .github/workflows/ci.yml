@@ -35,8 +35,8 @@ jobs:
             - name: Check out the pinned ai-android engine
               run: |
                   git clone --depth 1 https://github.com/Glass-Storm/ai-android.git "${{ github.workspace }}/../../ai-android"
-                  git -C "${{ github.workspace }}/../../ai-android" fetch --depth 1 origin c0644eada44c242604e07546ff93aef80d9563f8
-                  git -C "${{ github.workspace }}/../../ai-android" checkout --detach c0644eada44c242604e07546ff93aef80d9563f8
+                  git -C "${{ github.workspace }}/../../ai-android" fetch --depth 1 origin b0b2d7d874b40c1154c64b6bb552556c19785db3
+                  git -C "${{ github.workspace }}/../../ai-android" checkout --detach b0b2d7d874b40c1154c64b6bb552556c19785db3
                   bash "${{ github.workspace }}/../../ai-android/scripts/fetch-sherpa-aar.sh"
 
             # This project builds on JDK 21 (Gradle 8.13 toolchain); the reference repo
@@ -99,8 +99,8 @@ jobs:
             - name: Check out the pinned ai-android engine
               run: |
                   git clone --depth 1 https://github.com/Glass-Storm/ai-android.git "${{ github.workspace }}/../../ai-android"
-                  git -C "${{ github.workspace }}/../../ai-android" fetch --depth 1 origin c0644eada44c242604e07546ff93aef80d9563f8
-                  git -C "${{ github.workspace }}/../../ai-android" checkout --detach c0644eada44c242604e07546ff93aef80d9563f8
+                  git -C "${{ github.workspace }}/../../ai-android" fetch --depth 1 origin b0b2d7d874b40c1154c64b6bb552556c19785db3
+                  git -C "${{ github.workspace }}/../../ai-android" checkout --detach b0b2d7d874b40c1154c64b6bb552556c19785db3
                   bash "${{ github.workspace }}/../../ai-android/scripts/fetch-sherpa-aar.sh"
 
             - name: Set up JDK 21
@@ -226,8 +226,8 @@ jobs:
             - name: Check out the pinned ai-android engine
               run: |
                   git clone --depth 1 https://github.com/Glass-Storm/ai-android.git "${{ github.workspace }}/../../ai-android"
-                  git -C "${{ github.workspace }}/../../ai-android" fetch --depth 1 origin c0644eada44c242604e07546ff93aef80d9563f8
-                  git -C "${{ github.workspace }}/../../ai-android" checkout --detach c0644eada44c242604e07546ff93aef80d9563f8
+                  git -C "${{ github.workspace }}/../../ai-android" fetch --depth 1 origin b0b2d7d874b40c1154c64b6bb552556c19785db3
+                  git -C "${{ github.workspace }}/../../ai-android" checkout --detach b0b2d7d874b40c1154c64b6bb552556c19785db3
                   bash "${{ github.workspace }}/../../ai-android/scripts/fetch-sherpa-aar.sh"
 
             - name: Set up JDK 21
