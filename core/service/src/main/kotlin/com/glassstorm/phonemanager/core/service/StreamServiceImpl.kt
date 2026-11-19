@@ -151,6 +151,9 @@ class StreamServiceImpl
 
         private val latestImages = ConcurrentHashMap<PeerRole, RelayImage>()
 
+        /** Inbound stills since process start, sampled by [IMAGE_LOG_EVERY]. */
+        private val imageLogCounter = AtomicLong()
+
         private val imageOutputs =
             MutableSharedFlow<RelayImage>(
                 extraBufferCapacity = 1,
@@ -230,10 +233,13 @@ class StreamServiceImpl
         ) {
             val state = registry.find(sessionId) ?: return
             if (state.isClosing) return
-            logger.info(
-                "inbound image session=$sessionId device=${state.relay.deviceId} " +
-                    "role=${registry.roleFor(sessionId)} bytes=${jpeg.size} ptsMs=$ptsMs",
-            )
+            val inboundCount = imageLogCounter.incrementAndGet()
+            if (inboundCount == 1L || inboundCount % IMAGE_LOG_EVERY == 0L) {
+                logger.info(
+                    "inbound image session=$sessionId device=${state.relay.deviceId} " +
+                        "role=${registry.roleFor(sessionId)} bytes=${jpeg.size} ptsMs=$ptsMs",
+                )
+            }
             val role = registry.roleFor(sessionId)
             val relayImage =
                 RelayImage(
@@ -386,7 +392,17 @@ class StreamServiceImpl
             imageDrained: CompletableDeferred<Unit>,
         ) {
             try {
-                for (image in queue.image) {
+                // Load the engine before consuming the session's stills. On a cold app the
+                // landmarker/translator/KNN load would otherwise block the first frames, and the
+                // latest-wins queue would drop every sign made during it.
+                gesturePort.warmUp()
+                for (first in queue.image) {
+                    var image = first
+                    if (!gesturePort.retainsSequence) {
+                        while (true) {
+                            image = queue.image.tryReceive().getOrNull() ?: break
+                        }
+                    }
                     guarded("image") {
                         // JPEG decoding happens ONLY inside the gesture adapter, never here.
                         val role = registry.roleFor(sessionId)
@@ -501,6 +517,13 @@ class StreamServiceImpl
         }
 
         companion object {
+            /**
+             * One INFO line every N inbound stills. At 15 fps a line per still is pure
+             * logging I/O; the first still of the process is always logged so a session
+             * start is still visible.
+             */
+            const val IMAGE_LOG_EVERY: Long = 30L
+
             /** Audio buffer depth in frames. Generous: audio must never be dropped. */
             const val DEFAULT_AUDIO_CAPACITY: Int = RelayTuning.DEFAULT_AUDIO_CAPACITY
 

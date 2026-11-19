@@ -117,8 +117,8 @@ class GestureMeaningTable private constructor(
          * Its labels are the `Hksl_*` glosses of the provisioned KNN table, in that table's order, so
          * the mapping can be audited against the artifact one row at a time. A gloss is a lexical
          * sign with a direct Cantonese equivalent, which is why every entry is a translation and not
-         * an interpretation. The combined `Hksl_*-Jsl_*` glosses are HKSL signs whose JSL sample set
-         * contributed to the reference data; they are spoken as the HKSL meaning.
+         * an interpretation. The current table is the eight-gloss demo set; the full 71-gloss
+         * reference set remains in `data/knn` and can be rebuilt with `build_knn.py`.
          *
          * Meanings are Cantonese (Traditional Chinese) for the same reason as [standard]: the
          * on-device voice is Cantonese-only.
@@ -126,77 +126,14 @@ class GestureMeaningTable private constructor(
         val shuwa: GestureMeaningTable =
             GestureMeaningTable(
                 linkedMapOf(
-                    "Hksl_able_to" to "能夠",
-                    "Hksl_bathroom" to "洗手間",
-                    "Hksl_bicycle-Jsl_bicycle" to "單車",
-                    "Hksl_body_soap" to "香皂",
-                    "Hksl_busy" to "忙",
-                    "Hksl_carrot" to "紅蘿蔔",
                     "Hksl_cash" to "現金",
-                    "Hksl_chef" to "廚師",
-                    "Hksl_coffee" to "咖啡",
-                    "Hksl_correct" to "正確",
                     "Hksl_credit_cards" to "信用卡",
-                    "Hksl_dog" to "狗",
-                    "Hksl_double_bed" to "雙人床",
-                    "Hksl_dragonfly" to "蜻蜓",
-                    "Hksl_finish" to "完成",
-                    "Hksl_flip_flops" to "拖鞋",
-                    "Hksl_fortune_teller" to "算命",
-                    "Hksl_garden" to "花園",
-                    "Hksl_ginger" to "薑",
-                    "Hksl_good" to "好",
-                    "Hksl_grass" to "草",
-                    "Hksl_grey" to "灰色",
-                    "Hksl_hat-Jsl_cap" to "帽",
-                    "Hksl_hearing_aid-Jsl_hearing_aid" to "助聽器",
-                    "Hksl_high_heels" to "高跟鞋",
                     "Hksl_how_are_you" to "你好嗎",
-                    "Hksl_jacket" to "外套",
-                    "Hksl_leisurely" to "悠閒",
-                    "Hksl_lemon" to "檸檬",
-                    "Hksl_let_it_go" to "算啦",
-                    "Hksl_lipstick" to "唇膏",
-                    "Hksl_machine" to "機器",
-                    "Hksl_mango" to "芒果",
-                    "Hksl_matter" to "事情",
-                    "Hksl_milk_tea" to "奶茶",
-                    "Hksl_motorcycle-Jsl_motorcycle" to "電單車",
-                    "Hksl_non_smoking_room" to "非吸煙室",
-                    "Hksl_obstruct" to "阻礙",
-                    "Hksl_onsite_payment" to "現場付款",
-                    "Hksl_panda" to "熊貓",
-                    "Hksl_pasta" to "意粉",
-                    "Hksl_post_office" to "郵局",
-                    "Hksl_purple" to "紫色",
-                    "Hksl_read" to "閱讀",
-                    "Hksl_reservation_booking" to "預約",
-                    "Hksl_shampoo" to "洗頭水",
-                    "Hksl_shark" to "鯊魚",
-                    "Hksl_shirt-Jsl_shirt" to "恤衫",
-                    "Hksl_signature" to "簽名",
-                    "Hksl_single_bed" to "單人床",
-                    "Hksl_smoking_room" to "吸煙室",
                     "Hksl_soft_drink" to "汽水",
-                    "Hksl_special" to "特別",
-                    "Hksl_steak" to "牛扒",
-                    "Hksl_strange" to "奇怪",
-                    "Hksl_summer" to "夏天",
-                    "Hksl_sunglasses" to "太陽眼鏡",
-                    "Hksl_supermarket" to "超級市場",
-                    "Hksl_swimming_pool" to "游泳池",
-                    "Hksl_tiger" to "老虎",
                     "Hksl_tomato" to "番茄",
-                    "Hksl_trouble" to "麻煩",
                     "Hksl_understand" to "明白",
-                    "Hksl_waiter" to "侍應",
-                    "Hksl_watermelon" to "西瓜",
                     "Hksl_welcome" to "歡迎",
-                    "Hksl_wine" to "酒",
-                    "Hksl_winter-Jsl_winter" to "冬天",
-                    "Hksl_worry" to "擔心",
                     "Hksl_write" to "寫",
-                    "Hksl_yes" to "係",
                 ),
             )
 

@@ -9,20 +9,22 @@ import com.glassstorm.phonemanager.core.model.GestureMeaningTable
 import com.glassstorm.phonemanager.core.model.GestureOutcome
 import hk.edu.hkmu.core.license.LicenseKind
 import hk.edu.hkmu.core.license.ModelLicense
+import hk.edu.hkmu.sign.landmark.Keypoint3D
 import hk.edu.hkmu.sign.shuwa.ShuwaFrame
 import hk.edu.hkmu.sign.shuwa.ShuwaKnnIndex
 import hk.edu.hkmu.sign.shuwa.ShuwaLandmarker
+import hk.edu.hkmu.sign.shuwa.ShuwaPosePoint
 import hk.edu.hkmu.sign.shuwa.ShuwaPrediction
-import hk.edu.hkmu.sign.shuwa.ShuwaRecognizer
+import hk.edu.hkmu.sign.shuwa.ShuwaPreprocessor
+import hk.edu.hkmu.sign.shuwa.ShuwaSpec
 import hk.edu.hkmu.sign.shuwa.TfliteShuwaEmbedder
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.asFlow
-import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
+import kotlin.math.sqrt
 
 private const val TAG = "AiShuwaGesturePort"
 
@@ -30,25 +32,36 @@ private const val TAG = "AiShuwaGesturePort"
  * [GesturePort] backed by ai-android's **sequence** recogniser (MediaPipe Holistic + Shuwa translator +
  * HKSL KNN table).
  *
- * ### Why this is stateful
- * The port contract takes one JPEG still per call, but the model needs a **window** of stills. The port
- * therefore keeps the last [ShuwaWindowPolicy.windowFrames] extracted frames and reports a gloss only
- * when [ShuwaWindowPolicy.onFrame] says a window is complete and [ShuwaWindowPolicy.accept] says the
- * result is new. Everything above it (relay, transport, contract) stays unchanged: the hub configures a
- * deeper image queue (`RelayTuning.sequence`) so the intermediate stills reach this port instead of
- * being conflated away.
+ * ### Why this is stateful, and why it segments
+ * The port contract takes one JPEG per call, but the model was trained on **one sign per clip**,
+ * resampled to 16 frames. A fixed sliding window of 16 stills is a different input: it cuts signs in
+ * half, pads fast signs with idle, and truncates slow ones. Measured against the reference data, a
+ * fixed 10 fps window landed 1.7-2.1 from every HKSL class, while a sign-length segment at 30 fps
+ * landed at 1.40 — under the accept ceiling.
  *
- * The window policy lives here, not in ai-android, only because the port is a pull API (one still per
- * call) while the engine exposes a push API (a `Flow` of frames). Each completed window is handed to
- * [ShuwaRecognizer] as a one-window flow, so the embedding, the KNN lookup, the motion gate and the
- * confidence flag all remain the engine's.
+ * So the port performs the demo's record/stop automatically:
+ *
+ * ```
+ * motion rises ──► record frames ──► motion quiet for [END_QUIET_MS] ──► close burst
+ *                                                                          │
+ *                                            resample the burst to 16 ─────┘
+ * ```
+ *
+ * The burst is prepared once with [ShuwaPreprocessor.prepare] (which resamples it to 16 frames,
+ * making the model invariant to the signer's speed), embedded with [TfliteShuwaEmbedder], and
+ * matched against [ShuwaKnnIndex].
+ *
+ * ### Rejection
+ * The KNN is closed-set: it always returns a nearest class. The shipped table therefore includes the
+ * reference `Idle` class as a **sink**: [GestureMeaningTable.shuwa] has no entry for it, so an idle
+ * or non-HKSL pose produces no subtitle instead of being forced onto an HKSL gloss. A distance
+ * ceiling and the vote-confidence floor still guard the remaining matches.
  *
  * ### Threading and failure containment
- * One call runs one landmark extraction plus, at a window boundary, one embedding pass, both on
+ * One call runs one landmark extraction plus, at a burst close, one embedding pass, both on
  * [Dispatchers.Default]. A single recogniser instance is shared by every session pump and the native
  * handles are not safe for concurrent calls, so [recognize] serialises access with a [Mutex]. An
- * unusable still returns `null`; a genuine engine failure is logged and also returns `null`, so one
- * bad frame never kills a pump.
+ * unusable still returns `null`; a genuine engine failure is logged and also returns `null`.
  *
  * ### Laziness and licensing
  * Nothing native is loaded at construction. The landmarker, translator and table are built on the first
@@ -60,7 +73,6 @@ private const val TAG = "AiShuwaGesturePort"
  * @param modelDir directory holding the three provisioned artefacts.
  * @param meanings gloss -> spoken meaning table; an unmapped gloss yields no outcome rather than an
  *   invented meaning.
- * @param policy windowing and duplicate-suppression rules.
  * @param license licence attached to the host-provisioned translator.
  * @param clock capture clock, injectable for deterministic tests.
  */
@@ -68,12 +80,26 @@ class AiShuwaGesturePort(
     private val context: Context,
     private val modelDir: File,
     private val meanings: GestureMeaningTable = GestureMeaningTable.shuwa,
-    private val policy: ShuwaWindowPolicy = ShuwaWindowPolicy(),
     private val license: ModelLicense = ModelLicense(LicenseKind.UserProvided),
     private val clock: () -> Long = { System.currentTimeMillis() },
 ) : GesturePort,
     AutoCloseable {
-    private val window = ArrayDeque<ShuwaFrame>(policy.windowFrames)
+    /** Frames of the burst currently being recorded. */
+    private val burst = ArrayDeque<ShuwaFrame>(MAX_BURST_FRAMES)
+
+    /** Previous frame, for the motion signal that opens and closes a burst. */
+    private var previous: ShuwaFrame? = null
+
+    @Volatile
+    private var active = false
+    private var lastMotionAtMs = 0L
+    private var burstStartedAtMs = 0L
+
+    override val retainsSequence: Boolean
+        get() = active
+
+    /** Duplicate suppression: a held sign closes several bursts in a row. */
+    private val policy = ShuwaWindowPolicy(requiredAgreements = 1)
 
     private val components: Lazy<Components> =
         lazy(LazyThreadSafetyMode.SYNCHRONIZED) { Components.open(context, modelDir, license) }
@@ -95,41 +121,283 @@ class AiShuwaGesturePort(
             }
         }
 
-    private suspend fun recognizeLocked(jpeg: ByteArray): GestureOutcome? {
-        val bitmap: Bitmap =
-            BitmapFactory.decodeByteArray(jpeg, 0, jpeg.size) ?: return null
-        val frame =
+    /**
+     * Loads the native landmarker, translator and KNN table, then primes the landmark graph.
+     *
+     * The image pump calls this before reading the session queue. Without it the first
+     * [recognize] pays the whole cold-start cost while the queue drops stills, so every sign
+     * made during the load is lost.
+     */
+    override suspend fun warmUp() {
+        withContext(Dispatchers.Default) {
             try {
-                components.value.landmarker.detect(bitmap, clock())
-            } finally {
-                // The landmarker copies what it needs out of the bitmap; the relay's still is
-                // transient, so release it immediately instead of waiting for the collector.
-                bitmap.recycle()
+                engineMutex.withLock {
+                    val started = clock()
+                    val loaded = components.value
+                    val bitmap = Bitmap.createBitmap(WARMUP_SIZE, WARMUP_SIZE, Bitmap.Config.ARGB_8888)
+                    try {
+                        loaded.landmarker.detect(bitmap, clock())
+                    } finally {
+                        bitmap.recycle()
+                    }
+                    Log.d(TAG, "warm-up took ${clock() - started}ms")
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Throwable) {
+                Log.w(TAG, "warm-up failed; the first still will retry", failure)
             }
-        window.addLast(frame)
-        if (window.size > policy.windowFrames) {
-            window.removeFirst()
         }
-        if (!policy.onFrame()) {
-            return null
+    }
+
+    private suspend fun recognizeLocked(jpeg: ByteArray): GestureOutcome? {
+        val frame = extract(jpeg) ?: return null
+        val previousFrame = previous
+        val motion = previousFrame?.let { meanMotion(it, frame) } ?: 0f
+        previous = frame
+        val now = frame.timestampMillis
+
+        val hasHand =
+            frame.leftHand.size >= MIN_HAND_POINTS || frame.rightHand.size >= MIN_HAND_POINTS
+        if (hasHand && motion > START_MOTION) {
+            if (!active) {
+                active = true
+                burstStartedAtMs = now
+                burst.clear()
+            }
+            lastMotionAtMs = now
         }
-        val prediction = classifyWindow(window.toList()) ?: return null
-        if (prediction.lowConfidence) return null
-        if (!policy.accept(prediction.label, prediction.windowEndMillis)) return null
-        val text = meanings.meaningFor(prediction.label) ?: return null
-        return GestureOutcome(label = prediction.label, text = text, confidence = prediction.confidence)
+        if (!active) return null
+
+        burst.addLast(frame)
+        while (burst.size > MAX_BURST_FRAMES) {
+            burst.removeFirst()
+        }
+
+        val quietFor = now - lastMotionAtMs
+        val tooLong = now - burstStartedAtMs >= MAX_BURST_MS
+        if (quietFor < END_QUIET_MS && !tooLong) return null
+
+        active = false
+        val frames = burst.toList().takeWhile { it.timestampMillis <= lastMotionAtMs }
+        burst.clear()
+        return classifyBurst(frames)
+    }
+
+    /** Decodes the still, applies the reference square crop, and extracts the Shuwa frame. */
+    private fun extract(jpeg: ByteArray): ShuwaFrame? {
+        val decoded: Bitmap = BitmapFactory.decodeByteArray(jpeg, 0, jpeg.size) ?: return null
+        // The reference pipeline runs Holistic on a SQUARE image (`crop_utils.crop_square`), because
+        // MediaPipe normalises x and y independently. A 640x480 still without the crop stretches the
+        // pose horizontally relative to every training sample.
+        val bitmap = decoded.centerSquare()
+        if (bitmap !== decoded) decoded.recycle()
+        return try {
+            components.value.landmarker.detect(bitmap, clock())
+        } finally {
+            bitmap.recycle()
+        }
     }
 
     /**
-     * Runs the engine over exactly one window.
+     * Resamples one completed burst to 16 frames and classifies it.
      *
-     * `ShuwaRecognizer.recognize` consumes a flow and emits at most one prediction for a full window,
-     * so a one-window flow yields the prediction for the stills the port just completed (or nothing
-     * when the motion gate considers the window idle).
+     * The burst is the sign, whatever its duration: a 0.6 s and a 2.0 s performance both become 16
+     * uniformly spaced frames, so the signer's speed does not matter.
      */
-    private suspend fun classifyWindow(frames: List<ShuwaFrame>): ShuwaPrediction? {
-        val recognizer = components.value.recognizer
-        return recognizer.recognize(frames.asFlow()).firstOrNull()
+    private suspend fun classifyBurst(frames: List<ShuwaFrame>): GestureOutcome? {
+        if (frames.size < MIN_BURST_FRAMES) return null
+        // A sign needs a hand. MediaPipe reports an EMPTY hand list when it finds none, and the
+        // preprocessor zero-fills that block; without this gate a head turn or a shoulder shift can
+        // be classified from pose/face alone. Require at least one hand (>= MIN_HAND_POINTS
+        // landmarks) in at least a THIRD of the burst's frames; MediaPipe drops the hand during
+        // fast motion and a half-frames rule silently discarded real signs (measured: 4-6 of 15-20).
+        val leftFrames = frames.count { it.leftHand.size >= MIN_HAND_POINTS }
+        val rightFrames = frames.count { it.rightHand.size >= MIN_HAND_POINTS }
+        val handFrames =
+            frames.count {
+                it.leftHand.size >= MIN_HAND_POINTS || it.rightHand.size >= MIN_HAND_POINTS
+            }
+        Log.d(TAG, "burst frames=${frames.size} hands left=$leftFrames right=$rightFrames any=$handFrames")
+        if (handFrames * 2 < frames.size) return null
+
+        // Alignment search: the burst boundaries are motion-derived, so the same sign can land a
+        // little long, short or shifted on each attempt. Try the full burst first, then trimmed
+        // variants, and stop at the first one that clears the gates. This is what turns "sign it
+        // 2-3 times" into one attempt, without emitting anything the gates would have rejected.
+        for (candidate in candidateWindows(frames)) {
+            val candidateStarted = clock()
+            val prediction = classifyWindow(candidate)
+            Log.d(
+                TAG,
+                "candidate frames=${candidate.size} label=${prediction.label} " +
+                    "conf=${prediction.confidence} dist=${prediction.distance} " +
+                    "low=${prediction.lowConfidence} took=${clock() - candidateStarted}ms",
+            )
+            if (prediction.lowConfidence || prediction.distance > MAX_DISTANCE) continue
+            val text = meanings.meaningFor(prediction.label) ?: continue
+            if (!policy.accept(prediction.label, prediction.windowEndMillis)) return null
+            return GestureOutcome(label = prediction.label, text = text, confidence = prediction.confidence)
+        }
+        return null
+    }
+
+    /**
+     * Prepares and classifies one candidate burst.
+     *
+     * Calling [ShuwaPreprocessor.prepare] directly on [frames] runs `sampleIndices` **once** (matching
+     * the reference `translator_manager.get_feats`), whereas pre-resampling to 16 frames and passing
+     * the 16-frame window through `ShuwaRecognizer` ran `sampleIndices(16, 16)` a second time,
+     * dropping the first/last frames and duplicating slots 4 and 11.
+     */
+    private fun classifyWindow(frames: List<ShuwaFrame>): ShuwaPrediction {
+        val loaded = components.value
+        val sanitized = frames.map(::sanitizeForPreprocessor)
+        val inputs = ShuwaPreprocessor.prepare(sanitized)
+        val embedding = applyPartWeights(loaded.embedder.embed(inputs))
+        val match = loaded.index.match(embedding)
+        return ShuwaPrediction(
+            label = match.label,
+            confidence = match.confidence,
+            distance = match.distance,
+            windowStartMillis = frames.first().timestampMillis,
+            windowEndMillis = frames.last().timestampMillis,
+            lowConfidence = match.confidence < MIN_CONFIDENCE,
+        )
+    }
+
+    /**
+     * Scales the 4 concatenated embedding parts (`pose [0:96]`, `face [96:144]`, `lh [144:240]`,
+     * `rh [240:336]`) to match the pruned KNN table: person-specific face features are down-weighted
+     * and the dominant right hand is emphasised so `welcome`/`write` and `how_are_you`/`soft_drink`
+     * separate cleanly.
+     */
+    private fun applyPartWeights(embedding: FloatArray): FloatArray {
+        for (index in FACE_START until FACE_END) {
+            embedding[index] *= FACE_WEIGHT
+        }
+        for (index in RIGHT_HAND_START until ShuwaSpec.EMBEDDING_DIMENSIONS) {
+            embedding[index] *= RIGHT_HAND_WEIGHT
+        }
+        return embedding
+    }
+
+    /**
+     * Masks missing hands on the 15-point `SELECTED_POSE` indices (`15, 17, 19, 21` and
+     * `16, 18, 20, 22` in the 33-point BlazePose array) rather than raw indices `7, 9, 11, 13` /
+     * `8, 10, 12, 14` (where `11` and `12` are the shoulders). Without this, an absent hand
+     * overwrites the shoulder joint with `-100` and collapses the shoulder-width pose scale.
+     */
+    private fun sanitizeForPreprocessor(frame: ShuwaFrame): ShuwaFrame {
+        if (frame.pose.size < ShuwaSpec.POSE_POINTS) return frame
+        val missingLeftHand =
+            frame.leftHand.size < MIN_HAND_POINTS ||
+                frame.leftHand.first().x == ShuwaSpec.MISSING_VALUE
+        val missingRightHand =
+            frame.rightHand.size < MIN_HAND_POINTS ||
+                frame.rightHand.first().x == ShuwaSpec.MISSING_VALUE
+        val pose =
+            frame.pose.mapIndexed { index, point ->
+                when {
+                    missingLeftHand && index in REAL_LEFT_HAND_IN_POSE -> IGNORED_POSE_POINT
+                    missingRightHand && index in REAL_RIGHT_HAND_IN_POSE -> IGNORED_POSE_POINT
+                    index == UNSELECTED_LEFT_SENTINEL || index == UNSELECTED_RIGHT_SENTINEL ->
+                        ShuwaPosePoint(
+                            x = point.x,
+                            y = point.y,
+                            z = point.z,
+                            visibility = 1f,
+                        )
+                    else -> point
+                }
+            }
+        return ShuwaFrame(
+            pose = pose,
+            face = frame.face,
+            leftHand = if (missingLeftHand) IGNORED_HAND else frame.leftHand,
+            rightHand = if (missingRightHand) IGNORED_HAND else frame.rightHand,
+            timestampMillis = frame.timestampMillis,
+        )
+    }
+
+    /**
+     * Burst variants ordered by preference: the full burst, then gentle trims that remove a long
+     * approach or a trailing retreat.
+     */
+    private fun candidateWindows(frames: List<ShuwaFrame>): List<List<ShuwaFrame>> {
+        val candidates = mutableListOf(frames)
+        val n = frames.size
+        val trim = maxOf(2, n / 7)
+        if (n - trim >= MIN_BURST_FRAMES) {
+            candidates += frames.subList(trim, n)
+            candidates += frames.subList(0, n - trim)
+            if (n - 2 * trim >= MIN_BURST_FRAMES) {
+                candidates += frames.subList(trim, n - trim)
+            }
+        }
+        return candidates.distinctBy {
+            it.size to it.first().timestampMillis
+        }
+    }
+
+    /**
+     * Burst start/stop signal: the strongest per-point displacement across body pose and both
+     * hands. Measuring pose alone missed hand/wrist signs when the torso stayed still, splitting one
+     * sign into several short fragments.
+     */
+    private fun meanMotion(
+        previous: ShuwaFrame,
+        current: ShuwaFrame,
+    ): Float =
+        maxOf(
+            poseMotion(previous, current),
+            handMotion(previous.leftHand, current.leftHand),
+            handMotion(previous.rightHand, current.rightHand),
+        )
+
+    private fun poseMotion(
+        previous: ShuwaFrame,
+        current: ShuwaFrame,
+    ): Float {
+        val count = minOf(previous.pose.size, current.pose.size)
+        if (count == 0) return 0f
+        var total = 0.0
+        for (index in 0 until count) {
+            val dx = (current.pose[index].x - previous.pose[index].x).toDouble()
+            val dy = (current.pose[index].y - previous.pose[index].y).toDouble()
+            total += sqrt(dx * dx + dy * dy)
+        }
+        return (total / count).toFloat()
+    }
+
+    private fun handMotion(
+        previous: List<Keypoint3D>,
+        current: List<Keypoint3D>,
+    ): Float {
+        val count = minOf(previous.size, current.size)
+        if (count < MIN_HAND_POINTS) return 0f
+        var total = 0.0
+        for (index in 0 until count) {
+            val dx = (current[index].x - previous[index].x).toDouble()
+            val dy = (current[index].y - previous[index].y).toDouble()
+            total += sqrt(dx * dx + dy * dy)
+        }
+        return (total / count).toFloat()
+    }
+
+    /**
+     * The square crop the reference pipeline applies before landmark extraction.
+     *
+     * Landscape frames are centre-cropped horizontally; portrait frames keep the bottom square
+     * (`start_y = height - width`), matching `crop_utils.crop_square` exactly.
+     */
+    private fun Bitmap.centerSquare(): Bitmap {
+        if (width == height) return this
+        return if (width > height) {
+            Bitmap.createBitmap(this, (width - height) / 2, 0, height, height)
+        } else {
+            Bitmap.createBitmap(this, 0, height - width, width, width)
+        }
     }
 
     /** Releases the native landmarker and translator. Idempotent. */
@@ -142,10 +410,11 @@ class AiShuwaGesturePort(
     /** The three native pieces, created together on the first still. */
     private class Components(
         val landmarker: ShuwaLandmarker,
-        val recognizer: ShuwaRecognizer,
+        val embedder: TfliteShuwaEmbedder,
+        val index: ShuwaKnnIndex,
     ) : AutoCloseable {
         override fun close() {
-            recognizer.close()
+            embedder.close()
             landmarker.close()
         }
 
@@ -156,16 +425,13 @@ class AiShuwaGesturePort(
                 license: ModelLicense,
             ): Components {
                 val landmarker = ShuwaLandmarker.create(context = context, modelDir = modelDir)
-                val recognizer =
-                    ShuwaRecognizer(
-                        embedder =
-                            TfliteShuwaEmbedder.load(
-                                modelFile = File(modelDir, TRANSLATOR_FILE),
-                                license = license,
-                            ),
-                        index = ShuwaKnnIndex.load(File(modelDir, KNN_FILE)),
+                val embedder =
+                    TfliteShuwaEmbedder.load(
+                        modelFile = File(modelDir, TRANSLATOR_FILE),
+                        license = license,
                     )
-                return Components(landmarker = landmarker, recognizer = recognizer)
+                val index = ShuwaKnnIndex.load(File(modelDir, KNN_FILE))
+                return Components(landmarker = landmarker, embedder = embedder, index = index)
             }
         }
     }
@@ -174,7 +440,81 @@ class AiShuwaGesturePort(
         /** Provisioned translator file name inside `modelDir`. */
         const val TRANSLATOR_FILE = "shuwa-translator.tflite"
 
-        /** Provisioned HKSL KNN table file name inside `modelDir`. */
+        /** Provisioned KNN table file name inside `modelDir`. */
         const val KNN_FILE = "shuwa-knn-hksl.bin"
+
+        /** Mean pose or hand displacement that opens a burst. */
+        const val START_MOTION = 0.008f
+
+        /**
+         * Silence after the last motion that closes a burst.
+         *
+         * 180 ms split a real sign into fragments (Idle/chef/high-heels); 300 ms gives the segmenter a
+         * real boundary and costs only 120 ms more.
+         */
+        const val END_QUIET_MS = 300L
+
+        /** Embedding slice bounds (`pose=96, face=48, lh=96, rh=96`) and part weights. */
+        const val FACE_START = 96
+        const val FACE_END = 144
+        const val RIGHT_HAND_START = 240
+        const val FACE_WEIGHT = 0.2f
+        const val RIGHT_HAND_WEIGHT = 1.4f
+
+        /** Hard cap on one burst so a continuously moving scene cannot grow without bound. */
+        const val MAX_BURST_MS = 2_500L
+
+        /** Shortest burst worth classifying (about 0.4 s at 10-15 fps). */
+        const val MIN_BURST_FRAMES = 6
+
+        /** Hand landmarks MediaPipe returns per detected hand; fewer means the hand is absent. */
+        const val MIN_HAND_POINTS = 10
+
+        /** Ring-buffer cap: 2.5 s at up to 38 fps. */
+        const val MAX_BURST_FRAMES = 96
+
+        /** Square edge of the synthetic bitmap used to prime the landmark graph. */
+        const val WARMUP_SIZE = 64
+
+        /** Unselected BlazePose mouth indices (9, 10) used to disarm raw-index shoulder masking. */
+        const val UNSELECTED_LEFT_SENTINEL = 9
+        const val UNSELECTED_RIGHT_SENTINEL = 10
+
+        /** BlazePose indices corresponding to `SELECTED_POSE[7, 9, 11, 13]` (left hand in pose). */
+        val REAL_LEFT_HAND_IN_POSE = intArrayOf(15, 17, 19, 21)
+
+        /** BlazePose indices corresponding to `SELECTED_POSE[8, 10, 12, 14]` (right hand in pose). */
+        val REAL_RIGHT_HAND_IN_POSE = intArrayOf(16, 18, 20, 22)
+
+        val IGNORED_POSE_POINT =
+            ShuwaPosePoint(
+                x = ShuwaSpec.IGNORE_VALUE,
+                y = ShuwaSpec.IGNORE_VALUE,
+                z = ShuwaSpec.IGNORE_VALUE,
+                visibility = 1f,
+            )
+
+        val IGNORED_HAND: List<Keypoint3D> =
+            List(ShuwaSpec.HAND_POINTS) {
+                Keypoint3D(
+                    x = ShuwaSpec.IGNORE_VALUE,
+                    y = ShuwaSpec.IGNORE_VALUE,
+                    z = ShuwaSpec.IGNORE_VALUE,
+                )
+            }
+
+        /**
+         * Vote floor: the winning gloss must own at least this share of the 5 nearest neighbours
+         * (at least 4 of the 5 nearest neighbours agreeing is ~0.79).
+         */
+        const val MIN_CONFIDENCE = 0.78f
+
+        /**
+         * Loose sanity ceiling on the absolute nearest-neighbour distance.
+         *
+         * The vote, not distance, is the primary criterion; this only rejects a malformed or
+         * wildly out-of-domain embedding that happens to produce a unanimous-looking vote.
+         */
+        const val MAX_DISTANCE = 2.2f
     }
 }
