@@ -89,7 +89,7 @@ carries.
 
 ### `ImageFrame`
 
-A single JPEG still captured by the necklace camera (320×240 at 10 fps). This is
+A single JPEG still captured by the necklace camera (320×240 at 15 fps). This is
 the ONE media payload the hub decodes — into a bitmap, solely to run isolated
 gesture recognition on the still. It never re-encodes or stores the bytes, and
 the payload stays opaque to every other layer.
@@ -317,7 +317,7 @@ stream.
 - **Images (`image`) are JPEG stills.** This is the ONE media kind the hub
   decodes: it turns each still into a bitmap and runs isolated gesture
   recognition on it. It never stores or re-encodes the bytes. The necklace sends
-  these at 320×240 and 10 fps.
+  these at 320×240 and 15 fps.
 - **Routing is by session role.** A necklace session's `image` frame becomes a
   `gesture` frame on the GLASSES session AND a `tts_audio` frame back on the
   necklace; a glasses session's `audio_pcm16_16k` becomes a `result` frame on the
