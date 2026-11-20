@@ -11,6 +11,7 @@ import com.glassstorm.phonemanager.adapter.jvm.ai.FakeTtsPort
 import com.glassstorm.phonemanager.core.domain.adapter.config.AppConfig
 import com.glassstorm.phonemanager.core.domain.adapter.repository.DeviceRepository
 import com.glassstorm.phonemanager.core.model.HotspotMode
+import com.glassstorm.phonemanager.core.model.RelayTuning
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -76,5 +77,18 @@ class AppComponentWiringTest {
         assertThat(component.speechPort()).isInstanceOf(FakeSpeechPort::class.java)
         assertThat(component.ttsPort()).isInstanceOf(FakeTtsPort::class.java)
         assertThat(component.enrollmentStore()).isInstanceOf(FakeEnrollmentStore::class.java)
+    }
+
+    @Test
+    fun `the relay keeps the single-image tuning while the fake gesture port is bound`() {
+        // Given the production component with the JVM fakes bound
+        val component = component()
+
+        // When the relay tuning is resolved
+        val tuning: RelayTuning = component.relayTuning()
+
+        // Then the one-slot "latest wins" image queue is kept: only a sequence
+        // recogniser (Shuwa) may ask for a deeper queue.
+        assertThat(tuning).isEqualTo(RelayTuning.singleImage)
     }
 }

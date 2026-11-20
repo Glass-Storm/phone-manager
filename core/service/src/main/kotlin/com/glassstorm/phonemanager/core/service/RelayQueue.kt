@@ -23,11 +23,16 @@ internal data class QueuedImage(
  *  * [video] — drop-oldest. [admitVideo] evicts the oldest queued frame when
  *    the buffer is full, so the live edge keeps flowing.
  *  * [image] — drop-oldest (LATEST WINS), and practically a one-slot mailbox:
- *    production sets the capacity to ONE, so [admitImage] replaces the single
- *    queued still on every newer offer and a supersonic producer can never park
- *    the peer's `pushImage`; the caller counts the eviction as `imageDropped`.
- *    The consumer then recognizes the still stream as fast as the model allows,
- *    always on the newest still, so the recognizer never replays a stale frame.
+ *    the single-image recogniser is configured with a capacity of ONE, so
+ *    [admitImage] replaces the single queued still on every newer offer and a
+ *    supersonic producer can never park the peer's `pushImage`; the caller counts
+ *    the eviction as `imageDropped`. The consumer then recognizes the still stream
+ *    as fast as the model allows, always on the newest still, so the recognizer
+ *    never replays a stale frame.
+ *    A SEQUENCE recogniser (the Shuwa HKSL window) is the exception: it needs the
+ *    last N stills in order, so the composition root sizes this channel to the
+ *    window (`RelayTuning.sequence`) and the same drop-oldest rule then keeps the
+ *    newest N.
  */
 internal class RelayQueue(
     audioCapacity: Int,
@@ -50,7 +55,7 @@ internal class RelayQueue(
      * oldest queued still is evicted so the newest one always fits.
      *
      * Returns `true` only when an eviction was performed, matching [admitVideo]'s
-     * shape. It NEVER suspends, so a sustained 10 fps source can never park the
+     * shape. It NEVER suspends, so a sustained 15 fps source can never park the
      * peer's `pushImage`. The re-offer is best-effort under a concurrent consumer
      * race; the caller still counts the eviction it observed.
      */

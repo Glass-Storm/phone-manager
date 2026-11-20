@@ -43,7 +43,14 @@ fun relayStream(
     tts: TtsPort = FakeTtsPort(),
     enrollment: EnrollmentStore = FakeEnrollmentStore(),
     sink: FrameSink = FakeFrameSink(),
-): StreamService = StreamServiceImpl(speech, gesture, tts, enrollment, sink)
+): StreamService =
+    StreamServiceImpl.forTesting(
+        speechPort = speech,
+        gesturePort = gesture,
+        ttsPort = tts,
+        enrollmentStore = enrollment,
+        frameSink = sink,
+    )
 
 private class NoopSpeechPort : SpeechPort {
     override suspend fun transcribe(
@@ -84,4 +91,10 @@ private class NoopFrameSink : FrameSink {
 
 /** A paired service surface with inert media ports; used where media never flows. */
 fun inertStreamService(): StreamService =
-    StreamServiceImpl(NoopSpeechPort(), NoopGesturePort(), NoopTtsPort(), NoopEnrollmentStore(), NoopFrameSink())
+    StreamServiceImpl.forTesting(
+        speechPort = NoopSpeechPort(),
+        gesturePort = NoopGesturePort(),
+        ttsPort = NoopTtsPort(),
+        enrollmentStore = NoopEnrollmentStore(),
+        frameSink = NoopFrameSink(),
+    )

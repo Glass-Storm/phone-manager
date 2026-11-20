@@ -27,6 +27,10 @@ models/
 │       └── model.int8.onnx
 ├── gesture/
 │   └── gesture_recognizer.task
+├── shuwa/
+│   ├── holistic_landmarker.task
+│   ├── shuwa-knn-hksl.bin
+│   └── shuwa-translator.tflite
 └── tts/
     └── vits-cantonese-hf-xiaomaiiwn/
         ├── vits-cantonese-hf-xiaomaiiwn.onnx
@@ -37,6 +41,25 @@ models/
 
 The adapter only needs these listed files. Extra files from an upstream archive
 (sample WAVs, Python helpers, READMEs) are harmless but are not required.
+
+### The `shuwa/` tree (HKSL sequence recognition)
+
+`shuwa/` holds the Shuwa sequence recogniser, which supersedes `gesture/` when it is
+complete. All three files are required together; a partial tree is treated as
+absent so the hub falls back to the single-image recogniser rather than starting a
+windowed model with a missing half.
+
+- `holistic_landmarker.task` is Google's MediaPipe Holistic bundle (Apache-2.0).
+- `shuwa-translator.tflite` is the f32 export of the Shuwa HKSL translator.
+- `shuwa-knn-hksl.bin` is the demo KNN table (`SKS1`, float16, eight HKSL glosses plus
+  `Idle`, 1,946 vectors). It is built with `--prune-weight`; its rows are part-weighted, so
+  the live query must apply the same weights (see below).
+
+The translator and the table are produced by the `Code/shuwa` toolkit checkout
+(`build/shuwa-translator-f32.tflite`, `build/shuwa-knn-hksl-8-idle.bin`) and are
+**renamed** on the device: the adapter looks for the fixed names above, not for the
+export's `-f32` or `-8-idle` suffix. The f16 export is half the size but was not
+validated on the phone, so the runbook pins the f32 numbers.
 
 ## Fetch and verify on the host
 
@@ -53,6 +76,33 @@ scripts/fetch-ai-models.sh /tmp/ai-models
 The script downloads each engine, checks every byte against the pinned SHA-256
 below, and fails loudly on a mismatch. It is idempotent: a file that already
 matches is not downloaded again.
+
+It does **not** fetch `shuwa/`: the translator and the table are exported locally by
+the `Code/shuwa` toolkit, so stage them next to the downloaded tree before pushing:
+
+```bash
+mkdir -p build/ai-models/shuwa
+cp ../shuwa/build/shuwa-knn-hksl-8-idle.bin build/ai-models/shuwa/shuwa-knn-hksl.bin
+cp ../shuwa/build/shuwa-translator-f32.tflite build/ai-models/shuwa/shuwa-translator.tflite
+```
+
+The eight-gloss demo table is built with the local Shuwa builder:
+
+```bash
+cd ../shuwa
+.venv/Scripts/python build/build_knn.py --idle \
+  --only Hksl_cash,Hksl_credit_cards,Hksl_how_are_you,Hksl_soft_drink,Hksl_tomato,Hksl_understand,Hksl_welcome,Hksl_write \
+  --prune-weight shuwa-knn-hksl-8-idle.bin
+```
+
+`--prune-weight` is mandatory: the table rows are part-weighted
+(`pose ×1.0`, `face ×0.2`, `left hand ×1.0`, `right hand ×1.4`), and
+`AiShuwaGesturePort.applyPartWeights` applies the same weights to the live query. Never
+pair a weighted table with an unweighted query, or vice versa. The older 71-gloss table
+is not used by the eight-gloss demo meaning table.
+
+`holistic_landmarker.task` is the one downloadable Shuwa file; fetch it from the
+MediaPipe URL in the pinned table.
 
 ## Push to the device
 
@@ -82,6 +132,9 @@ adb shell 'cd /sdcard/Android/data/com.glassstorm.phonemanager/files/models && \
     diarization/3dspeaker_speech_campplus_sv_zh-cn_16k-common.onnx \
     diarization/sherpa-onnx-pyannote-segmentation-3-0/model.int8.onnx \
     gesture/gesture_recognizer.task \
+    shuwa/holistic_landmarker.task \
+    shuwa/shuwa-translator.tflite \
+    shuwa/shuwa-knn-hksl.bin \
     tts/vits-cantonese-hf-xiaomaiiwn/vits-cantonese-hf-xiaomaiiwn.onnx \
     tts/vits-cantonese-hf-xiaomaiiwn/tokens.txt \
     tts/vits-cantonese-hf-xiaomaiiwn/lexicon.txt \
@@ -101,6 +154,9 @@ adb shell 'cd /sdcard/Android/data/com.glassstorm.phonemanager/files/models && \
 | Diarization | `diarization/sherpa-onnx-pyannote-segmentation-3-0/model.int8.onnx`  | `https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2`     | `d582f4b4c6b48205de7e0643c57df0df5615a3c176189be3fc461e9d18827b5d` |
 | Diarization | `diarization/3dspeaker_speech_campplus_sv_zh-cn_16k-common.onnx`     | `https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_campplus_sv_zh-cn_16k-common.onnx` | `f682b514c05d947ee3fa91cd6ec6c5c7543479a128373fa29b1faedccd21fd11` |
 | Gesture     | `gesture/gesture_recognizer.task`                                    | `https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task`               | `01e5a59bcb2c9a6f13b76d67f038e417c07341250899199a409677b3e2900bb1` |
+| Shuwa       | `shuwa/holistic_landmarker.task`                                     | `https://storage.googleapis.com/mediapipe-models/holistic_landmarker/holistic_landmarker/float16/1/holistic_landmarker.task`              | `e2dab61191e2dcd0a15f943d8e3ed1dce13c82dfa597b9dd39f562975a50c3f8` |
+| Shuwa       | `shuwa/shuwa-translator.tflite`                                      | local export, `Code/shuwa/build/shuwa-translator-f32.tflite` (renamed on the device)                                                      | `9f1c5017cdf95002e8c156308757b56d989db32c8a573c864030c4f053240449` |
+| Shuwa       | `shuwa/shuwa-knn-hksl.bin`                                           | local export, `Code/shuwa/build/shuwa-knn-hksl-8-idle.bin` (`SKS1`, eight HKSL glosses + `Idle`, 1,946 vectors, part-weighted)             | `336fb2d7d05de1c98fea06e8c599d8e133a71915159aa1976ea4689ca67d0a8a` |
 
 Container archives, for manual extraction:
 
@@ -135,6 +191,8 @@ lexicon. The model, tokens and rule FST are byte-identical in both sources.
 | pyannote segmentation 3.0      | MIT                                                                                                                            |
 | 3D-Speaker CAM++               | Apache-2.0                                                                                                                     |
 | MediaPipe gesture recognizer   | Apache-2.0                                                                                                                     |
+| MediaPipe holistic landmarker  | Apache-2.0                                                                                                                     |
+| Shuwa translator + HKSL table  | No licence is declared by the Shuwa toolkit or its sample data. Built locally, declared `UserProvided`, and must not be redistributed. |
 
 ## Troubleshooting
 
@@ -145,3 +203,11 @@ lexicon. The model, tokens and rule FST are byte-identical in both sources.
   covered by the hashes above.
 - A failed hash on the device almost always means a truncated `adb push`. Delete
   the file and push again.
+- If `shuwa/` is present but signs are never reported, check that all THREE files
+  landed: a partial tree falls back to the single-image recogniser silently (by
+  design). `adb shell ls -l .../models/shuwa` must list the task, the translator
+  and the KNN table.
+- The Shuwa port reports nothing while the camera is still: the engine's motion gate
+  skips windows whose pose barely changed. A held-but-static hand is still a
+  *moving* sign only up to the point the reference model expects; sign the gloss
+  through its full movement rather than holding the final pose.

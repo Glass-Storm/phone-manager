@@ -1,5 +1,6 @@
 package com.glassstorm.phonemanager.ui
 
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
@@ -35,6 +36,14 @@ import com.glassstorm.phonemanager.ui.hub.TagChip
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+
+/**
+ * Display-only preview downscale. Recognition always decodes the original
+ * full-resolution JPEG inside the gesture adapter, so this cannot change accuracy;
+ * it only quarters the decoded pixels and the Compose/GC cost that competes with
+ * MediaPipe on the phone.
+ */
+private const val PREVIEW_SAMPLE_SIZE = 2
 
 /**
  * Live-relay observability: who is attached, what the relay has carried, and the
@@ -188,7 +197,12 @@ private fun imageCard(state: StreamUiState) {
         } else {
             val bitmap =
                 remember(jpeg) {
-                    BitmapFactory.decodeByteArray(jpeg, 0, jpeg.size)?.asImageBitmap()
+                    val options =
+                        BitmapFactory.Options().apply {
+                            inPreferredConfig = Bitmap.Config.RGB_565
+                            inSampleSize = PREVIEW_SAMPLE_SIZE
+                        }
+                    BitmapFactory.decodeByteArray(jpeg, 0, jpeg.size, options)?.asImageBitmap()
                 }
             if (bitmap == null) {
                 Text(

@@ -22,4 +22,20 @@ interface GesturePort {
      * outcome.
      */
     suspend fun recognize(jpeg: ByteArray): GestureOutcome?
+
+    /**
+     * Optional warm-up: loads the engine's native models before the first still.
+     *
+     * The default is a no-op, so a fake or a single-image engine needs no change;
+     * a sequence engine overrides it to move its cold-start load off the first
+     * recognized still, where it would otherwise block the image pump.
+     */
+    suspend fun warmUp() {}
+
+    /**
+     * Whether the recogniser is currently mid-sign and needs every queued frame in
+     * order. When `false`, the pump collapses any queued backlog to the newest
+     * still so a sign never starts behind stale idle frames.
+     */
+    val retainsSequence: Boolean get() = false
 }

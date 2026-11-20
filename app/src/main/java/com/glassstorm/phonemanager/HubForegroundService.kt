@@ -84,6 +84,10 @@ class HubForegroundService : Service() {
     /** Build the ordered bring-up from the process-wide graph. */
     private fun newBringUp(): HubBringUp {
         val component = (application as PhoneManagerApplication).component
+        // Warm the gesture engine while the hub comes up. A cold sequence engine would
+        // otherwise load its landmarker/translator/KNN on the first still and lose the
+        // first signs while the latest-wins image queue drops frames.
+        scope.launch { component.gesturePort().warmUp() }
         return HubBringUp(
             hub = component.hubServer(),
             hotspot = component.hotspotController(),

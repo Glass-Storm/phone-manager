@@ -20,11 +20,13 @@ data class GestureOutcome(
 /**
  * The CONFIGURABLE canned-gesture -> spoken-meaning table.
  *
- * The MediaPipe engine emits canned labels plus the custom classifier labels the
- * bundled `.task` bundle carries. What a label MEANS to a listener is a hub
- * decision, not an engine fact, so it lives in this overridable table rather than
- * being hardcoded in the adapter. [standard] is the shipped default; a caller may
- * build any other table with [of].
+ * The engines emit their own labels: MediaPipe's canned gestures plus the custom
+ * classifier labels its bundled `.task` bundle carries, and, for the sequence
+ * recognizer, the `Hksl_*` glosses of the HKSL table. What a label MEANS to a
+ * listener is a hub decision, not an engine fact, so it lives in this overridable
+ * table rather than being hardcoded in the adapter. [standard] is the shipped
+ * default for the single-image recognizer, [shuwa] the one for the HKSL sequence
+ * recognizer; a caller may build any other table with [of].
  *
  * An unmapped label yields `null` from [meaningFor] (the adapter then reports no
  * outcome) — silently inventing a meaning is forbidden.
@@ -107,6 +109,32 @@ class GestureMeaningTable private constructor(
                         put(letter.toString(), letter.uppercaseChar().toString())
                     }
                 },
+            )
+
+        /**
+         * The meaning table for the eight-gloss HKSL demo set.
+         *
+         * Its labels are the `Hksl_*` glosses of the host-provisioned KNN table, so the mapping can
+         * be audited against the artifact one row at a time. A gloss is a lexical sign with a direct
+         * Cantonese equivalent, which is why every entry is a translation and not an interpretation.
+         * Only these eight labels are mapped; `Idle` is a sink and produces no subtitle. See
+         * `docs/ai-model-provisioning.md` for the table itself.
+         *
+         * Meanings are Cantonese (Traditional Chinese) for the same reason as [standard]: the
+         * on-device voice is Cantonese-only.
+         */
+        val shuwa: GestureMeaningTable =
+            GestureMeaningTable(
+                linkedMapOf(
+                    "Hksl_cash" to "現金",
+                    "Hksl_credit_cards" to "信用卡",
+                    "Hksl_how_are_you" to "你好嗎",
+                    "Hksl_soft_drink" to "汽水",
+                    "Hksl_tomato" to "番茄",
+                    "Hksl_understand" to "明白",
+                    "Hksl_welcome" to "歡迎",
+                    "Hksl_write" to "寫",
+                ),
             )
 
         /** Build a custom table from an explicit label -> meaning map. */

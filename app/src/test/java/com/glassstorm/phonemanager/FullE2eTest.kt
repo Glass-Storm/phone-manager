@@ -99,6 +99,7 @@ class FullE2eTest {
                 ttsPort = component.ttsPort(),
                 enrollmentStore = component.enrollmentStore(),
                 frameSink = sink,
+                tuning = component.relayTuning(),
             )
         hub =
             HubServerAdapter(
