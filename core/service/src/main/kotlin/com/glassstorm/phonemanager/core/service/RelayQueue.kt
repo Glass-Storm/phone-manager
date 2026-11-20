@@ -55,7 +55,7 @@ internal class RelayQueue(
      * oldest queued still is evicted so the newest one always fits.
      *
      * Returns `true` only when an eviction was performed, matching [admitVideo]'s
-     * shape. It NEVER suspends, so a sustained 10 fps source can never park the
+     * shape. It NEVER suspends, so a sustained 15 fps source can never park the
      * peer's `pushImage`. The re-offer is best-effort under a concurrent consumer
      * race; the caller still counts the eviction it observed.
      */

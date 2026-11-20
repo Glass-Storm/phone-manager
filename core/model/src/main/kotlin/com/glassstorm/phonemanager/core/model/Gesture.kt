@@ -112,13 +112,13 @@ class GestureMeaningTable private constructor(
             )
 
         /**
-         * The shipped table for the HKSL sequence recognizer.
+         * The meaning table for the eight-gloss HKSL demo set.
          *
-         * Its labels are the `Hksl_*` glosses of the provisioned KNN table, in that table's order, so
-         * the mapping can be audited against the artifact one row at a time. A gloss is a lexical
-         * sign with a direct Cantonese equivalent, which is why every entry is a translation and not
-         * an interpretation. The current table is the eight-gloss demo set; the full 71-gloss
-         * reference set remains in `data/knn` and can be rebuilt with `build_knn.py`.
+         * Its labels are the `Hksl_*` glosses of the host-provisioned KNN table, so the mapping can
+         * be audited against the artifact one row at a time. A gloss is a lexical sign with a direct
+         * Cantonese equivalent, which is why every entry is a translation and not an interpretation.
+         * Only these eight labels are mapped; `Idle` is a sink and produces no subtitle. See
+         * `docs/ai-model-provisioning.md` for the table itself.
          *
          * Meanings are Cantonese (Traditional Chinese) for the same reason as [standard]: the
          * on-device voice is Cantonese-only.

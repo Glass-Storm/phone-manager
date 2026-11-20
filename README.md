@@ -173,7 +173,7 @@ consumption and regeneration commands are in
 ### Test
 
 ```bash
-JAVA_HOME=/home/chaos/.jdk/jdk-21.0.12.1+1 ANDROID_HOME=/home/chaos/Android/Sdk ./gradlew :contract:test :core:model:test :core:domain:test :core:service:test :transport:grpc:test :adapter:jvm:test :adapter:android:testDebugUnitTest :app:testDebugUnitTest
+JAVA_HOME=/home/chaos/.jdk/jdk-21.0.12.1+1 ANDROID_HOME=/home/chaos/Android/Sdk ./gradlew :contract:test :core:model:test :core:domain:test :core:service:test :transport:grpc:test :adapter:jvm:test :adapter:android:testDebugUnitTest :adapter:ai:testDebugUnitTest :app:testDebugUnitTest
 ```
 
 ### End-to-end

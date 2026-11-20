@@ -27,7 +27,7 @@ import org.junit.rules.Timeout
 
 /**
  * The gesture PROCESSING policy: the hub turns a fast JPEG still stream (the live
- * Pi pushes ~10 fps) into one model inference per still the model can keep up
+ * Pi pushes ~15 fps) into one model inference per still the model can keep up
  * with, always on the newest still. A one-slot latest-wins queue is the only
  * backlog control: no artificial fps cap, so a held gesture keeps being spoken
  * and a switch is heard as soon as the model recognizes it.
@@ -40,9 +40,9 @@ class StreamGestureSamplingTest {
     private lateinit var scope: CoroutineScope
 
     @Test
-    fun `a ten hz still stream recognizes every still on the newest frame`() =
+    fun `a fast still stream recognizes every still on the newest frame`() =
         runTest {
-            // Given a 10 fps producer, each still carrying a distinct marker byte
+            // Given a 20 Hz producer, each still carrying a distinct marker byte
             val gesture = MarkerGesturePort(testScheduler) { GestureOutcome("Thumb_Up", "好", 0.9f) }
             val stream = stream(gesture = gesture, tts = SamplingSilentTtsPort(), scheduler = testScheduler)
             val session = stream.openSession("necklace")

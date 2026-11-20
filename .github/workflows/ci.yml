@@ -35,8 +35,8 @@ jobs:
             - name: Check out the pinned ai-android engine
               run: |
                   git clone --depth 1 https://github.com/Glass-Storm/ai-android.git "${{ github.workspace }}/../../ai-android"
-                  git -C "${{ github.workspace }}/../../ai-android" fetch --depth 1 origin b0b2d7d874b40c1154c64b6bb552556c19785db3
-                  git -C "${{ github.workspace }}/../../ai-android" checkout --detach b0b2d7d874b40c1154c64b6bb552556c19785db3
+                  git -C "${{ github.workspace }}/../../ai-android" fetch --depth 1 origin 8570a3a65525f7b18d43e3c453749289cc02f97d
+                  git -C "${{ github.workspace }}/../../ai-android" checkout --detach 8570a3a65525f7b18d43e3c453749289cc02f97d
                   bash "${{ github.workspace }}/../../ai-android/scripts/fetch-sherpa-aar.sh"
 
             # This project builds on JDK 21 (Gradle 8.13 toolchain); the reference repo
@@ -99,8 +99,8 @@ jobs:
             - name: Check out the pinned ai-android engine
               run: |
                   git clone --depth 1 https://github.com/Glass-Storm/ai-android.git "${{ github.workspace }}/../../ai-android"
-                  git -C "${{ github.workspace }}/../../ai-android" fetch --depth 1 origin b0b2d7d874b40c1154c64b6bb552556c19785db3
-                  git -C "${{ github.workspace }}/../../ai-android" checkout --detach b0b2d7d874b40c1154c64b6bb552556c19785db3
+                  git -C "${{ github.workspace }}/../../ai-android" fetch --depth 1 origin 8570a3a65525f7b18d43e3c453749289cc02f97d
+                  git -C "${{ github.workspace }}/../../ai-android" checkout --detach 8570a3a65525f7b18d43e3c453749289cc02f97d
                   bash "${{ github.workspace }}/../../ai-android/scripts/fetch-sherpa-aar.sh"
 
             - name: Set up JDK 21
@@ -141,12 +141,12 @@ jobs:
             - name: Warm the mockpeer module cache
               run: go build ./tools/mockpeer/...
 
-            # JVM -> `:task`; Android -> `:taskDebugUnitTest`. `:adapter:android` and
-            # `:app` are the only Android modules. `lint` is scoped to `:app` (the only
-            # module with an Android application surface); it consumes the library's lint
-            # model transitively.
+            # JVM -> `:task`; Android -> `:taskDebugUnitTest`. `:adapter:android`,
+            # `:adapter:ai` and `:app` are the Android modules. `lint` is scoped to `:app`
+            # (the only module with an Android application surface); it consumes the
+            # libraries' lint models transitively.
             - name: Run Android tests, assemble APKs & lint
-              run: ./gradlew :adapter:android:testDebugUnitTest :app:testDebugUnitTest :app:assembleDebug :app:assembleRelease :app:lint --stacktrace
+              run: ./gradlew :adapter:android:testDebugUnitTest :adapter:ai:testDebugUnitTest :app:testDebugUnitTest :app:assembleDebug :app:assembleRelease :app:lint --stacktrace
 
             - name: Upload JUnit test results
               if: always()
@@ -154,6 +154,7 @@ jobs:
               with:
                   name: junit-results-android-${{ github.sha }}
                   path: |
+                      adapter/ai/build/test-results/**
                       adapter/android/build/test-results/**
                       app/build/test-results/**
                   if-no-files-found: error
@@ -226,8 +227,8 @@ jobs:
             - name: Check out the pinned ai-android engine
               run: |
                   git clone --depth 1 https://github.com/Glass-Storm/ai-android.git "${{ github.workspace }}/../../ai-android"
-                  git -C "${{ github.workspace }}/../../ai-android" fetch --depth 1 origin b0b2d7d874b40c1154c64b6bb552556c19785db3
-                  git -C "${{ github.workspace }}/../../ai-android" checkout --detach b0b2d7d874b40c1154c64b6bb552556c19785db3
+                  git -C "${{ github.workspace }}/../../ai-android" fetch --depth 1 origin 8570a3a65525f7b18d43e3c453749289cc02f97d
+                  git -C "${{ github.workspace }}/../../ai-android" checkout --detach 8570a3a65525f7b18d43e3c453749289cc02f97d
                   bash "${{ github.workspace }}/../../ai-android/scripts/fetch-sherpa-aar.sh"
 
             - name: Set up JDK 21

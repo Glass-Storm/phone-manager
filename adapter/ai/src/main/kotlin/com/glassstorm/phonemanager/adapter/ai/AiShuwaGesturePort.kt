@@ -99,7 +99,7 @@ class AiShuwaGesturePort(
         get() = active
 
     /** Duplicate suppression: a held sign closes several bursts in a row. */
-    private val policy = ShuwaWindowPolicy(requiredAgreements = 1)
+    private val policy = ShuwaWindowPolicy()
 
     private val components: Lazy<Components> =
         lazy(LazyThreadSafetyMode.SYNCHRONIZED) { Components.open(context, modelDir, license) }
@@ -210,8 +210,8 @@ class AiShuwaGesturePort(
         // A sign needs a hand. MediaPipe reports an EMPTY hand list when it finds none, and the
         // preprocessor zero-fills that block; without this gate a head turn or a shoulder shift can
         // be classified from pose/face alone. Require at least one hand (>= MIN_HAND_POINTS
-        // landmarks) in at least a THIRD of the burst's frames; MediaPipe drops the hand during
-        // fast motion and a half-frames rule silently discarded real signs (measured: 4-6 of 15-20).
+        // landmarks) in at least HALF of the burst's frames; the gate tolerates the hand detector
+        // dropping a frame during fast motion and rejects pose-only fragments.
         val leftFrames = frames.count { it.leftHand.size >= MIN_HAND_POINTS }
         val rightFrames = frames.count { it.rightHand.size >= MIN_HAND_POINTS }
         val handFrames =
@@ -283,12 +283,15 @@ class AiShuwaGesturePort(
     }
 
     /**
-     * Masks missing hands on the 15-point `SELECTED_POSE` indices (`15, 17, 19, 21` and
-     * `16, 18, 20, 22` in the 33-point BlazePose array) rather than raw indices `7, 9, 11, 13` /
-     * `8, 10, 12, 14` (where `11` and `12` are the shoulders). Without this, an absent hand
-     * overwrites the shoulder joint with `-100` and collapses the shoulder-width pose scale.
+     * Masks absent hands on the raw BlazePose hand indices and keeps a detected hand even when the
+     * coarse pose visibility dips.
+     *
+     * The translator's preprocessor masks a hand when BlazePose's wrist/finger visibility is low, but
+     * MediaPipe's 21-point hand landmarker can still have detected it. For a present hand, force the
+     * four pose points visible so the hand block survives; for an absent hand, write the sentinel so
+     * the shoulder/elbow scale is untouched.
      */
-    private fun sanitizeForPreprocessor(frame: ShuwaFrame): ShuwaFrame {
+    internal fun sanitizeForPreprocessor(frame: ShuwaFrame): ShuwaFrame {
         if (frame.pose.size < ShuwaSpec.POSE_POINTS) return frame
         val missingLeftHand =
             frame.leftHand.size < MIN_HAND_POINTS ||
@@ -301,13 +304,8 @@ class AiShuwaGesturePort(
                 when {
                     missingLeftHand && index in REAL_LEFT_HAND_IN_POSE -> IGNORED_POSE_POINT
                     missingRightHand && index in REAL_RIGHT_HAND_IN_POSE -> IGNORED_POSE_POINT
-                    index == UNSELECTED_LEFT_SENTINEL || index == UNSELECTED_RIGHT_SENTINEL ->
-                        ShuwaPosePoint(
-                            x = point.x,
-                            y = point.y,
-                            z = point.z,
-                            visibility = 1f,
-                        )
+                    !missingLeftHand && index in REAL_LEFT_HAND_IN_POSE -> point.copy(visibility = 1f)
+                    !missingRightHand && index in REAL_RIGHT_HAND_IN_POSE -> point.copy(visibility = 1f)
                     else -> point
                 }
             }
@@ -476,10 +474,6 @@ class AiShuwaGesturePort(
         /** Square edge of the synthetic bitmap used to prime the landmark graph. */
         const val WARMUP_SIZE = 64
 
-        /** Unselected BlazePose mouth indices (9, 10) used to disarm raw-index shoulder masking. */
-        const val UNSELECTED_LEFT_SENTINEL = 9
-        const val UNSELECTED_RIGHT_SENTINEL = 10
-
         /** BlazePose indices corresponding to `SELECTED_POSE[7, 9, 11, 13]` (left hand in pose). */
         val REAL_LEFT_HAND_IN_POSE = intArrayOf(15, 17, 19, 21)
 
@@ -512,9 +506,10 @@ class AiShuwaGesturePort(
         /**
          * Loose sanity ceiling on the absolute nearest-neighbour distance.
          *
-         * The vote, not distance, is the primary criterion; this only rejects a malformed or
-         * wildly out-of-domain embedding that happens to produce a unanimous-looking vote.
+         * The vote, not distance, is the primary criterion. The weighted table's in-distribution
+         * 1-NN distance has p99 1.64 and a maximum of 2.15, while valid live matches have measured
+         * 2.27; 3.0 still rejects a wildly out-of-domain embedding without dropping a real sign.
          */
-        const val MAX_DISTANCE = 2.2f
+        const val MAX_DISTANCE = 3.0f
     }
 }

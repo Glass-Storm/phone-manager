@@ -51,13 +51,15 @@ windowed model with a missing half.
 
 - `holistic_landmarker.task` is Google's MediaPipe Holistic bundle (Apache-2.0).
 - `shuwa-translator.tflite` is the f32 export of the Shuwa HKSL translator.
-- `shuwa-knn-hksl.bin` is the HKSL-only KNN table (`SKS1`, float16, 71 glosses).
+- `shuwa-knn-hksl.bin` is the demo KNN table (`SKS1`, float16, eight HKSL glosses plus
+  `Idle`, 1,946 vectors). It is built with `--prune-weight`; its rows are part-weighted, so
+  the live query must apply the same weights (see below).
 
-Both Shuwa files are produced by the `Code/shuwa` toolkit checkout
-(`build/shuwa-translator-f32.tflite`, `build/shuwa-knn-hksl.bin`) and are **renamed**
-on the device: the adapter looks for the fixed names above, not for the export's
-`-f32` suffix. The f16 export is half the size but was not validated on the phone,
-so the runbook pins the f32 numbers.
+The translator and the table are produced by the `Code/shuwa` toolkit checkout
+(`build/shuwa-translator-f32.tflite`, `build/shuwa-knn-hksl-8-idle.bin`) and are
+**renamed** on the device: the adapter looks for the fixed names above, not for the
+export's `-f32` or `-8-idle` suffix. The f16 export is half the size but was not
+validated on the phone, so the runbook pins the f32 numbers.
 
 ## Fetch and verify on the host
 
@@ -75,14 +77,29 @@ The script downloads each engine, checks every byte against the pinned SHA-256
 below, and fails loudly on a mismatch. It is idempotent: a file that already
 matches is not downloaded again.
 
-It does **not** fetch `shuwa/`: those two artefacts are exported locally by the
-`Code/shuwa` toolkit, so stage them next to the downloaded tree before pushing:
+It does **not** fetch `shuwa/`: the translator and the table are exported locally by
+the `Code/shuwa` toolkit, so stage them next to the downloaded tree before pushing:
 
 ```bash
 mkdir -p build/ai-models/shuwa
-cp ../shuwa/build/shuwa-knn-hksl.bin build/ai-models/shuwa/
+cp ../shuwa/build/shuwa-knn-hksl-8-idle.bin build/ai-models/shuwa/shuwa-knn-hksl.bin
 cp ../shuwa/build/shuwa-translator-f32.tflite build/ai-models/shuwa/shuwa-translator.tflite
 ```
+
+The eight-gloss demo table is built with the local Shuwa builder:
+
+```bash
+cd ../shuwa
+.venv/Scripts/python build/build_knn.py --idle \
+  --only Hksl_cash,Hksl_credit_cards,Hksl_how_are_you,Hksl_soft_drink,Hksl_tomato,Hksl_understand,Hksl_welcome,Hksl_write \
+  --prune-weight shuwa-knn-hksl-8-idle.bin
+```
+
+`--prune-weight` is mandatory: the table rows are part-weighted
+(`pose ×1.0`, `face ×0.2`, `left hand ×1.0`, `right hand ×1.4`), and
+`AiShuwaGesturePort.applyPartWeights` applies the same weights to the live query. Never
+pair a weighted table with an unweighted query, or vice versa. The older 71-gloss table
+is not used by the eight-gloss demo meaning table.
 
 `holistic_landmarker.task` is the one downloadable Shuwa file; fetch it from the
 MediaPipe URL in the pinned table.
@@ -139,7 +156,7 @@ adb shell 'cd /sdcard/Android/data/com.glassstorm.phonemanager/files/models && \
 | Gesture     | `gesture/gesture_recognizer.task`                                    | `https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task`               | `01e5a59bcb2c9a6f13b76d67f038e417c07341250899199a409677b3e2900bb1` |
 | Shuwa       | `shuwa/holistic_landmarker.task`                                     | `https://storage.googleapis.com/mediapipe-models/holistic_landmarker/holistic_landmarker/float16/1/holistic_landmarker.task`              | `e2dab61191e2dcd0a15f943d8e3ed1dce13c82dfa597b9dd39f562975a50c3f8` |
 | Shuwa       | `shuwa/shuwa-translator.tflite`                                      | local export, `Code/shuwa/build/shuwa-translator-f32.tflite` (renamed on the device)                                                      | `9f1c5017cdf95002e8c156308757b56d989db32c8a573c864030c4f053240449` |
-| Shuwa       | `shuwa/shuwa-knn-hksl.bin`                                           | local export, `Code/shuwa/build/shuwa-knn-hksl.bin` (`SKS1`, 71 glosses, 21,181 vectors)                                                  | `38cd07093eb3ded260bf0f6b3ed79fea113ec794b5213cc21edd37e49997d61a` |
+| Shuwa       | `shuwa/shuwa-knn-hksl.bin`                                           | local export, `Code/shuwa/build/shuwa-knn-hksl-8-idle.bin` (`SKS1`, eight HKSL glosses + `Idle`, 1,946 vectors, part-weighted)             | `336fb2d7d05de1c98fea06e8c599d8e133a71915159aa1976ea4689ca67d0a8a` |
 
 Container archives, for manual extraction:
 

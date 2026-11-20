@@ -63,7 +63,7 @@ non-interactive: no `ANDROID_HOME`, and `JAVA_HOME` points at Java 25 which Grad
 - Publish the contract: `:contract:publishToMavenLocal`.
 - Test (module list): `:contract:test :core:model:test :core:domain:test
 :core:service:test :transport:grpc:test :adapter:jvm:test
-:adapter:android:testDebugUnitTest :app:testDebugUnitTest`.
+:adapter:android:testDebugUnitTest :adapter:ai:testDebugUnitTest :app:testDebugUnitTest`.
 - End-to-end: `./gradlew e2e` (an alias over the real-socket suites; add
   `--rerun-tasks` to force execution when it reports `UP-TO-DATE`).
 - Lint, AGP: `./gradlew lint`. Lint, Kotlin style and naming: `./gradlew ktlintCheck`.
