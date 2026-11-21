@@ -14,6 +14,9 @@ missing, that one engine falls back to the deterministic `:adapter:jvm` fake. Th
 real engines also require an `arm64-v8a` device, because ai-android's native build
 is arm64 only.
 
+> For the linear fresh-machine path (checkout, build, model bundle, push, hotspot,
+> Pi), start with [`install.md`](install.md). This document is the reference detail.
+
 ## Target tree
 
 ```text

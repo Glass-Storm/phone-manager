@@ -14,6 +14,10 @@ source of truth for it is
 The glasses app and the Ubuntu daemon are OUT OF SCOPE for this repository; this
 repo ships the hub plus the contract they generate their clients from.
 
+> **Installing for the first time?** Start with [`docs/install.md`](docs/install.md).
+> It is the single linear path from a clean machine to an arm64 phone running the
+> HKSL sequence demo; the sections below are the reference detail.
+
 ## Module layout
 
 | Module             | Kind                | Owns                                                                                                                                                                                                                    |
@@ -50,27 +54,28 @@ asserts its `HEAD` equals `pinnedAiAndroidCommit`, and substitutes the
 A missing checkout or a drifted commit fails configuration with a named message,
 so a build can never silently compile against a different engine.
 
-### Why `:adapter:ai` is isolated
+### Why `:adapter:ai` is a separate module
 
 ai-android's MediaPipe path uses **full protobuf-java**, while `:contract` and
-`:transport:grpc` use **protobuf-lite**. Putting both on `:app`'s runtime
-classpath would ship duplicate `com.google.protobuf.*` classes and break dexing.
-`:adapter:ai` is therefore a **separate module that `:app` does not depend on**:
-the hub keeps building with the deterministic `:adapter:jvm` fakes bound by
-default, and the engine is compiled and packaged only for the arm64 on-device
-build. ai-android's gesture/diarization native is `arm64-v8a` only, so a JVM test
-could never load it anyway.
+`:transport:grpc` use **protobuf-lite**. Full `protobuf-java` bundles
+`GeneratedMessageLite`, so it satisfies both call sites, but the lite runtime
+(`protobuf-javalite`) must be removed from every configuration or the duplicate
+`com.google.protobuf.*` classes break dexing. `:app` applies that exclusion and
+supplies full `protobuf-java` in `app/build.gradle.kts`.
+
+`:app` depends on `:adapter:ai`; `DeviceAiModule` binds each real engine
+independently, and only when the device is `arm64-v8a` and that engine's model
+files are provisioned. Otherwise that engine falls back to the deterministic
+`:adapter:jvm` fake. For gesture, the preference is Shuwa (all three
+`models/shuwa/` files), then the single-image MediaPipe bundle, then the fake.
+ai-android's gesture/diarization native is `arm64-v8a` only, so a JVM test could
+never load it anyway and the test graph keeps the fakes.
 
 Build the engine adapter on its own:
 
 ```bash
 JAVA_HOME=/home/chaos/.jdk/jdk-21.0.12.1+1 ANDROID_HOME=/home/chaos/Android/Sdk ./gradlew :adapter:ai:assembleDebug
 ```
-
-Adopting it on a device is a deliberate graph change: add the `:adapter:ai` edge
-to `:app`, bind its constructors in place of the `:adapter:jvm` fakes, and resolve
-the protobuf conflict there (exclude `protobuf-javalite` and supply full
-`protobuf-java`, which also bundles `GeneratedMessageLite`).
 
 ### Model provisioning
 
